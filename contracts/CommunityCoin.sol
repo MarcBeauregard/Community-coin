@@ -447,22 +447,26 @@ contract CommunityCoin is ReentrancyGuard {
         address[] memory path = lineageOf(token);
         out = ethIn;
         for (uint256 i; i < path.length; ++i) {
-            (uint256 vQuote, uint256 vToken) = _liveCurve(path[i]);
-            (out,,) = _buyOut(vQuote, vToken, out - out * FEE_BPS / BPS);
+            out = _quoteBuyHop(path[i], out);
         }
+    }
+
+    /// @notice Tokens received by `buy(token, quoteIn)`, paying with the quote asset, fee included.
+    function quoteBuy(address token, uint256 quoteIn) external view known(token) returns (uint256) {
+        return _quoteBuyHop(token, quoteIn);
     }
 
     /// @notice ETH received by `sellToEth(token, amount)`, fees and spike share included.
     function quoteSellToEth(address token, uint256 amount) external view known(token) returns (uint256 out) {
         out = amount;
         for (address t = token; t != address(0); t = memes[t].parent) {
-            (uint256 vQuote, uint256 vToken) = _liveCurve(t);
-            uint256 ref = _refNow(memes[t], vQuote, vToken);
-            (uint256 gross, uint256 newVQuote, uint256 newVToken) = _sellOut(vQuote, vToken, out);
-            uint256 spike =
-                _nobodyLeft(newVQuote - memes[t].floor, newVToken) ? 0 : _spikeShare(vQuote, vToken, ref, out, gross);
-            out = gross - gross * FEE_BPS / BPS - spike;
+            out = _quoteSellHop(t, out);
         }
+    }
+
+    /// @notice Quote asset received by `sell(token, amount)`, fee and spike share included.
+    function quoteSell(address token, uint256 amount) external view known(token) returns (uint256) {
+        return _quoteSellHop(token, amount);
     }
 
     /// @notice Reference price (quote per whole token, 1e18-scaled) a sale would be measured against now.
@@ -481,6 +485,20 @@ contract CommunityCoin is ReentrancyGuard {
     }
 
     // ------------------------------------------------------------------ internals
+
+    function _quoteBuyHop(address token, uint256 quoteIn) internal view returns (uint256 out) {
+        (uint256 vQuote, uint256 vToken) = _liveCurve(token);
+        (out,,) = _buyOut(vQuote, vToken, quoteIn - quoteIn * FEE_BPS / BPS);
+    }
+
+    function _quoteSellHop(address token, uint256 tokensIn) internal view returns (uint256) {
+        (uint256 vQuote, uint256 vToken) = _liveCurve(token);
+        uint256 ref = _refNow(memes[token], vQuote, vToken);
+        (uint256 gross, uint256 newVQuote, uint256 newVToken) = _sellOut(vQuote, vToken, tokensIn);
+        uint256 spike =
+            _nobodyLeft(newVQuote - memes[token].floor, newVToken) ? 0 : _spikeShare(vQuote, vToken, ref, tokensIn, gross);
+        return gross - gross * FEE_BPS / BPS - spike;
+    }
 
     function _commit(address token, address user, uint256 quote) internal {
         Meme storage m = memes[token];

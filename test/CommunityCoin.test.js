@@ -168,8 +168,16 @@ describe("CommunityCoin", function () {
       const next = await launch(vamp, "PNUT3", await pnut.getAddress());
       await time.increase(OPEN);
       const pnutBag = await pnut.balanceOf(degen);
-      await hub.connect(degen).buy(next, pnutBag, 0);
-      expect(await next.balanceOf(degen)).to.be.gt(0n);
+      const quotedNext = await hub.quoteBuy(next, pnutBag);
+      await hub.connect(degen).buy(next, pnutBag, quotedNext);
+      expect(await next.balanceOf(degen)).to.equal(quotedNext);
+
+      // Single-step sells are quoted exactly too.
+      const half = quotedNext / 2n;
+      const quotedPnut = await hub.quoteSell(next, half);
+      await sameTimestamp();
+      await hub.connect(degen).sell(next, half, quotedPnut);
+      expect(await pnut.balanceOf(degen)).to.equal(quotedPnut);
     });
 
     it("quotes routed trades exactly", async function () {

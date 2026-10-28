@@ -6,12 +6,56 @@ Community Coin est un launchpad de memecoins (contrats Solidity, testés) conçu
 des memes : le **vamp** (chaque meme qui marche est copié, et chaque copie vide l'original) et le **PvP**
 (les premiers arrivés, souvent des bots, revendent sur la vague des suivants).
 
-Ce dépôt contient le protocole, 26 tests, et un simulateur qui joue **le même scénario viral sur les vrais
-contrats**, une fois avec les règles d'aujourd'hui et une fois avec celles-ci, pour mesurer qui paie qui.
+Ce dépôt contient le protocole, 26 tests, un simulateur qui joue **le même scénario viral sur les vrais
+contrats** (une fois avec les règles d'aujourd'hui, une fois avec celles-ci, pour mesurer qui paie qui), et
+**l'application du launchpad**.
 
 **Résultat en une phrase :** le vamp se règle dans le protocole ; le PvP se réduit fortement, mais ne
 disparaît pas, et aucun mécanisme ne peut le faire disparaître, parce qu'un marché de memes est à somme
 nulle. Le détail, chiffres compris, est plus bas, y compris ce qui n'a pas marché.
+
+## L'application
+
+Le launchpad complet tourne dans le navigateur : explorer les familles, lancer un meme ou une variante,
+participer à une enchère d'ouverture, retirer son allocation au fil du vesting, acheter et vendre (en ETH à
+travers toute la lignée, ou directement dans le token parent), proposer et voter une Union, retirer ses frais
+de créateur.
+
+- **Mode démo**, celui de la version en ligne : les vrais contrats compilés s'exécutent dans une EVM à
+  l'intérieur de la page, avec des comptes de démo crédités d'ETH fictif et une horloge que l'on peut avancer
+  (+5 min, +1 h, +1 j, +3 j) pour vivre l'ouverture, le vesting et les votes. La page s'ouvre sur un marché
+  d'exemple : une famille `PNUT` avec ses variantes, un rival `PEANUT` en plein vote d'Union, une ouverture en
+  cours.
+- **Mode wallet** : la même application se connecte à un hub déployé sur une vraie chaîne via un wallet du
+  navigateur, dès qu'un déploiement est inscrit dans `web/src/deployments.js`. Ce mode demande un hébergement
+  classique (GitHub Pages, ci-dessous), car la page hébergée sur claude.ai ne peut joindre ni wallet ni nœud.
+
+Le code est dans `web/` (Preact, ethers, EVM d'ethereumjs, regroupés par esbuild en un seul script). Pour la
+construire, puis la tester de bout en bout dans Chromium sous une politique de sécurité stricte :
+
+```bash
+npm run build:web
+```
+
+```bash
+npm run test:web
+```
+
+Ensuite `web/dist/index.html` s'ouvre directement dans un navigateur.
+
+**L'héberger soi-même.** Le workflow `.github/workflows/pages.yml` publie l'application sur GitHub Pages à
+chaque push sur `main`. Il faut l'activer une fois : *Settings → Pages → Build and deployment → Source :
+GitHub Actions*.
+
+**La brancher sur une vraie chaîne.** Commencer par un testnet (Base Sepolia par exemple), avec une clé
+dédiée et un peu d'ETH de test :
+
+```bash
+RPC_URL=https://sepolia.base.org DEPLOYER_KEY=0x... npm run deploy
+```
+
+Le script affiche la ligne à ajouter dans `web/src/deployments.js` ; reconstruire et republier l'application
+fait apparaître le bouton « Connecter un wallet ». Pas de mainnet avant un audit.
 
 ## Le diagnostic
 
@@ -145,6 +189,8 @@ npm test
 npm run simulate
 ```
 
+(`npm run build:web` et `npm run test:web` pour l'application, voir plus haut.)
+
 Le simulateur accepte `SEEDS` (nombre de scénarios), et pour l'ablation `VEST`, `SPIKE` et `LINEAGE` :
 
 ```bash
@@ -153,7 +199,7 @@ VEST=0 SPIKE=0 LINEAGE=1 SEEDS=5 npm run simulate
 
 ## Le contrat
 
-`contracts/CommunityCoin.sol` (le hub, ~18 Ko de bytecode) et `contracts/MemeToken.sol` (un ERC20 dont seul
+`contracts/CommunityCoin.sol` (le hub, ~19 Ko de bytecode) et `contracts/MemeToken.sol` (un ERC20 dont seul
 le hub peut frapper, brûler ou déplacer les tokens, et uniquement ceux de `msg.sender`).
 
 | Fonction | Rôle |
@@ -165,7 +211,8 @@ le hub peut frapper, brûler ou déplacer les tokens, et uniquement ceux de `msg
 | `sell` / `sellToEth` | Vendre contre l'actif de cotation (le parent, donc l'argent reste dans la famille) ou jusqu'à l'ETH. |
 | `claimFees(asset)` | Le créateur retire ses frais (1 %), payés dans l'actif de cotation de son meme. |
 | `proposeUnion` / `lockUnion` / `unlockUnion` / `executeUnion` | Le cycle de vote d'une Union. |
-| `quoteBuyEth` / `quoteSellToEth` / `priceInEth` / `referencePrice` / `lineageOf` | Vues pour les interfaces. |
+| `quoteBuyEth` / `quoteSellToEth` / `quoteBuy` / `quoteSell` | Ce que rapporte un achat ou une vente, frais et part de pic compris. |
+| `priceInEth` / `referencePrice` / `lineageOf` / `circulatingSupply` | Vues pour les interfaces. |
 
 Paramètres (constructeur) : durée de l'ouverture, durée du vesting, part de pic (en points de base),
 durée d'un vote d'Union. Constantes : courbe de 1 milliard de tokens virtuels, 1 ETH virtuel pour une racine,

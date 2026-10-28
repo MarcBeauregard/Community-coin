@@ -29,6 +29,10 @@ module.exports = {
     },
   },
   networks: {
+    // A real network for scripts/deploy.js, configured from the environment only.
+    ...(process.env.RPC_URL && process.env.DEPLOYER_KEY
+      ? { target: { url: process.env.RPC_URL, accounts: [process.env.DEPLOYER_KEY] } }
+      : {}),
     hardhat: {
       // The simulation needs a crowd.
       accounts: { count: 100 },

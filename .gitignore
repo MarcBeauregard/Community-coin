@@ -3,3 +3,5 @@ artifacts/
 cache/
 coverage/
 .env
+web/dist/
+web/src/contracts.json
