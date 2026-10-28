@@ -90,11 +90,12 @@ async function bootDemo() {
 }
 
 async function bootWallet() {
-  const chain = await WalletChain.connect();
+  const chain = await WalletChain.connect(DEPLOYMENTS);
   const deployment = DEPLOYMENTS[String(chain.chainId)];
   if (!deployment) throw new Error("Community Coin n'est pas déployé sur le réseau de ton wallet.");
   const hub = new Hub(chain, deployment.hub);
   const session = newSession(chain, hub, deployment.name);
+  session.explorer = deployment.explorer;
   session.params = await readParams(hub);
   const count = Number(await hub.read("memeCount"));
   for (let i = 0; i < count; i++) {
@@ -773,7 +774,9 @@ function Root() {
     ${session.chain.kind === "local" && html`<p class="demo-note">Démo : les contrats tournent dans ton navigateur, avec de l'ETH fictif. Les memes déjà présents sont des exemples.</p>`}
     <main>${page}</main>
     <footer class="foot">
-      <p>Hub ${f.shortAddress(session.hub.address)} · ouverture ${f.duration(session.params.openWindow)} · vesting ${f.duration(session.params.vestWindow)} · part de pic ${f.percent(session.params.spikeShareBps / 10000, 0)} · code non audité, prototype de recherche.</p>
+      <p>Hub ${session.explorer
+        ? html`<a href=${`${session.explorer}/address/${session.hub.address}`} target="_blank" rel="noopener">${f.shortAddress(session.hub.address)}</a>`
+        : f.shortAddress(session.hub.address)} · ouverture ${f.duration(session.params.openWindow)} · vesting ${f.duration(session.params.vestWindow)} · part de pic ${f.percent(session.params.spikeShareBps / 10000, 0)} · code non audité, prototype de recherche.</p>
     </footer>
     <${Toasts} toasts=${toasts} />
   </${App.Provider}>`;

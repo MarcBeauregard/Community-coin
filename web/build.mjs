@@ -20,7 +20,18 @@ const contracts = Object.fromEntries(
 );
 writeFileSync(join(web, "src/contracts.json"), JSON.stringify(contracts));
 
-const dist = join(web, "dist");
+const dist = process.env.OUTDIR ?? join(web, "dist");
+
+// DEPLOYMENTS_JSON='{"31337":{"name":"…","hub":"0x…"}}' builds the app against other hubs (used by the wallet test).
+const deploymentsOverride = process.env.DEPLOYMENTS_JSON && {
+  name: "deployments-override",
+  setup(b) {
+    b.onLoad({ filter: /deployments\.js$/ }, () => ({
+      contents: `export const DEPLOYMENTS = ${JSON.stringify(JSON.parse(process.env.DEPLOYMENTS_JSON))};`,
+      loader: "js",
+    }));
+  },
+};
 mkdirSync(dist, { recursive: true });
 await build({
   entryPoints: [join(web, "src/app.js")],
@@ -33,6 +44,7 @@ await build({
   define: { "process.env.NODE_ENV": '"production"' },
   legalComments: "none",
   logLevel: "warning",
+  plugins: deploymentsOverride ? [deploymentsOverride] : [],
 });
 
 const page = readFileSync(join(web, "page.html"), "utf8");
@@ -42,4 +54,4 @@ writeFileSync(
   join(dist, "index.html"),
   `<!doctype html>\n<html lang="fr">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n${head}</head>\n<body>${body}</body>\n</html>\n`,
 );
-console.log(`built web/dist (app.js ${(readFileSync(join(dist, "app.js")).length / 1024).toFixed(0)} KB)`);
+console.log(`built ${dist} (app.js ${(readFileSync(join(dist, "app.js")).length / 1024).toFixed(0)} KB)`);
