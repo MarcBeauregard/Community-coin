@@ -76,6 +76,8 @@ async function play(world, scenario, botLeavesFirst) {
   const pnl = Object.fromEntries(Object.keys(GROUPS).map((g) => [g, 0]));
   const bags = []; // [signer, token, group] to sell when the hype ends
   const sniped = [];
+  let original; // PNUT, once launched
+  let peakOriginalReserve = 0n;
 
   const buy = async (who, group, token, value) => {
     await hub.connect(who).buyEth(token, 0, { value: eth(value) });
@@ -123,6 +125,8 @@ async function play(world, scenario, botLeavesFirst) {
     }
     sniped.push(token);
     for (const { who, value } of late) await buy(who, buyerGroup, token, value);
+    const reserve = await hub.realReserve(original ?? token); // top of the wave
+    if (reserve > peakOriginalReserve) peakOriginalReserve = reserve;
     await wait(WAVE);
     await botSells();
     for (const { who, paperHands } of wave) if (paperHands) await sellAll(who, buyerGroup, token);
@@ -132,14 +136,11 @@ async function play(world, scenario, botLeavesFirst) {
 
   let next = 0;
   const take = (wave) => wave.map((b) => ({ ...b, who: retail[next++] }));
-  const original = await launch("PNUT", ethers.ZeroAddress, originalDev, "originalDev", take(scenario.originalWave), "originalBuyers");
-  let peakOriginalReserve = await hub.realReserve(original);
+  original = await launch("PNUT", ethers.ZeroAddress, originalDev, "originalDev", take(scenario.originalWave), "originalBuyers");
   for (let i = 0; i < COPYCATS.length; i++) {
     await wait(GAP);
     const parent = LINEAGE ? original : ethers.ZeroAddress;
     await launch(COPYCATS[i], parent, copycatDevs[i], "copycatDevs", take(scenario.copycatWaves[i]), "copycatBuyers");
-    const r = await hub.realReserve(original);
-    if (r > peakOriginalReserve) peakOriginalReserve = r;
   }
 
   // The hype is over: everybody leaves in a random order (the bot first if it saw the top), then creators
@@ -187,6 +188,7 @@ async function main() {
   const row = (label, a, b) => console.log(`${label.padEnd(24)}${String(a).padStart(14)}${String(b).padStart(17)}`);
   const retailIn = (ORIGINAL_BUYERS + COPYCATS.length * COPYCAT_BUYERS) * 0.8;
   console.log(`Mean result in ETH over ${SEEDS} scenarios (~${retailIn.toFixed(0)} ETH of retail money each)`);
+  console.log(`community coin: opening ${OPEN}s, vesting ${VEST}s, spike share ${SPIKE / 100}%, lineage ${LINEAGE ? "on" : "off"}`);
 
   for (const [i, [title]] of reports.entries()) {
     const mean = (world, f) => runs[i][world].reduce((a, r) => a + f(r), 0) / runs[i][world].length;
@@ -204,7 +206,7 @@ async function main() {
     row("Peak ETH behind PNUT", peak("pvp"), peak("cc"));
   }
   console.log();
-  row("ETH pools for the meme", 1 + COPYCATS.length, 1);
+  row("ETH pools for the meme", 1 + COPYCATS.length, LINEAGE ? 1 : 1 + COPYCATS.length);
 }
 
 main().catch((e) => {
