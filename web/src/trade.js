@@ -28,7 +28,8 @@ export function Flow({ hops, last = "You get" }) {
       const quote = m.quoteSymbol, isLast = i === hops.length - 1;
       const creator = nameOf(session, m.creator);
       const reserveDelta = h.isBuy ? h.toReserve : -(h.gross - h.spike);
-      return html`<li key=${i} class="flow-hop" data-hop=${i} data-fee=${String(h.fee)} data-spike=${String(h.spike)} data-out=${String(h.out)}
+      return html`<li key=${i} class="flow-hop" data-hop=${i} data-fee=${String(h.fee)} data-creator-fee=${String(h.creatorFee)} data-protocol-fee=${String(h.protocolFee)}
+        data-spike=${String(h.spike)} data-out=${String(h.out)}
         data-reserve=${String(reserveDelta)}>
         <span class="flow-coin"><${MemeAvatar} m=${m} size="sm" /></span>
         <div class="flow-body">
@@ -42,7 +43,8 @@ export function Flow({ hops, last = "You get" }) {
             ${h.isBuy
               ? html`<div><dt>Pays</dt><dd>${ethOrTokens(h.quoteIn, quote)}</dd></div>`
               : html`<div><dt>Sells</dt><dd>${f.tokens(h.tokensIn, m.symbol)}</dd></div>`}
-            <div><dt><${Term} k="creatorFee">Fee to ${creator}</${Term}></dt><dd>${ethOrTokens(h.fee, quote)}</dd></div>
+            <div><dt><${Term} k="creatorFee">Fee to ${creator}</${Term}></dt><dd>${ethOrTokens(h.creatorFee, quote)}</dd></div>
+            ${h.protocolFee > 0n && html`<div><dt><${Term} k="protocolFee">Protocol fee</${Term}></dt><dd>${ethOrTokens(h.protocolFee, quote)}</dd></div>`}
             ${h.spike > 0n && html`<div class="hot-text"><dt><${Term} k="spikeShare">Kept for holders</${Term}></dt><dd>${ethOrTokens(h.spike, quote)}</dd></div>`}
             <div class=${isLast ? "flow-out" : ""}><dt>${isLast ? last : h.isBuy ? "Becomes the next reserve" : "Sold on to the parent"}</dt>
               <dd>${h.isBuy ? f.tokens(h.out, m.symbol) : ethOrTokens(h.out, quote)}</dd></div>
@@ -90,8 +92,8 @@ function Breakdown({ sim, side, m, getUnit }) {
 
 /** What a trade did, from its events: the same rows as the breakdown, now final. */
 function Receipt({ receipt, onClose }) {
-  const { world } = useApp();
-  const hops = hopsFromEvents(receipt.events);
+  const { world, session } = useApp();
+  const hops = hopsFromEvents(receipt.events, BigInt(session.params.protocolFeeBps));
   const first = hops[0], last = hops.at(-1);
   if (!first) return null;
   const paid = first.isBuy ? ethOrTokens(first.quoteIn, world.memes.get(first.token).quoteSymbol) : f.tokens(first.tokensIn, world.memes.get(first.token).symbol);
@@ -139,7 +141,8 @@ export function TradePanel({ m }) {
       setQuote(q);
       try {
         const curves = await readCurves(hub, m.lineage);
-        const s = simulateTrade(curves, { side, viaParent, lineage: m.lineage, amount: wei, spikeBps: BigInt(session.params.spikeShareBps), now });
+        const s = simulateTrade(curves, { side, viaParent, lineage: m.lineage, amount: wei, spikeBps: BigInt(session.params.spikeShareBps), now,
+          protocolBps: BigInt(session.params.protocolFeeBps) });
         if (live) setSim(s.out === q ? s : null); // never show a breakdown that disagrees with the contract
       } catch {
         if (live) setSim(null);
@@ -206,7 +209,7 @@ export function TradePanel({ m }) {
           </div>
         </div>
       </div>
-      <div class="route" aria-label="Route" data-tip=${`Route\n1% fee at each hop, paid to that meme's creator`}>
+      <div class="route" aria-label="Route" data-tip=${`Route\n1% fee at each hop: ${f.percent((100 - session.params.protocolFeeBps) / 10000, 1)} to that meme's creator, ${f.percent(session.params.protocolFeeBps / 10000, 1)} to the protocol`}>
         ${shownRoute.map((s, i) => html`${i > 0 && html`<${I.Arrow} size=${13} />`}<span class="route-step">${s}</span>`)}
       </div>
       ${over && html`<p class="explain down-text">You hold ${f.tokens(m.balance, m.symbol)}. Lower the amount or press Max.</p>`}

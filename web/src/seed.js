@@ -3,7 +3,9 @@
 
 import { ZeroAddress, parseEther } from "ethers";
 
-export const DEMO_ACCOUNTS = ["You", "Alice", "Bob", "Chloe", "Dev Peanut", "Sniper bot"];
+export const DEMO_ACCOUNTS = ["You", "Alice", "Bob", "Chloe", "Dev Peanut", "Sniper bot", "Treasury"];
+/** The demo hub's protocol fee: 0.2% of every trade, out of the 1%, paid to the Treasury account. */
+export const DEMO_PROTOCOL_FEE_BPS = 20;
 
 const STEPS = [
   ["Dev Peanut", "launch", ["Peanut the Squirrel", "PNUT", ZeroAddress], "0.5"],

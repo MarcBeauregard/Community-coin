@@ -4,7 +4,7 @@ import { ZeroAddress } from "ethers";
 import { LocalChain, WalletChain } from "./chain.js";
 import { Hub, explain } from "./hub.js";
 import { loadWorld, activityFrom } from "./world.js";
-import { seed, DEMO_ACCOUNTS, SEED_SPAN } from "./seed.js";
+import { seed, DEMO_ACCOUNTS, DEMO_PROTOCOL_FEE_BPS, SEED_SPAN } from "./seed.js";
 import { DEPLOYMENTS } from "./deployments.js";
 import * as f from "./format.js";
 import * as I from "./icons.js";
@@ -38,6 +38,8 @@ async function readParams(hub) {
     vestWindow: Number(await hub.read("vestWindow")),
     spikeShareBps: Number(await hub.read("spikeShareBps")),
     unionWindow: Number(await hub.read("unionWindow")),
+    protocolFeeBps: Number(await hub.read("protocolFeeBps")),
+    feeRecipient: await hub.read("feeRecipient"),
   };
 }
 
@@ -102,9 +104,9 @@ async function bootDemo() {
   performance.mark("cc:boot");
   const chain = await LocalChain.create(DEMO_ACCOUNTS);
   chain.startChain -= SEED_SPAN + 40; // the example history ends about now
-  const hub = await Hub.deploy(chain, chain.accounts[0].address, DEMO_PARAMS);
-  const session = newSession(chain, hub, "Demo");
   const accountOf = (name) => chain.accounts.find((a) => a.name === name).address;
+  const hub = await Hub.deploy(chain, chain.accounts[0].address, [...DEMO_PARAMS, DEMO_PROTOCOL_FEE_BPS, accountOf("Treasury")]);
+  const session = newSession(chain, hub, "Demo");
   await seed({
     hub,
     accountOf,

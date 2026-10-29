@@ -18,8 +18,8 @@ import { parseEther } from "ethers";
 
 export async function run() {
   const chain = await LocalChain.create(DEMO_ACCOUNTS);
-  const hub = await Hub.deploy(chain, chain.accounts[0].address, [300, 3600, 5000, 259200]);
   const accountOf = (n) => chain.accounts.find((a) => a.name === n).address;
+  const hub = await Hub.deploy(chain, chain.accounts[0].address, [300, 3600, 5000, 259200, 20, accountOf("Treasury")]);
   await seed({ hub, accountOf, run: (a, fn, args, v) => hub.write(accountOf(a), fn, args, v), warp: async (s) => chain.warp(s) });
   const tokenOf = async (ticker) => hub.read("tokenOfKey", [await hub.read("symbolKey", [ticker])]);
   const tokens = [];
@@ -55,10 +55,22 @@ export async function run() {
     }
   }
 
-  // A sale right after a buy runs above the reference price: the spike share must match too.
-  const wif = await tokenOf("PNUTWIFHAT");
-  const you = accountOf("You");
+  // A sale right after a buy runs above the reference price: the spike share must match too. The buy itself
+  // checks the fee split: what the creators and the protocol were credited must equal the simulated split.
+  const wif = await tokenOf("PNUTWIFHAT"), pnut0 = await tokenOf("PNUT");
+  const you = accountOf("You"), treasury = accountOf("Treasury");
+  const ZERO = "0x0000000000000000000000000000000000000000";
+  const feesNow = async () => [await hub.read("feesOf", [accountOf("Dev Peanut"), ZERO]), await hub.read("feesOf", [treasury, ZERO]),
+    await hub.read("feesOf", [accountOf("Bob"), pnut0]), await hub.read("feesOf", [treasury, pnut0])];
+  const linWif = [...(await hub.read("lineageOf", [wif]))];
+  const buySim = simulateTrade(await readCurves(hub, tokens), { side: "buy", viaParent: false, lineage: linWif, amount: parseEther("3"), spikeBps: 5000n, now: chain.now() + 1, protocolBps: 20n });
+  const before = await feesNow();
   await hub.write(you, "buyEth", [wif, 0n], parseEther("3"));
+  const after = await feesNow();
+  same("PNUT creator fee", after[0] - before[0], buySim.hops[0].creatorFee);
+  same("protocol fee in ETH", after[1] - before[1], buySim.hops[0].protocolFee);
+  same("PNUTWIFHAT creator fee", after[2] - before[2], buySim.hops[1].creatorFee);
+  same("protocol fee in PNUT", after[3] - before[3], buySim.hops[1].protocolFee);
   const lin = [...(await hub.read("lineageOf", [wif]))];
   const bal = await hub.token(wif, "balanceOf", [you]);
   const spiky = simulateTrade(await readCurves(hub, tokens), { side: "sell", viaParent: false, lineage: lin, amount: bal, spikeBps: 5000n, now: chain.now() });

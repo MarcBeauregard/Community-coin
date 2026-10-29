@@ -5,7 +5,8 @@
     "openSeconds": 300,
     "vestSeconds": 3600,
     "spikeShareBps": 5000,
-    "lineage": true
+    "lineage": true,
+    "protocolFeeBps": 20
   },
   "retailInEth": 59.2,
   "buyers": {
@@ -26,36 +27,42 @@
           "key": "sniper",
           "label": "Sniper bot",
           "pvp": 53,
-          "cc": 47.06
+          "cc": 47.15
         },
         {
           "key": "originalDev",
           "label": "Original creator",
-          "pvp": 0.43,
-          "cc": 1.18
+          "pvp": 0.35,
+          "cc": 0.92
         },
         {
           "key": "copycatDevs",
           "label": "Copycat creators",
-          "pvp": 1.2,
+          "pvp": 1,
           "cc": -1.43
         },
         {
           "key": "originalBuyers",
           "label": "Original buyers",
           "pvp": -17.25,
-          "cc": -7.82
+          "cc": -7.93
         },
         {
           "key": "copycatBuyers",
           "label": "Copycat buyers",
           "pvp": -37.38,
-          "cc": -38.99
+          "cc": -38.98
+        },
+        {
+          "key": "protocol",
+          "label": "Protocol",
+          "pvp": 0.28,
+          "cc": 0.27
         }
       ],
       "retail": {
         "pvp": -54.63,
-        "cc": -46.81
+        "cc": -46.91
       },
       "sniperProfitable": {
         "pvp": 10,
@@ -63,7 +70,7 @@
       },
       "peakOriginalReserve": {
         "pvp": 19.95,
-        "cc": 23.49
+        "cc": 23.8
       }
     },
     {
@@ -74,36 +81,42 @@
           "key": "sniper",
           "label": "Sniper bot",
           "pvp": 53,
-          "cc": 47.2
+          "cc": 47.05
         },
         {
           "key": "originalDev",
           "label": "Original creator",
-          "pvp": 0.43,
-          "cc": 1.19
+          "pvp": 0.35,
+          "cc": 0.92
         },
         {
           "key": "copycatDevs",
           "label": "Copycat creators",
-          "pvp": 1.2,
+          "pvp": 1,
           "cc": -1.44
         },
         {
           "key": "originalBuyers",
           "label": "Original buyers",
           "pvp": -17.25,
-          "cc": -7.96
+          "cc": -7.78
         },
         {
           "key": "copycatBuyers",
           "label": "Copycat buyers",
           "pvp": -37.38,
-          "cc": -38.99
+          "cc": -39.01
+        },
+        {
+          "key": "protocol",
+          "label": "Protocol",
+          "pvp": 0.28,
+          "cc": 0.27
         }
       ],
       "retail": {
         "pvp": -54.63,
-        "cc": -46.94
+        "cc": -46.79
       },
       "sniperProfitable": {
         "pvp": 10,
@@ -111,7 +124,7 @@
       },
       "peakOriginalReserve": {
         "pvp": 19.95,
-        "cc": 23.8
+        "cc": 23.17
       }
     }
   ]

@@ -29,6 +29,7 @@ const ORIGINAL_BUYERS = 24;
 const COPYCAT_BUYERS = 10;
 const DEV_BAG = 0.3; // ETH each creator puts in at launch
 const SNIPER_BAG = 2; // ETH the bot puts in every launch
+const PROTOCOL = Number(process.env.PROTOCOL ?? 20); // protocol's cut of the 1% trade fee, in bps of the trade, in both worlds
 
 const GROUPS = {
   sniper: "Sniper bot",
@@ -36,6 +37,7 @@ const GROUPS = {
   copycatDevs: "Copycat creators",
   originalBuyers: "Original buyers",
   copycatBuyers: "Copycat buyers",
+  protocol: "Protocol",
 };
 
 function rng(seed) {
@@ -69,8 +71,13 @@ function draw(seed) {
 async function play(world, scenario, botLeavesFirst) {
   const snapshot = await network.provider.send("evm_snapshot");
   const cc = world === "cc";
-  const hub = await ethers.deployContract("CommunityCoin", cc ? [OPEN, VEST, SPIKE, 3 * 86400] : [0, 0, 0, 3 * 86400]);
-  const [originalDev, ...rest] = await ethers.getSigners();
+  const signers = await ethers.getSigners();
+  const treasury = signers.at(-1); // the protocol's fee recipient, nobody's wallet in the scenario
+  const hub = await ethers.deployContract(
+    "CommunityCoin",
+    cc ? [OPEN, VEST, SPIKE, 3 * 86400, PROTOCOL, treasury.address] : [0, 0, 0, 3 * 86400, PROTOCOL, treasury.address],
+  );
+  const [originalDev, ...rest] = signers.slice(0, -1);
   const copycatDevs = rest.splice(0, COPYCATS.length);
   const sniper = rest.shift();
   const retail = rest;
@@ -155,7 +162,7 @@ async function play(world, scenario, botLeavesFirst) {
     const [who, token, group] = bags[scenario.exitOrder[k]];
     await sellAll(who, group, token);
   }
-  for (const [who, group] of [[originalDev, "originalDev"], ...copycatDevs.map((d) => [d, "copycatDevs"])]) {
+  for (const [who, group] of [[originalDev, "originalDev"], ...copycatDevs.map((d) => [d, "copycatDevs"]), [treasury, "protocol"]]) {
     const ethFees = await hub.feesOf(who, ethers.ZeroAddress);
     if (ethFees > 0n) {
       await hub.connect(who).claimFees(ethers.ZeroAddress);
@@ -191,6 +198,7 @@ async function main() {
   const retailIn = (ORIGINAL_BUYERS + COPYCATS.length * COPYCAT_BUYERS) * 0.8;
   console.log(`Mean result in ETH over ${SEEDS} scenarios (~${retailIn.toFixed(0)} ETH of retail money each)`);
   console.log(`community coin: opening ${OPEN}s, vesting ${VEST}s, spike share ${SPIKE / 100}%, lineage ${LINEAGE ? "on" : "off"}`);
+  console.log(`both worlds: 1% fee per trade, ${PROTOCOL / 100}% of the trade to the protocol, the rest to the meme's creator`);
 
   for (const [i, [title]] of reports.entries()) {
     const mean = (world, f) => runs[i][world].reduce((a, r) => a + f(r), 0) / runs[i][world].length;
@@ -215,7 +223,7 @@ async function main() {
     const json = {
       source: "scripts/simulate.js",
       seeds: SEEDS,
-      params: { openSeconds: OPEN, vestSeconds: VEST, spikeShareBps: SPIKE, lineage: LINEAGE },
+      params: { openSeconds: OPEN, vestSeconds: VEST, spikeShareBps: SPIKE, lineage: LINEAGE, protocolFeeBps: PROTOCOL },
       retailInEth: round(retailIn),
       buyers: { original: ORIGINAL_BUYERS, perCopycat: COPYCAT_BUYERS, copycats: COPYCATS.length },
       pools: { pvp: 1 + COPYCATS.length, cc: LINEAGE ? 1 : 1 + COPYCATS.length },
