@@ -11,9 +11,11 @@
 // Later copycats repeat the cycle. When the hype ends, everybody sells what is left in a random order; the bot
 // either leaves first (it knew where the top was) or at a random moment (it did not). Everyone ends in ETH,
 // so the market is zero-sum: the question is only who pays whom.
-// Run with `npm run simulate` (SEEDS=n to change the sample size).
+// Run with `npm run simulate` (SEEDS=n to change the sample size). SIM_JSON=path also writes the means as JSON, which
+// is how the app's "How it works" page gets its numbers (`npm run simulate:web`).
 
 const { ethers, network } = require("hardhat");
+const { writeFileSync } = require("node:fs");
 
 const OPEN = 300; // opening batch
 const VEST = Number(process.env.VEST ?? 3600); // vesting of the batch
@@ -207,6 +209,32 @@ async function main() {
   }
   console.log();
   row("ETH pools for the meme", 1 + COPYCATS.length, LINEAGE ? 1 : 1 + COPYCATS.length);
+
+  if (process.env.SIM_JSON) {
+    const round = (x) => Math.round(x * 100) / 100;
+    const json = {
+      source: "scripts/simulate.js",
+      seeds: SEEDS,
+      params: { openSeconds: OPEN, vestSeconds: VEST, spikeShareBps: SPIKE, lineage: LINEAGE },
+      retailInEth: round(retailIn),
+      buyers: { original: ORIGINAL_BUYERS, perCopycat: COPYCAT_BUYERS, copycats: COPYCATS.length },
+      pools: { pvp: 1 + COPYCATS.length, cc: LINEAGE ? 1 : 1 + COPYCATS.length },
+      reports: reports.map(([title, botLeavesFirst], i) => {
+        const mean = (world, f) => runs[i][world].reduce((a, r) => a + f(r), 0) / runs[i][world].length;
+        const both = (f) => ({ pvp: round(mean("pvp", f)), cc: round(mean("cc", f)) });
+        return {
+          title,
+          botLeavesFirst,
+          groups: Object.entries(GROUPS).map(([key, label]) => ({ key, label, ...both((r) => r.pnl[key]) })),
+          retail: both((r) => r.pnl.originalBuyers + r.pnl.copycatBuyers),
+          sniperProfitable: { pvp: runs[i].pvp.filter((r) => r.pnl.sniper > 0).length, cc: runs[i].cc.filter((r) => r.pnl.sniper > 0).length },
+          peakOriginalReserve: both((r) => r.peakOriginalReserve),
+        };
+      }),
+    };
+    writeFileSync(process.env.SIM_JSON, JSON.stringify(json, null, 2) + "\n");
+    console.log(`wrote ${process.env.SIM_JSON}`);
+  }
 }
 
 main().catch((e) => {

@@ -8,6 +8,7 @@
     "build": "hardhat compile",
     "test": "hardhat test",
     "simulate": "hardhat run scripts/simulate.js",
+    "simulate:web": "SIM_JSON=web/src/simulation.json hardhat run scripts/simulate.js",
     "build:web": "hardhat compile && node web/build.mjs",
     "test:web": "node web/e2e.cjs",
     "deploy": "hardhat run scripts/deploy.js --network target",

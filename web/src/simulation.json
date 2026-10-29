@@ -1,0 +1,118 @@
+{
+  "source": "scripts/simulate.js",
+  "seeds": 10,
+  "params": {
+    "openSeconds": 300,
+    "vestSeconds": 3600,
+    "spikeShareBps": 5000,
+    "lineage": true
+  },
+  "retailInEth": 59.2,
+  "buyers": {
+    "original": 24,
+    "perCopycat": 10,
+    "copycats": 5
+  },
+  "pools": {
+    "pvp": 6,
+    "cc": 1
+  },
+  "reports": [
+    {
+      "title": "The bot sees the top and leaves first",
+      "botLeavesFirst": true,
+      "groups": [
+        {
+          "key": "sniper",
+          "label": "Sniper bot",
+          "pvp": 53,
+          "cc": 47.06
+        },
+        {
+          "key": "originalDev",
+          "label": "Original creator",
+          "pvp": 0.43,
+          "cc": 1.18
+        },
+        {
+          "key": "copycatDevs",
+          "label": "Copycat creators",
+          "pvp": 1.2,
+          "cc": -1.43
+        },
+        {
+          "key": "originalBuyers",
+          "label": "Original buyers",
+          "pvp": -17.25,
+          "cc": -7.82
+        },
+        {
+          "key": "copycatBuyers",
+          "label": "Copycat buyers",
+          "pvp": -37.38,
+          "cc": -38.99
+        }
+      ],
+      "retail": {
+        "pvp": -54.63,
+        "cc": -46.81
+      },
+      "sniperProfitable": {
+        "pvp": 10,
+        "cc": 10
+      },
+      "peakOriginalReserve": {
+        "pvp": 19.95,
+        "cc": 23.49
+      }
+    },
+    {
+      "title": "Nobody knows where the top is: the bot leaves at a random moment",
+      "botLeavesFirst": false,
+      "groups": [
+        {
+          "key": "sniper",
+          "label": "Sniper bot",
+          "pvp": 53,
+          "cc": 47.2
+        },
+        {
+          "key": "originalDev",
+          "label": "Original creator",
+          "pvp": 0.43,
+          "cc": 1.19
+        },
+        {
+          "key": "copycatDevs",
+          "label": "Copycat creators",
+          "pvp": 1.2,
+          "cc": -1.44
+        },
+        {
+          "key": "originalBuyers",
+          "label": "Original buyers",
+          "pvp": -17.25,
+          "cc": -7.96
+        },
+        {
+          "key": "copycatBuyers",
+          "label": "Copycat buyers",
+          "pvp": -37.38,
+          "cc": -38.99
+        }
+      ],
+      "retail": {
+        "pvp": -54.63,
+        "cc": -46.94
+      },
+      "sniperProfitable": {
+        "pvp": 10,
+        "cc": 10
+      },
+      "peakOriginalReserve": {
+        "pvp": 19.95,
+        "cc": 23.8
+      }
+    }
+  ]
+}

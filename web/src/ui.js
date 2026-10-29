@@ -11,7 +11,10 @@ export const html = htm.bind(h);
 
 // ------------------------------------------------------------------ tooltip
 
-/** Any element with data-tip gets the same dark tooltip, on hover and on keyboard focus. */
+/**
+ * Any element with data-tip gets the same dark tooltip: on hover with a mouse, on keyboard focus, and on tap on a touch
+ * screen (where it stays until the next tap elsewhere).
+ */
 export function installTooltip() {
   const tip = document.createElement("div");
   tip.id = "tip";
@@ -39,14 +42,25 @@ export function installTooltip() {
     current = null;
     tip.classList.remove("show");
   };
-  for (const type of ["pointerover", "focusin"])
-    document.addEventListener(type, (e) => {
-      const el = e.target.closest?.("[data-tip]");
-      el ? show(el) : hide();
-    });
-  document.addEventListener("pointerout", (e) => {
-    if (current && !current.contains(e.relatedTarget)) hide();
+  const at = (e) => e.target.closest?.("[data-tip]");
+  document.addEventListener("pointerover", (e) => {
+    if (e.pointerType === "touch") return;
+    const el = at(e);
+    el ? show(el) : hide();
   });
+  document.addEventListener("pointerout", (e) => {
+    if (e.pointerType !== "touch" && current && !current.contains(e.relatedTarget)) hide();
+  });
+  document.addEventListener("pointerdown", (e) => {
+    if (e.pointerType !== "touch") return;
+    const el = at(e);
+    el && el !== current ? show(el) : hide();
+  });
+  document.addEventListener("focusin", (e) => {
+    const el = at(e);
+    el ? show(el) : hide();
+  });
+  document.addEventListener("focusout", (e) => current && !current.contains(e.relatedTarget) && hide());
   document.addEventListener("scroll", hide, true);
   document.addEventListener("keydown", (e) => e.key === "Escape" && hide());
 }
@@ -61,6 +75,22 @@ export function niceTicks(max, count = 4) {
   const raw = max / count, pow = 10 ** Math.floor(Math.log10(raw));
   const step = [1, 2, 2.5, 5, 10].map((m) => m * pow).find((s) => s >= raw);
   return Array.from({ length: Math.ceil(max / step - 1e-9) + 1 }, (_, i) => +(i * step).toPrecision(12));
+}
+
+/**
+ * Round ticks for a price axis: from 0 when the series spans most of its height anyway, otherwise tight around it
+ * so that a 3% move is visible. Returns at least two ticks; the first and last bound the axis.
+ */
+export function niceRange(lo, hi, count = 4) {
+  if (!(hi > 0)) return [0, 1];
+  if (lo < hi * 0.45) return niceTicks(hi, count);
+  const pad = Math.max((hi - lo) * 0.15, hi * 0.02);
+  const a = Math.max(0, lo - pad), b = hi + pad;
+  const raw = (b - a) / count, pow = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * pow).find((x) => x >= raw);
+  const first = Math.floor(a / step) * step;
+  const n = Math.ceil((b - first) / step - 1e-9);
+  return Array.from({ length: n + 1 }, (_, i) => +(first + i * step).toPrecision(12));
 }
 
 /** Compact number with a few significant digits: 0.0162 · 12.9M · 1.2K. */
@@ -109,7 +139,8 @@ export function Defs() {
 
 /**
  * A minted coin: reeded rim, beaded ring, the ticker struck into the face. The family sets the metal, so a meme
- * and its variants are the same metal; dots above the legend count how many generations a variant is from its root.
+ * and its variants are the same metal; a variant also carries a dark mint ring inside the rim (legible down to the
+ * smallest size) and one dot above the legend per generation from its root.
  */
 export function Coin({ symbol, hue = 0, size = "md", depth = 0, glyph }) {
   const text = glyph ?? (symbol.replace(/[^A-Za-z0-9]/g, "").slice(0, 2).toUpperCase() || "?");
@@ -121,6 +152,7 @@ export function Coin({ symbol, hue = 0, size = "md", depth = 0, glyph }) {
       <circle class="coin-reed" cx="32" cy="32" r="29.8" />
       <circle cx="32" cy="32" r="26.2" fill=${`url(#coin-face-${m})`} />
       <circle class="coin-bead" cx="32" cy="32" r="23" />
+      ${depth > 0 && html`<circle class="coin-mark" cx="32" cy="32" r="25.4" />`}
       ${Array.from({ length: dots }, (_, i) => html`<circle key=${i} class="coin-dot" cx=${32 + (i - (dots - 1) / 2) * 5} cy="14.5" r="1.4" />`)}
       <text class="coin-hi" x="32" y="33.4" font-size=${text.length > 1 ? 18 : 22}>${text}</text>
       <text class="coin-lo" x="32" y="32.4" font-size=${text.length > 1 ? 18 : 22}>${text}</text>
@@ -229,21 +261,22 @@ export function Delta({ cur, prev, vs, min = 0, invert = false, neutral = false,
   if (r === 0) return html`<span class="delta muted" data-tip=${tip}>±0% <span>${vs}</span></span>`;
   const good = invert ? d < 0 : d > 0;
   const text = Math.abs(d) > 999 ? (d > 0 ? "10×+" : "−99%") : `${d > 0 ? "▲" : "▼"} ${Math.abs(r)}%`;
+  const spoken = Math.abs(d) > 999 ? (d > 0 ? "up more than tenfold" : "down 99%") : `${d > 0 ? "up" : "down"} ${Math.abs(r)}%`;
   return html`<span class="delta" data-tip=${tip ?? `${vs}: ${format(prev)}`}>
-    <b class=${neutral ? "" : good ? "up" : "down"}>${text}</b> <span class="muted">${vs}</span>
+    <b class=${neutral ? "" : good ? "up" : "down"} aria-hidden="true">${text}</b><span class="sr">${spoken}</span> <span class="muted">${vs}</span>
   </span>`;
 }
 
 // ------------------------------------------------------------------ cards
 
-export function Kpi({ label, icon, value, unit, delta, tip, tone, id }) {
+export function Kpi({ label, icon, value, unit, delta, sub, tip, tone, id }) {
   return html`<div class=${`card kpi ${tone ? `tone-${tone}` : ""}`} data-kpi=${id}>
     <div class="kpi-head">
       <span class="kpi-label">${label}</span>
       ${icon && html`<span class="icon-square">${icon}</span>`}
     </div>
     <div class="kpi-value" data-tip=${tip}>${value}${unit && html`<small>${unit}</small>`}</div>
-    <div class="kpi-foot">${delta ?? html`<span class="delta muted"> </span>`}</div>
+    <div class="kpi-foot">${delta ?? (sub ? html`<span class="delta muted">${sub}</span>` : html`<span class="delta muted"> </span>`)}</div>
   </div>`;
 }
 
@@ -293,24 +326,40 @@ export function Segmented({ options, value, onChange, label, size }) {
   </div>`;
 }
 
-/** A pill that opens a popover; closes on outside click, Escape and after a choice. */
+/**
+ * A pill that opens a menu: focus moves to the first item, arrow keys move between items, Escape closes and gives
+ * focus back to the pill; it also closes on an outside click and after a choice.
+ */
 export function Popover({ trigger, label, children, align = "end", class: cls = "" }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
+  const items = () => [...(ref.current?.querySelectorAll(".menu [role^='menuitem']:not(:disabled)") ?? [])];
+  const close = (refocus) => {
+    setOpen(false);
+    if (refocus) ref.current?.querySelector(".pill")?.focus();
+  };
   useEffect(() => {
     if (!open) return;
+    items()[0]?.focus();
     const outside = (e) => ref.current && !ref.current.contains(e.target) && setOpen(false);
-    const esc = (e) => e.key === "Escape" && setOpen(false);
+    const keys = (e) => {
+      if (e.key === "Escape") return close(true);
+      if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key) || !ref.current?.contains(document.activeElement)) return;
+      const list = items(), i = list.indexOf(document.activeElement);
+      const next = e.key === "Home" ? 0 : e.key === "End" ? list.length - 1 : (i + (e.key === "ArrowDown" ? 1 : -1) + list.length) % list.length;
+      list[next]?.focus();
+      e.preventDefault();
+    };
     document.addEventListener("pointerdown", outside);
-    document.addEventListener("keydown", esc);
+    document.addEventListener("keydown", keys);
     return () => {
       document.removeEventListener("pointerdown", outside);
-      document.removeEventListener("keydown", esc);
+      document.removeEventListener("keydown", keys);
     };
   }, [open]);
   return html`<div class=${`popover ${cls}`} ref=${ref}>
     <button type="button" class="pill" aria-haspopup="menu" aria-expanded=${open} aria-label=${label} onClick=${() => setOpen(!open)}>${trigger}</button>
-    ${open && html`<div class=${`menu menu-${align}`} role="menu" onClick=${(e) => e.target.closest("[data-close]") && setOpen(false)}>${children}</div>`}
+    ${open && html`<div class=${`menu menu-${align}`} role="menu" onClick=${(e) => e.target.closest("[data-close]") && close(true)}>${children}</div>`}
   </div>`;
 }
 
@@ -323,19 +372,28 @@ export function Skeleton({ lines = 3 }) {
 /**
  * One series over time with a dashed comparison series (the reference price), round ticks on the right edge,
  * a hairline and a dark tooltip on hover or keyboard focus. Prices move only on trades: steps, not slopes.
+ * `from` starts the window later than the first point (the value at that moment is carried in); `markers` pin
+ * events (launch, opening close, union, big trades) along the bottom, each with its own tooltip.
  */
-export function StepChart({ points, compare, label, compareLabel, unit, timeOf }) {
+export function StepChart({ points: all, compare: allCompare, label, compareLabel, unit, timeOf, from, markers = [] }) {
   const [focus, setFocus] = useState(null);
   const box = useRef(null);
+  const clip = (pts) => {
+    if (!pts || from === undefined || from <= pts[0].t) return pts;
+    const before = [...pts].reverse().find((p) => p.t <= from);
+    return [...(before ? [{ ...before, t: from }] : []), ...pts.filter((p) => p.t > from)];
+  };
+  const points = clip(all), compare = clip(allCompare);
   if (!points || points.length < 2) return html`<div class="chart-empty">—</div>`;
   const narrow = globalThis.matchMedia?.("(max-width: 640px)").matches;
   const W = narrow ? 360 : 720, H = narrow ? 210 : 260, L = 4, R = 64, T = 14, B = 26;
   const t0 = points[0].t, t1 = Math.max(points.at(-1).t, t0 + 1);
-  const max = Math.max(...points.map((p) => p.v), ...(compare ?? []).map((p) => p.v));
-  const ticks = niceTicks(max);
-  const top = ticks.at(-1);
+  const values = [...points.map((p) => p.v), ...(compare ?? []).map((p) => p.v)];
+  const lo = Math.min(...values), max = Math.max(...values);
+  const ticks = niceRange(lo, max);
+  const bottom = ticks[0], top = ticks.at(-1);
   const x = (t) => L + ((t - t0) / (t1 - t0)) * (W - L - R);
-  const y = (v) => T + (1 - v / top) * (H - T - B);
+  const y = (v) => T + (1 - (v - bottom) / (top - bottom)) * (H - T - B);
   const path = (pts) => {
     let d = `M${x(pts[0].t).toFixed(1)},${y(pts[0].v).toFixed(1)}`;
     for (let i = 1; i < pts.length; i++) d += ` H${x(pts[i].t).toFixed(1)} V${y(pts[i].v).toFixed(1)}`;
@@ -346,6 +404,7 @@ export function StepChart({ points, compare, label, compareLabel, unit, timeOf }
   const xTicks = Array.from({ length: narrow ? 3 : 5 }, (_, i) => t0 + ((t1 - t0) * i) / ((narrow ? 3 : 5) - 1));
   const at = focus === null ? null : points[focus];
   const cmpAt = at && compare ? [...compare].reverse().find((p) => p.t <= at.t) : null;
+  const shown = markers.filter((m) => m.t >= t0 && m.t <= t1);
 
   const pick = (clientX) => {
     const r = box.current.getBoundingClientRect();
@@ -361,7 +420,8 @@ export function StepChart({ points, compare, label, compareLabel, unit, timeOf }
     e.preventDefault();
   };
   const last = points.at(-1);
-  const summary = `${label}: ${compact(last.v)} ${unit} at ${timeOf(last.t)}, ranging ${compact(Math.min(...points.map((p) => p.v)))} to ${compact(max)}`;
+  const summary = `${label}: ${compact(last.v)} ${unit} at ${timeOf(last.t)}, ranging ${compact(Math.min(...points.map((p) => p.v)))} to ${compact(Math.max(...points.map((p) => p.v)))}`
+    + (shown.length ? `. Events: ${shown.map((m) => m.label.split("\n")[0]).join(", ")}` : "");
 
   return html`<figure class="chart" ref=${box}>
     <svg viewBox="0 0 ${W} ${H}" role="img" aria-label=${summary} tabindex="0" onKeyDown=${onKey}
@@ -375,6 +435,11 @@ export function StepChart({ points, compare, label, compareLabel, unit, timeOf }
       <path class="area" d=${area} fill="url(#chart-fill)" />
       ${compare && compare.length > 1 && html`<path class="compare" d=${path(compare)} />`}
       <path class="line" d=${line} />
+      ${shown.map((m, i) => html`<g key=${`m${i}`} class=${`marker marker-${m.tone ?? "plain"}`} data-tip=${m.label}>
+        <line x1=${x(m.t)} x2=${x(m.t)} y1=${T} y2=${H - B} />
+        <rect x=${x(m.t) - 5} y=${H - B - 5} width="10" height="10" rx="2" transform=${`rotate(45 ${x(m.t)} ${H - B})`} />
+        <rect class="marker-hit" x=${x(m.t) - 9} y=${T} width="18" height=${H - B - T + 9} />
+      </g>`)}
       ${at
         ? html`<g><line class="hair" x1=${x(at.t)} x2=${x(at.t)} y1=${T} y2=${H - B} /><circle class="dot" cx=${x(at.t)} cy=${y(at.v)} r="4" /></g>`
         : html`<g><circle class="dot-halo" cx=${x(last.t)} cy=${y(last.v)} r="9" /><circle class="dot" cx=${x(last.t)} cy=${y(last.v)} r="3.5" /></g>`}
@@ -386,6 +451,7 @@ export function StepChart({ points, compare, label, compareLabel, unit, timeOf }
     <figcaption class="legend">
       <span><i class="key key-line"></i>${label}</span>
       ${compare && html`<span><i class="key key-dash"></i>${compareLabel}</span>`}
+      ${shown.length > 0 && html`<span><i class="key key-marker"></i>Events</span>`}
     </figcaption>
   </figure>`;
 }
