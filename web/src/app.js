@@ -203,16 +203,18 @@ function Ticker({ session, world }) {
     rows.map((r, i) => {
       const m = world.memes.get(r.token);
       const [label, tone] = TICK_KINDS[r.kind];
-      return html`<a key=${`${copy}-${i}`} class="tick" href=${memeHref(m.address)} tabindex=${copy ? -1 : null}>
+      return html`<a key=${`${copy}-${i}`} class="tick" href=${memeHref(m.address)} tabindex="-1">
         <${Coin} symbol=${m.symbol} hue=${Math.max(0, roots.indexOf(m.root))} depth=${m.depth} size="sm" />
         <b>${m.symbol}</b><span class=${`tick-kind ${tone}`}>${label}</span><span class="tnum">${amount(r.in ?? r.out)}</span>
         <span class="muted">${nameOf(r.actor)}</span>
       </a>`;
     });
-  return html`<div class="ticker" role="region" aria-label="Latest trades">
+  // Decoration for the eye: the same trades are in the Activity table, so the tape stays out of the tab order and
+  // out of screen readers.
+  return html`<div class="ticker" aria-hidden="true">
     <div class="ticker-track">
       <div class="ticker-group">${items(0)}</div>
-      <div class="ticker-group" aria-hidden="true">${items(1)}</div>
+      <div class="ticker-group">${items(1)}</div>
     </div>
   </div>`;
 }

@@ -476,13 +476,6 @@ form.inline .amount { flex: 1 1 180px; }
 .chart-tip span { font-size: var(--fs-2); color: color-mix(in srgb, var(--on-tip) 70%, transparent); }
 .chart-empty { color: var(--muted); padding: var(--sp-10) 0; text-align: center; }
 
-/* Rules */
-.prose { max-width: 760px; gap: var(--sp-5); }
-.rules { margin: 0; padding-left: var(--sp-6); display: grid; gap: var(--sp-5); }
-.rules li::marker { font: 600 var(--fs-4) var(--display); color: var(--gold-ink); }
-.rules h2 { margin-bottom: var(--sp-1); font: 600 var(--fs-6) var(--display); letter-spacing: -0.01em; }
-.rules p { color: var(--ink-2); max-width: 64ch; line-height: 1.6; }
-
 /* Minting moment */
 .mint { position: fixed; inset: 0; z-index: 40; pointer-events: none; display: grid; place-items: center; }
 .mint-coin { animation: mint-drop 2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
@@ -515,7 +508,7 @@ form.inline .amount { flex: 1 1 180px; }
   right: max(16px, env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); left: max(16px, env(safe-area-inset-left, 0px)); }
 .toast { display: inline-flex; align-items: center; gap: var(--sp-2); max-width: 420px; background: var(--tip); color: var(--on-tip); border-radius: var(--r-lg); padding: var(--sp-2h) var(--sp-3h);
   font-weight: 500; box-shadow: var(--shadow-pop), inset 0 0 0 1px color-mix(in srgb, var(--gold) 25%, transparent); animation: toast-in 0.25s cubic-bezier(0.2, 0.8, 0.2, 1); }
-.toast .icon { color: var(--gold); }
+.toast .icon { color: var(--gold-a); }
 .toast.error { background: var(--down); color: var(--on-down); box-shadow: var(--shadow-pop); }
 @keyframes toast-in { from { transform: translateY(8px); opacity: 0; } }
 .skeleton { display: grid; gap: var(--sp-2h); width: 100%; }
@@ -736,7 +729,7 @@ svg.dia { width: 100%; max-width: 220px; height: auto; }
 .sticky-action { display: none; }
 .spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid color-mix(in srgb, var(--on-tip) 30%, transparent); border-top-color: var(--gold); animation: spin 0.8s linear infinite; flex: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.toast a { color: var(--gold); font-weight: 600; margin-left: var(--sp-1); }
+.toast a { color: var(--gold-a); font-weight: 600; margin-left: var(--sp-1); }
 
 /* Chart event marks */
 .chart .marker line { stroke: var(--line-strong); stroke-dasharray: 2 3; }
@@ -766,6 +759,7 @@ svg.dia { width: 100%; max-width: 220px; height: auto; }
 }
 @media (max-width: 1024px) {
   .hero { grid-template-columns: minmax(0, 1fr); }
+  .meme-main > .stack-col { order: -1; }
   .kpis-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .span-8, .span-4, .span-7, .span-5 { grid-column: span 12; }
   .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -832,7 +826,7 @@ svg.dia { width: 100%; max-width: 220px; height: auto; }
 @media (prefers-reduced-motion: reduce) {
   .ticker-track { animation: none; }
   .ticker { overflow-x: auto; scrollbar-width: none; }
-  .ticker-group[aria-hidden="true"] { display: none; }
+  .ticker-group + .ticker-group { display: none; }
   .skeleton span, .skeleton-coin, .dot-hot, .chart .dot-halo, .spot-stage .coin-xl, .preview .coin-xl { animation: none; }
   .flash-up, .flash-down, .toast { animation: none; }
   a:hover .coin-sm svg, a:hover .coin-md svg, .brand:hover .coin svg { animation: none; }

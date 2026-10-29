@@ -350,7 +350,7 @@ export function MemePage({ address }) {
         tip=${`Curve reserve, in ${m.quoteSymbol}\nBuys back every circulating token, at any time`}
         delta=${m.opening ? null : html`<${Delta} cur=${n(lockedOf(m))} prev=${hourAgo(session, world, m, "res")} vs="vs 1h" />`} />
     </div>
-    <div class="grid-12">
+    <div class="grid-12 meme-main">
       ${m.opening ? html`<${OpeningStory} m=${m} />` : html`<${PriceCard} m=${m} />`}
       <div class="span-4 stack-col">
         ${m.opening ? html`<${OpeningPanel} key=${m.address} m=${m} />` : html`<${TradePanel} key=${m.address} m=${m} />`}
@@ -434,7 +434,7 @@ export function Launch({ parentHint }) {
           <label for="launch-amount"><${Term} k="commit">Your commit</${Term}> <span class="muted fine">optional</span></label>
           <div class="amount"><input id="launch-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0" value=${value} onInput=${(e) => setValue(e.currentTarget.value)} /><span class="unit">ETH</span></div>
         </div>
-        <button class="btn wide btn-lg" disabled=${!valid || busy}>Launch ${key || ""}</button>
+        <button class="btn wide btn-lg" disabled=${!valid || busy}>${existing ? `${existing.symbol} is taken` : `Launch ${key || ""}`}</button>
       </form>
       <${Card} id="preview" title="Preview" class="span-5 preview-card">
         <div class=${`preview ${existing ? "is-taken" : ""}`}>

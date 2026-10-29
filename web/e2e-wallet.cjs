@@ -73,6 +73,16 @@ async function rpc(method, params = []) {
         removeListener() {},
       };
     }, rpcUrl);
+    // Every toast text the page shows, in order: the wallet's progress (confirm, waiting, done) is checked from it.
+    await page.addInitScript(() => {
+      window.__toasts = [];
+      new MutationObserver(() => {
+        for (const t of document.querySelectorAll(".toast")) {
+          const text = t.textContent.trim();
+          if (window.__toasts.at(-1) !== text) window.__toasts.push(text);
+        }
+      }).observe(document, { childList: true, subtree: true, characterData: true });
+    });
     const toast = (text) =>
       page.locator(".toast", { hasText: text }).first().waitFor({ timeout: 20000 }).catch(async (e) => {
         throw new Error(`${e.message.split("\n")[0]}\ntoasts on screen: ${(await page.locator(".toast").allInnerTexts()).join(" | ") || "none"}`);
@@ -106,6 +116,9 @@ async function rpc(method, params = []) {
     await toast("Meme launched");
     await page.locator("h1", { hasText: "WALLET" }).waitFor({ timeout: 20000 });
     check(true, "a meme launches with a signed transaction");
+    const seen = await page.evaluate(() => window.__toasts);
+    check(seen.some((t) => t.includes("Confirm in your wallet")) && seen.some((t) => t.includes("Waiting for the network")),
+      `the toast follows the transaction: ${[...new Set(seen)].slice(0, 4).join(" → ")}`);
     await page.locator("#opening-title").waitFor();
 
     await warp(3700); // past the opening and the vesting
