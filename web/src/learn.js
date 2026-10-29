@@ -55,8 +55,9 @@ export function SpikeDiagram() {
     <path class="dia-kept" d="M70,78 L100,30 L130,24 L160,40 L160,55 L130,48 L100,52 Z" />
     <path class="dia-ref" d="M10,82 L70,80 L100,75 L130,72 L160,70 L210,66" />
     <path class="dia-price-line" d="M10,84 L40,82 L70,78 L100,30 L130,24 L160,40 L190,62 L210,64" />
-    <text x="196" y="58" class="dia-label" text-anchor="end">price</text>
-    <text x="210" y="80" class="dia-label" text-anchor="end">1h reference</text>
+    <text x="138" y="16" class="dia-label" text-anchor="middle">price</text>
+    <text x="210" y="84" class="dia-label" text-anchor="end">1h reference</text>
+    <text x="126" y="44" class="dia-label dia-label-kept" text-anchor="middle">kept</text>
   </svg>`;
 }
 
@@ -176,7 +177,7 @@ function Results() {
   const devs = report.groups.find((g) => g.key === "copycatDevs");
   const sniper = report.groups.find((g) => g.key === "sniper");
   return html`<div class="results">
-    <${Segmented} label="Scenario" value=${which} onChange=${setWhich} options=${[["random", "Bot exits at a random moment"], ["first", "Bot sees the top"]]} size="sm" />
+    <${Segmented} label="Scenario" value=${which} onChange=${setWhich} options=${[["random", "Bot exits at random"], ["first", "Bot sees the top"]]} size="sm" />
     <div class="scroll-x">
       <table class="results-table">
         <caption class="sr">Mean result per group in ETH over ${simulation.seeds} scenarios, today versus Community Coin</caption>

@@ -344,7 +344,7 @@ export function MemePage({ address }) {
         value=${m.opening ? "—" : f.signedPercent(m.premium)} sub=${m.opening ? "starts after the opening" : m.premium > SPIKE_FLAG ? "selling now pays holders" : "no spike"}
         tip=${`Reference: ${compact(n(m.refEth) * 1e6)} ETH · 1M\nA slow price that follows the real one over an hour. Above it, part of a sale stays with holders`} />
       <${Kpi} id="cap" label=${html`<${Term} k="marketCap">Market cap</${Term}>`} icon=${html`<${I.Coins} />`} value=${compact(n(m.capEth))} unit="ETH"
-        tip=${`${f.eth(m.capEth)}\n${f.tokens(m.circulating)} circulating`} sub=${`${f.tokens(m.circulating)} circulating`} />
+        tip=${`${f.eth(m.capEth)}\n${m.opening ? "What the batch has committed so far" : `${f.tokens(m.circulating)} circulating`}`} sub=${m.opening ? "committed so far" : `${f.tokens(m.circulating)} circulating`} />
       <${Kpi} id="reserve" label=${html`<${Term} k="reserve">Reserve</${Term}>`} icon=${html`<${I.Lock} />`}
         value=${m.parent ? f.tokens(lockedOf(m)) : compact(n(lockedOf(m)))} unit=${m.parent ? m.quoteSymbol : "ETH"}
         tip=${`Curve reserve, in ${m.quoteSymbol}\nBuys back every circulating token, at any time`}

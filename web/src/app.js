@@ -9,7 +9,9 @@ import { DEPLOYMENTS } from "./deployments.js";
 import * as f from "./format.js";
 import * as I from "./icons.js";
 import { html, installTooltip, Avatar, Coin, Defs, Popover, Skeleton, compact } from "./ui.js";
-import { App, Market, MemePage, Launch, Unions, Portfolio, Rules, memeHref } from "./pages.js";
+import { App, Market, MemePage, Launch, Unions, Portfolio, memeHref } from "./pages.js";
+import { HowItWorks, DemoNote } from "./learn.js";
+import { Tour, planTour } from "./tour.js";
 
 const DEMO_PARAMS = [300, 3600, 5000, 3 * 24 * 3600]; // opening, vesting, spike share (bps), union vote
 const WARPS = [
@@ -23,10 +25,10 @@ const PAGES = [
   ["launch", "Launch", I.Launch],
   ["unions", "Unions", I.Merge],
   ["portfolio", "Portfolio", I.Wallet],
-  ["rules", "Rules", I.Book],
+  ["how", "How it works", I.Book],
 ];
-// Links shared before the site went English keep working.
-const OLD_ROUTES = { explorer: "market", lancer: "launch", portefeuille: "portfolio", regles: "rules" };
+// Links shared before the site went English, or before Rules became How it works, keep working.
+const OLD_ROUTES = { explorer: "market", lancer: "launch", portefeuille: "portfolio", regles: "how", rules: "how" };
 
 // ------------------------------------------------------------------ sessions
 
@@ -75,9 +77,9 @@ async function snapshot(session, t) {
 
 const MOVES_PRICES = new Set(["Trade", "Settled", "UnionExecuted"]);
 
-async function transact(session, from, fn, args = [], value = 0n) {
+async function transact(session, from, fn, args = [], value = 0n, hooks) {
   const { hub, cache } = session;
-  const res = await hub.write(from, fn, args, value);
+  const res = await hub.write(from, fn, args, value, hooks);
   for (const e of res.events) {
     if (e.name === "Launched") cache.set(e.args.token, { symbol: e.args.symbol, parent: e.args.parent });
     if (e.name === "UnionExecuted") cache.get(e.args.meme).parent = e.args.target;
@@ -97,6 +99,7 @@ async function transact(session, from, fn, args = [], value = 0n) {
 }
 
 async function bootDemo() {
+  performance.mark("cc:boot");
   const chain = await LocalChain.create(DEMO_ACCOUNTS);
   chain.startChain -= SEED_SPAN + 40; // the example history ends about now
   const hub = await Hub.deploy(chain, chain.accounts[0].address, DEMO_PARAMS);
@@ -112,13 +115,17 @@ async function bootDemo() {
     },
   });
   session.params = await readParams(hub);
+  performance.mark("cc:seeded");
   return session;
 }
 
 async function bootWallet() {
   const chain = await WalletChain.connect(DEPLOYMENTS);
   const deployment = DEPLOYMENTS[String(chain.chainId)];
-  if (!deployment) throw new Error("Community Coin is not deployed on your wallet's network.");
+  if (!deployment) {
+    const names = Object.values(DEPLOYMENTS).map((d) => d.name).join(" or ");
+    throw new Error(`Community Coin is not deployed on your wallet's network. Switch your wallet to ${names} and connect again.`);
+  }
   const hub = new Hub(chain, deployment.hub);
   const session = newSession(chain, hub, deployment.name);
   session.explorer = deployment.explorer;
@@ -210,28 +217,19 @@ function Ticker({ session, world }) {
   </div>`;
 }
 
-function Toolbar({ session, world, account, setAccount, onWarp, onReset, onConnect, canConnect, busy, route, theme, onTheme }) {
-  const [menu, setMenu] = useState(false);
+function Toolbar({ session, world, account, setAccount, onWarp, onReset, onConnect, onTour, canConnect, busy, section, theme, onTheme }) {
   const local = session.chain.kind === "local";
-  const section = route.startsWith("meme-") ? "market" : route.startsWith("launch") ? "launch" : route;
   const me = session.chain.accounts.find((a) => a.address === account);
-  useEffect(() => setMenu(false), [route]);
-  useEffect(() => {
-    if (!menu) return;
-    const esc = (e) => e.key === "Escape" && setMenu(false);
-    document.addEventListener("keydown", esc);
-    return () => document.removeEventListener("keydown", esc);
-  }, [menu]);
   const time = f.clock(world.now);
-
   return html`<header class="top">
+    <a class="skip" href="#main">Skip to content</a>
     <div class="top-inner">
       <a class="brand" href="#market"><${Coin} symbol="CC" hue=${0} size="md" /><span>Community Coin</span></a>
       <nav class="tabs" aria-label="Pages">
         ${PAGES.map(([r, label, Icon]) => html`<a key=${r} href=${`#${r}`} aria-current=${section === r ? "page" : null}><${Icon} size=${16} />${label}</a>`)}
       </nav>
       <div class="pills">
-        <span class="pill pill-static" data-tip=${local ? "Demo\nThe contracts run in your browser, with play ETH" : `${session.label}\nHub ${session.hub.address}`}>
+        <span class="pill pill-static" tabindex="0" data-tip=${local ? "Demo\nThe real contracts run in your browser, with play ETH" : `${session.label}\nHub ${session.hub.address}`}>
           <i class=${`dot ${local ? "dot-demo" : "dot-live"}`}></i>${session.label}
         </span>
         ${local
@@ -239,6 +237,7 @@ function Toolbar({ session, world, account, setAccount, onWarp, onReset, onConne
               <p class="menu-title">Skip ahead</p>
               ${WARPS.map(([s, l]) => html`<button key=${s} type="button" role="menuitem" data-close disabled=${busy} onClick=${() => onWarp(s)}>${l}</button>`)}
               <hr />
+              <button type="button" role="menuitem" data-close onClick=${onTour}>Start the tour</button>
               <button type="button" role="menuitem" data-close onClick=${onReset}>Restart demo</button>
             </${Popover}>`
           : html`<span class="pill pill-static"><${I.Clock} size=${16} /><span class="tnum">${time}</span></span>`}
@@ -246,27 +245,30 @@ function Toolbar({ session, world, account, setAccount, onWarp, onReset, onConne
           ${theme === "dark" ? html`<${I.Sun} size=${16} />` : html`<${I.Moon} size=${16} />`}
         </button>
         <${Popover} label="Account" class="account" trigger=${html`<${Avatar} symbol=${me?.name ?? "?"} size="sm" /><span class="account-name">${me?.name}</span><span class="tnum muted">${compact(f.toNumber(world.ethBalance), 4)} ETH</span><${I.Chevron} size=${14} />`}>
+          ${local && html`<p class="menu-title">Play as</p>`}
           ${session.chain.accounts.map((a) => html`<button key=${a.address} type="button" role="menuitemradio" aria-checked=${a.address === account} data-close onClick=${() => setAccount(a.address)}>
             <${Avatar} symbol=${a.name} size="sm" />${a.name}${a.address === account && html`<${I.Check} size=${16} class="menu-check" />`}
           </button>`)}
           ${canConnect && html`<hr /><button type="button" role="menuitem" data-close onClick=${onConnect}>Connect wallet</button>`}
         </${Popover}>
-        <button type="button" class="pill menu-button" aria-label="Menu" aria-expanded=${menu} aria-controls="phone-menu" onClick=${() => setMenu(!menu)}>
-          ${menu ? html`<${I.Close} size=${16} />` : html`<${I.Menu} size=${16} />`}<span class="menu-label">Menu</span>
-        </button>
       </div>
     </div>
-    ${menu && html`<div class="phone-menu" id="phone-menu" onClick=${(e) => e.target === e.currentTarget && setMenu(false)}>
-      <nav class="menu-grid" aria-label="Pages">
-        ${PAGES.map(([r, label, Icon]) => html`<a key=${r} href=${`#${r}`} aria-current=${section === r ? "page" : null} onClick=${() => setMenu(false)}><${Icon} size=${22} /><span>${label}</span></a>`)}
-      </nav>
-    </div>`}
   </header>`;
+}
+
+/** On phones and tablets the pages sit in a bar at the bottom, within reach of the thumb. */
+function BottomTabs({ section }) {
+  return html`<nav class="bottom-tabs" aria-label="Pages">
+    ${PAGES.map(([r, label, Icon]) => html`<a key=${r} href=${`#${r}`} aria-current=${section === r ? "page" : null}><${Icon} size=${20} /><span>${r === "how" ? "Learn" : label}</span></a>`)}
+  </nav>`;
 }
 
 function Toasts({ toasts }) {
   return html`<div class="toasts" role="status" aria-live="polite">
-    ${toasts.map((t) => html`<p key=${t.id} class=${`toast ${t.kind}`}>${t.kind === "ok" && html`<${I.Check} size=${16} />`}${t.text}</p>`)}
+    ${toasts.map((t) => html`<p key=${t.id} class=${`toast ${t.kind}`}>
+      ${t.kind === "ok" && html`<${I.Check} size=${16} />`}${t.kind === "pending" && html`<span class="spinner" aria-hidden="true"></span>`}
+      <span>${t.text}</span>${t.href && html`<a href=${t.href} target="_blank" rel="noopener">View on explorer</a>`}
+    </p>`)}
   </div>`;
 }
 
@@ -275,7 +277,7 @@ function BootSkeleton() {
   return html`<div class="boot">
     <header class="top"><div class="top-inner"><span class="brand"><${Coin} symbol="CC" hue=${0} size="md" /><span>Community Coin</span></span></div></header>
     <main><div class="page">
-      <div class="page-head"><h1>Market</h1></div>
+      <div class="page-head"><h1>Market</h1><span class="tagline">Starting the demo chain</span></div>
       <div class="hero">
         <div class="card spotlight"><div class="spot-stage"><span class="skeleton-coin"></span></div><div class="spot-body"><${Skeleton} lines=${4} /></div></div>
         <div class="kpis kpis-grid">${[0, 1, 2, 3].map((i) => html`<div class="card kpi" key=${i}><${Skeleton} lines=${2} /></div>`)}</div>
@@ -293,27 +295,31 @@ function Root() {
   const [world, setWorld] = useState(null);
   const [busy, setBusy] = useState(false);
   const [toasts, setToasts] = useState([]);
+  const [tour, setTour] = useState(null);
   const [, setTick] = useState(0);
   const route = useRoute();
   const [theme, toggleTheme] = useTheme();
   const toastId = useRef(0);
   const loadSeq = useRef(0);
 
-  const toast = useCallback((text, kind = "ok") => {
-    const id = ++toastId.current;
-    setToasts((t) => [...t.slice(-2), { id, text, kind }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), kind === "error" ? 6000 : 3000);
+  /** Shows a toast, or replaces the one with the same id (a wallet transaction moving from pending to done). */
+  const toast = useCallback((text, kind = "ok", { id, href, stay } = {}) => {
+    const key = id ?? ++toastId.current;
+    setToasts((t) => [...t.filter((x) => x.id !== key).slice(-2), { id: key, text, kind, href }]);
+    if (!stay) setTimeout(() => setToasts((t) => t.filter((x) => x.id !== key || x.text !== text)), kind === "error" ? 7000 : href ? 6000 : 3000);
+    return key;
   }, []);
 
   const start = useCallback(async (boot) => {
     setWorld(null);
     setBootError(null);
+    setTour(null);
     try {
       const s = await boot();
       setSession(s);
       setAccount(s.chain.accounts[0].address);
     } catch (e) {
-      setBootError(explain(e));
+      setBootError({ text: explain(e), wallet: boot === bootWallet });
     }
   }, []);
 
@@ -321,6 +327,11 @@ function Root() {
     installTooltip();
     start(bootDemo);
   }, []);
+
+  // End-to-end tests read the chain directly to check what the page shows; only with ?e2e in the address.
+  useEffect(() => {
+    if (session && new URLSearchParams(location.search).has("e2e")) globalThis.__cc = { session };
+  }, [session]);
 
   // A newer load always wins: an answer for an account or state no longer shown is dropped.
   const refresh = useCallback(async () => {
@@ -331,6 +342,7 @@ function Root() {
       if (seq === loadSeq.current) {
         setWorld(w);
         setRefreshError(false);
+        if (!performance.getEntriesByName("cc:ready").length) performance.mark("cc:ready");
       }
     } catch {
       if (seq === loadSeq.current) setRefreshError(true);
@@ -350,17 +362,26 @@ function Root() {
     };
   }, [refresh]);
 
+  const tourEvent = (ev) => setTour((t) => (t && t.steps[t.i].done?.(ev) ? { ...t, i: t.i + 1 } : t));
+
+  /** Sends a transaction. Returns its result (events, hash) or null when it failed; the toast says which. */
   const act = useCallback(
     async (success, fn, args, value = 0n) => {
       setBusy(true);
+      const wallet = session.chain.kind === "wallet";
+      const id = wallet ? toast("Confirm in your wallet", "pending", { stay: true }) : undefined;
+      const link = (hash) => (session.explorer && hash ? `${session.explorer}/tx/${hash}` : undefined);
       try {
-        await transact(session, account, fn, args, value);
-        toast(success);
+        const res = await transact(session, account, fn, args, value, {
+          onSent: (hash) => toast("Waiting for the network", "pending", { id, href: link(hash), stay: true }),
+        });
+        toast(success, "ok", { id, href: link(res.hash) });
         await refresh();
-        return true;
+        tourEvent({ type: "act", fn });
+        return res;
       } catch (e) {
-        toast(explain(e), "error");
-        return false;
+        toast(explain(e), "error", { id });
+        return null;
       } finally {
         setBusy(false);
       }
@@ -373,39 +394,52 @@ function Root() {
     await snapshot(session, session.chain.now());
     await refresh();
     toast(`+${f.duration(seconds)}`);
+    tourEvent({ type: "warp", seconds });
   };
 
   if (bootError)
-    return html`<${Defs} /><div class="boot-error card panel"><p>${bootError}</p><button class="btn" onClick=${() => start(bootDemo)}>Back to the demo</button></div>`;
+    return html`<${Defs} /><div class="boot-error card panel">
+      <p>${bootError.text}</p>
+      <div class="inline-actions">
+        ${bootError.wallet && html`<button class="btn" onClick=${() => start(bootWallet)}>Try again</button>`}
+        <button class=${`btn ${bootError.wallet ? "btn-quiet" : ""}`} onClick=${() => start(bootDemo)}>Back to the demo</button>
+      </div>
+    </div>`;
   if (!session || !world) return html`<${Defs} /><${BootSkeleton} />`;
 
   const live = { ...world, now: session.chain.now() };
-  const ctx = { session, world: live, account, setAccount, act, busy, refresh, route };
-  const canConnect = Boolean(globalThis.ethereum) && Object.keys(DEPLOYMENTS).length > 0 && session.chain.kind === "local";
+  const local = session.chain.kind === "local";
+  const startTour = () => local && setTour({ steps: planTour(live), i: 0 });
+  const ctx = { session, world: live, account, setAccount, act, busy, refresh, route, startTour };
+  const canConnect = Boolean(globalThis.ethereum) && Object.keys(DEPLOYMENTS).length > 0 && local;
+  const section = route.startsWith("meme-") ? "market" : route.startsWith("launch") ? "launch" : route.startsWith("how") ? "how" : route;
   let page;
   if (route.startsWith("meme-")) page = html`<${MemePage} address=${route.slice(5)} />`;
   else if (route.startsWith("launch")) page = html`<${Launch} parentHint=${route.slice(7) || null} />`;
   else if (route === "unions") page = html`<${Unions} />`;
-  else if (route === "portfolio") page = html`<${Portfolio} />`;
-  else if (route === "rules") page = html`<${Rules} />`;
-  else page = html`<${Market} />`;
+  else if (route === "portfolio") page = html`<${Portfolio} onTour=${startTour} />`;
+  else if (route.startsWith("how")) page = html`<${HowItWorks} section=${route.slice(4) || null} />`;
+  else page = html`<${Market} onTour=${startTour} />`;
 
   return html`<${App.Provider} value=${ctx}>
     <${Defs} />
-    <${Toolbar} session=${session} world=${live} account=${account} setAccount=${setAccount} onWarp=${onWarp} busy=${busy} route=${route}
-      onReset=${() => start(bootDemo)} onConnect=${() => start(bootWallet)} canConnect=${canConnect} theme=${theme} onTheme=${toggleTheme} />
+    <${Toolbar} session=${session} world=${live} account=${account} setAccount=${setAccount} onWarp=${onWarp} busy=${busy} section=${section}
+      onReset=${() => start(bootDemo)} onConnect=${() => start(bootWallet)} onTour=${startTour} canConnect=${canConnect} theme=${theme} onTheme=${toggleTheme} />
     <${Ticker} session=${session} world=${live} />
+    ${local && html`<${DemoNote} onTour=${startTour} />`}
     ${refreshError && html`<p class="page-note" role="alert">Showing the last data: reading the chain failed, retrying in 5s.</p>`}
-    <main>${page}</main>
+    <main id="main" tabindex="-1">${page}</main>
     <footer class="foot">
       <span>Hub ${session.explorer
         ? html`<a href=${`${session.explorer}/address/${session.hub.address}`} target="_blank" rel="noopener">${f.shortAddress(session.hub.address)}</a>`
         : f.shortAddress(session.hub.address)}</span>
-      <span>Opening ${f.duration(session.params.openWindow)}</span>
-      <span>Vesting ${f.duration(session.params.vestWindow)}</span>
-      <span>Spike share ${f.percent(session.params.spikeShareBps / 10000, 0)}</span>
-      <span>Unaudited</span>
+      <a href="#how-opening">Opening ${f.duration(session.params.openWindow)}</a>
+      <a href="#how-opening">Vesting ${f.duration(session.params.vestWindow)}</a>
+      <a href="#how-spike">Spike share ${f.percent(session.params.spikeShareBps / 10000, 0)}</a>
+      <a href="#how-limits">Unaudited</a>
     </footer>
+    <${BottomTabs} section=${section} />
+    ${tour && html`<${Tour} tour=${tour} onNext=${() => setTour((t) => ({ ...t, i: Math.min(t.i + 1, t.steps.length - 1) }))} onClose=${() => setTour(null)} />`}
     <${Toasts} toasts=${toasts} />
   </${App.Provider}>`;
 }

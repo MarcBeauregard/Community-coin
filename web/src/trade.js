@@ -292,10 +292,10 @@ function Phases({ m }) {
       <span class="phase phase-vest" style=${`width:${w(vest)}`}></span>
       <span class="phase-now" style=${`left:${(pos * 100).toFixed(2)}%`}></span>
     </div>
-    <div class="phase-labels">
-      <span style=${`width:${w(open)}`}><b><${Term} k="opening">Opening</${Term}></b><span class="muted tnum">${f.hourMinute(start)} → ${f.hourMinute(m.openUntil)}</span></span>
-      <span style=${`width:${w(vest)}`}><b><${Term} k="vesting">Vesting</${Term}></b><span class="muted tnum">→ ${f.hourMinute(end)}</span></span>
-      <span class="phase-free"><b>Trading</b></span>
+    <div class="phase-legend">
+      <span><i class="key key-open"></i><b><${Term} k="opening">Opening</${Term}></b><span class="muted tnum">${f.hourMinute(start)} → ${f.hourMinute(m.openUntil)}</span></span>
+      <span><i class="key key-vest"></i><b><${Term} k="vesting">Vesting</${Term}></b><span class="muted tnum">${f.hourMinute(m.openUntil)} → ${f.hourMinute(end)}</span></span>
+      <span><i class="key key-free"></i><b>Free trading</b><span class="muted tnum">from ${f.hourMinute(end)}</span></span>
     </div>
   </div>`;
 }
