@@ -1,7 +1,8 @@
 // The screens. Each answers one question at first glance, after the dashboard-design skill:
 //
 //   Market       Where is the money going, and what is waiting for me?
-//                ETH locked, volume, memes, live openings · families ranked by locked ETH · to-do list · activity
+//                spotlight (the live opening, or the top family) beside ETH locked, volume, memes, live openings ·
+//                families ranked by locked ETH, with a price trend per row · to-do list · movers · activity
 //   Meme         Is it rising, and what happens if I trade now?
 //                price per million, gap to the 1h reference, market cap, reserve, my position · chart · trade
 //   Launch       Is the ticker free, and what will the launch look like?
@@ -18,7 +19,7 @@ import { useState, useEffect, useContext } from "preact/hooks";
 import { createContext } from "preact";
 import * as f from "./format.js";
 import * as I from "./icons.js";
-import { html, Avatar, Delta, Kpi, Card, ShareBar, Bullet, SegBar, Segmented, StepChart, compact } from "./ui.js";
+import { html, Avatar, Coin, Ring, Sparkline, Flash, celebrate, Delta, Kpi, Card, ShareBar, Bullet, SegBar, Segmented, StepChart, compact } from "./ui.js";
 import { families, pointAt } from "./world.js";
 
 export const App = createContext(null);
@@ -51,8 +52,21 @@ function hueOf(world, m) {
 
 function MemeAvatar({ m, size }) {
   const { world } = useApp();
-  return html`<${Avatar} symbol=${m.symbol} hue=${hueOf(world, m)} size=${size} />`;
+  return html`<${Coin} symbol=${m.symbol} hue=${hueOf(world, m)} depth=${m.depth} size=${size} />`;
 }
+
+/** ETH gets a silver coin struck with its own sign. */
+const EthCoin = ({ size }) => html`<${Coin} symbol="ETH" glyph="Ξ" hue=${5} size=${size} />`;
+
+/** The coin of whatever unit an amount is in: ETH, or one of the memes on screen. */
+function UnitCoin({ unit, memes, size = "sm" }) {
+  if (unit === "ETH") return html`<${EthCoin} size=${size} />`;
+  const m = memes.find((x) => x && x.symbol === unit);
+  return m ? html`<${MemeAvatar} m=${m} size=${size} />` : null;
+}
+
+const pathFor = (session, m) => (session.history.get(m.address) ?? []).map((p) => ({ t: p.t, v: p.p }));
+const familySize = (world, m) => [...world.memes.values()].filter((x) => x.root === m.root).length;
 
 function MemeName({ m, link = true, name = true }) {
   const inner = html`<${MemeAvatar} m=${m} /><span class="meme-sym">${m.symbol}</span>${name && html`<span class="meme-name">${m.name}</span>`}`;
@@ -65,10 +79,10 @@ const lockedOf = (m) => (m.settled ? m.reserve : m.batchQuote);
 function Phase({ m }) {
   const { world, session } = useApp();
   if (m.opening)
-    return html`<span class="chip chip-warn" data-tip=${`Opening · ${f.duration(m.openUntil - world.now)}\nBatch auction: one price for everyone`}>
+    return html`<span class="chip chip-hot" data-tip=${`Opening · ${f.duration(m.openUntil - world.now)}\nBatch auction: one price for everyone`}>
       <${I.Timer} size=${14} /> ${countdown(m.openUntil - world.now)}</span>`;
   if (m.premium > SPIKE_FLAG)
-    return html`<span class="chip chip-warn" data-tip=${`${f.signedPercent(m.premium)} vs 1h ref.\nSelling now leaves half the excess to holders`}>
+    return html`<span class="chip chip-hot" data-tip=${`${f.signedPercent(m.premium)} vs 1h ref.\nSelling now leaves half the excess to holders`}>
       Spike ${f.signedPercent(m.premium)}</span>`;
   if (m.vesting)
     return html`<span class="chip" data-tip=${`Vesting ${f.percent(m.vestedShare, 0)}\nOpening allocations unlock over ${f.spoken(session.params.vestWindow)}`}>Vesting ${f.percent(m.vestedShare, 0)}</span>`;
@@ -90,7 +104,7 @@ function ActivityTable({ token, limit = 10 }) {
   const rows = session.activity.filter((r) => !token || r.token === token || r.target === token);
   const shown = rows.slice(0, more ? 60 : limit);
   const KIND = {
-    buy: ["Buy", "accent"], sell: ["Sell", ""], commit: ["Commit", "accent"], claim: ["Claim", ""],
+    buy: ["Buy", "up"], sell: ["Sell", "down"], commit: ["Commit", "accent"], claim: ["Claim", ""],
     launch: ["Launch", "accent"], settle: ["Settle", ""], union: ["Union", "money"], propose: ["Proposal", ""],
     vote: ["Vote", ""], unvote: ["Unlock", ""], fees: ["Fees", "money"],
   };
@@ -108,11 +122,11 @@ function ActivityTable({ token, limit = 10 }) {
       const who = nameOf(r.actor);
       return html`<div class="activity-row" role="row" key=${i}>
         <span class="muted tnum" role="cell" data-tip=${f.fullDate(r.t)}>${f.ago(world.now - r.t)}</span>
-        <span role="cell" class="who"><${Avatar} symbol=${who} hue=${5} size="sm" />${who}</span>
+        <span role="cell" class="who"><${Avatar} symbol=${who} size="sm" />${who}</span>
         <span role="cell"><span class=${`chip ${tone ? `chip-${tone}` : ""}`}>${label}</span></span>
         <span role="cell" class="activity-meme">${m ? html`<${MemeName} m=${m} name=${false} />` : "—"}${target && html`<${I.Arrow} size=${14} /><${MemeName} m=${target} name=${false} />`}</span>
         <span role="cell" class="num tnum">${r.in && r.out ? html`${amount(r.in)} <span class="muted">→</span> ${amount(r.out)}` : amount(r.in ?? r.out)}</span>
-        <span role="cell" class="num tnum">${r.spike ? html`<span class="warn-text" data-tip=${"Spike share\nLeft in the reserve for holders"}>${amount(r.spike)}</span>` : html`<span class="muted">—</span>`}</span>
+        <span role="cell" class="num tnum">${r.spike ? html`<span class="hot-text" data-tip=${"Spike share\nLeft in the reserve for holders"}>${amount(r.spike)}</span>` : html`<span class="muted">—</span>`}</span>
       </div>`;
     })}
     ${rows.length > limit && html`<button type="button" class="link-btn" onClick=${() => setMore(!more)}>${more ? "Less" : `Show all · ${rows.length}`}</button>`}
@@ -128,7 +142,8 @@ function todoItems({ world }) {
     const meme = world.memes.get(u.meme), target = world.memes.get(u.target);
     const passed = world.now > u.deadline, majority = u.locked * 2n > u.circulating;
     if (!u.executed && !u.stale && passed && majority)
-      items.push({ key: `exec-${u.id}`, m: meme, to: target, label: "Union", chip: "Majority", run: ["Union executed", "executeUnion", [u.id, 0n]], action: "Execute", sort: 1e6 });
+      items.push({ key: `exec-${u.id}`, m: meme, to: target, label: "Union", chip: "Majority", run: ["Union executed", "executeUnion", [u.id, 0n]], action: "Execute", sort: 1e6,
+        party: { symbol: target.symbol, hue: hueOf(world, target) } });
     if (u.mine > 0n && (u.executed || u.stale || passed))
       items.push({ key: `lock-${u.id}`, m: meme, label: "Vote over", chip: f.tokens(u.mine), run: ["Tokens unlocked", "unlockUnion", [u.id]], action: "Unlock", sort: 3e6 });
     if (!u.executed && !u.stale && !passed && meme.balance > 0n)
@@ -148,14 +163,14 @@ function TodoList() {
   return html`<ul class="todo">
     ${items.slice(0, 7).map((it) => html`<li key=${it.key}>
       <span class="todo-what">
-        ${it.m ? html`<${MemeName} m=${it.m} name=${false} />` : html`<span class="meme-id"><${Avatar} symbol="ETH" hue=${5} /><span class="meme-sym">ETH</span></span>`}
+        ${it.m ? html`<${MemeName} m=${it.m} name=${false} />` : html`<span class="meme-id"><${EthCoin} /><span class="meme-sym">ETH</span></span>`}
         ${it.to && html`<${I.Arrow} size=${14} /><${MemeName} m=${it.to} name=${false} />`}
       </span>
       <span class="todo-label muted">${it.label}</span>
-      <span class=${`chip ${it.warm ? "chip-warn" : ""} tnum`}>${it.chip}</span>
+      <span class=${`chip ${it.warm ? "chip-hot" : ""} tnum`}>${it.chip}</span>
       ${it.href
         ? html`<a class="btn btn-sm" href=${it.href}>${it.action}</a>`
-        : html`<button type="button" class="btn btn-sm" disabled=${busy} onClick=${() => act(...it.run)}>${it.action}</button>`}
+        : html`<button type="button" class="btn btn-sm" disabled=${busy} onClick=${async () => (await act(...it.run)) && it.party && celebrate(it.party)}>${it.action}</button>`}
     </li>`)}
   </ul>`;
 }
@@ -180,10 +195,11 @@ function Movers() {
 
 function FamilyList({ rows, total, showShare = true }) {
   const { session, world } = useApp();
-  return html`<div class="ranked" role="table" aria-label="Families">
+  return html`<div class="ranked families" role="table" aria-label="Families">
     <div class="ranked-row head" role="row">
       <span role="columnheader">Meme</span><span role="columnheader" class="num">Price · 1M</span>
-      <span role="columnheader" class="num">1h</span><span role="columnheader" class="num col-res">Reserve</span>
+      <span role="columnheader" class="num">1h</span><span role="columnheader" class="col-trend">Trend</span>
+      <span role="columnheader" class="num col-res">Reserve</span>
       ${showShare && html`<span role="columnheader" class="num col-share">Share</span>`}
     </div>
     ${rows.map((m) => {
@@ -196,8 +212,9 @@ function FamilyList({ rows, total, showShare = true }) {
           <${MemeAvatar} m=${m} /><span class="meme-sym">${m.symbol}</span><span class="meme-name">${m.name}</span>
           <${Phase} m=${m} />
         </span>
-        <span role="cell" class="num tnum" data-tip=${`${f.perMillion(m.priceEth)}\nPrice of one million ${m.symbol}`}>${compact(n(m.priceEth) * 1e6)}</span>
+        <span role="cell" class="num tnum" data-tip=${`${f.perMillion(m.priceEth)}\nPrice of one million ${m.symbol}`}><${Flash} value=${n(m.priceEth)}>${compact(n(m.priceEth) * 1e6)}</${Flash}></span>
         <span role="cell" class="num">${m.opening ? html`<span class="muted">—</span>` : html`<${Delta} cur=${n(m.priceEth) * 1e6} prev=${prev} vs="" tip=${prev !== null ? `1h ago: ${compact(prev)} ETH` : undefined} />`}</span>
+        <span role="cell" class="col-trend">${m.opening ? null : html`<${Sparkline} points=${pathFor(session, m)} />`}</span>
         <span role="cell" class="num tnum col-res" data-tip=${m.parent ? `Reserve in ${m.quoteSymbol}` : "Reserve in ETH"}>${m.parent ? f.tokens(lockedOf(m), m.quoteSymbol) : `${compact(n(lockedOf(m)))} ETH`}</span>
         ${showShare && html`<span role="cell" class="num tnum muted col-share">${share === null ? "" : share < 0.1 ? "<0.1%" : `${f.percent(share / 100, share < 1 ? 1 : 0)}`}</span>`}
       </a>`;
@@ -206,6 +223,52 @@ function FamilyList({ rows, total, showShare = true }) {
 }
 
 // ------------------------------------------------------------------ Market
+
+/**
+ * The hero of the market page: the live opening if there is one (the moment everyone pays the same price), else
+ * the family holding the most ETH. Its coin sits inside the opening's countdown ring.
+ */
+function Spotlight({ rows }) {
+  const { world, session } = useApp();
+  const live = rows.filter((m) => m.opening).sort((a, b) => a.openUntil - b.openUntil)[0];
+  const top = rows.filter((m) => !m.parent).sort((a, b) => (lockedOf(b) > lockedOf(a) ? 1 : lockedOf(b) < lockedOf(a) ? -1 : 0))[0];
+  const m = live ?? top;
+  if (!m) return null;
+  const parent = m.parent && world.memes.get(m.parent);
+  const left = m.openUntil - world.now;
+  const prev = hourAgo(session, world, m);
+  const pts = pathFor(session, m);
+  const quote = (wei) => (m.parent ? f.tokens(wei, m.quoteSymbol) : `${compact(n(wei))} ETH`);
+  const variants = familySize(world, m) - 1;
+  return html`<section class="card spotlight" aria-labelledby="spotlight-title" data-spotlight=${live ? "opening" : "top"}>
+    <div class="spot-stage">
+      ${live
+        ? html`<${Ring} fraction=${left / session.params.openWindow} size=${184} stroke=${3} label=${`Opening closes in ${countdown(left)}`}><${MemeAvatar} m=${m} size="xl" /></${Ring}>`
+        : html`<div class="spot-halo"><${MemeAvatar} m=${m} size="xl" /></div>`}
+    </div>
+    <div class="spot-body">
+      ${live
+        ? html`<span class="chip chip-hot spot-eyebrow" data-tip=${"Live opening\nEvery commit buys at the same price when the timer ends"}><i class="dot dot-hot"></i>Live opening</span>`
+        : html`<span class="chip chip-accent spot-eyebrow" data-tip=${"Top family\nThe root holding the most ETH"}>Top family</span>`}
+      <h2 id="spotlight-title" class="spot-sym"><a href=${memeHref(m.address)}>${m.symbol}</a></h2>
+      <p class="spot-name">${m.name}${parent ? html` <span class="muted">· variant of</span> <a href=${memeHref(parent.address)}>${parent.symbol}</a>` : ""}</p>
+      <dl class="spot-stats">
+        ${live
+          ? html`<div><dt>Closes in</dt><dd class="tnum hot-text">${countdown(left)}</dd></div>
+              <div><dt>Committed</dt><dd class="tnum">${quote(m.batchQuote)}</dd></div>
+              <div><dt>Price · 1M</dt><dd class="tnum">${compact(n(m.priceEth) * 1e6)} ETH</dd></div>`
+          : html`<div><dt>Price · 1M</dt><dd class="tnum"><${Flash} value=${n(m.priceEth)}>${compact(n(m.priceEth) * 1e6)} ETH</${Flash}></dd>
+                <${Delta} cur=${n(m.priceEth) * 1e6} prev=${prev} vs="1h" /></div>
+              <div><dt>Reserve</dt><dd class="tnum">${compact(n(lockedOf(m)))} ETH</dd></div>
+              <div><dt>Family</dt><dd class="tnum">${f.count(variants, "variant")}</dd></div>`}
+      </dl>
+      <div class="spot-actions">
+        <a class="btn btn-lg" href=${memeHref(m.address)}>${live ? `Commit to ${m.symbol}` : `Trade ${m.symbol}`}</a>
+        ${!live && pts.length > 1 && html`<span class="spot-spark"><${Sparkline} points=${pts} width=${180} height=${44} /></span>`}
+      </div>
+    </div>
+  </section>`;
+}
 
 export function Market() {
   const { world, session } = useApp();
@@ -223,19 +286,22 @@ export function Market() {
   const local = session.chain.kind === "local";
 
   return html`<div class="page">
-    <header class="page-head"><h1>Market</h1></header>
-    <div class="kpis">
-      <${Kpi} id="locked" label="ETH locked" icon=${html`<${I.Lock} />`} value=${compact(n(locked))} unit="ETH"
-        tip=${`${f.eth(locked)}\nReserves of the root memes, live openings included`}
-        delta=${html`<${Delta} cur=${n(locked)} prev=${lockedAgo === null ? null : n(lockedAgo)} vs="vs 1h" />`} />
-      <${Kpi} id="volume" label="Volume · 1h" icon=${html`<${I.Pulse} />`} value=${compact(n(volume))} unit="ETH"
-        tip=${`${f.eth(volume)}\nETH traded on the root curves${local ? "" : " since this page opened"}`}
-        delta=${html`<${Delta} cur=${n(volume)} prev=${volumePrev === null ? null : n(volumePrev)} vs="vs prev. hour" neutral=${true} />`} />
-      <${Kpi} id="memes" label="Memes" icon=${html`<${I.Market} />`} value=${String(world.memes.size)}
-        tip=${`${roots.length} ${roots.length === 1 ? "family" : "families"}\n${f.count(world.memes.size - roots.length, "variant")}`}
-        delta=${html`<${Delta} cur=${world.memes.size} prev=${launchedBefore} vs="vs 1h" min=${5} format=${String} />`} />
-      <${Kpi} id="openings" label="Openings" icon=${html`<${I.Timer} />`} value=${String(openings)}
-        tip=${"Live batch auctions\nOne price for every participant"} />
+    <header class="page-head"><h1>Market</h1><span class="tagline">Copies feed the original</span></header>
+    <div class=${`hero ${rows.length ? "" : "no-spot"}`}>
+      <${Spotlight} rows=${rows} />
+      <div class="kpis kpis-grid">
+        <${Kpi} id="locked" label="ETH locked" icon=${html`<${I.Lock} />`} value=${html`<${Flash} value=${n(locked)}>${compact(n(locked))}</${Flash}>`} unit="ETH"
+          tip=${`${f.eth(locked)}\nReserves of the root memes, live openings included`}
+          delta=${html`<${Delta} cur=${n(locked)} prev=${lockedAgo === null ? null : n(lockedAgo)} vs="vs 1h" />`} />
+        <${Kpi} id="volume" label="Volume · 1h" icon=${html`<${I.Pulse} />`} value=${compact(n(volume))} unit="ETH"
+          tip=${`${f.eth(volume)}\nETH traded on the root curves${local ? "" : " since this page opened"}`}
+          delta=${html`<${Delta} cur=${n(volume)} prev=${volumePrev === null ? null : n(volumePrev)} vs="vs prev. hour" neutral=${true} />`} />
+        <${Kpi} id="memes" label="Memes" icon=${html`<${I.Market} />`} value=${String(world.memes.size)}
+          tip=${`${roots.length} ${roots.length === 1 ? "family" : "families"}\n${f.count(world.memes.size - roots.length, "variant")}`}
+          delta=${html`<${Delta} cur=${world.memes.size} prev=${launchedBefore} vs="vs 1h" min=${5} format=${String} />`} />
+        <${Kpi} id="openings" label="Openings" icon=${html`<${I.Timer} />`} value=${String(openings)} tone=${openings ? "hot" : null}
+          tip=${"Live batch auctions\nOne price for every participant"} />
+      </div>
     </div>
     <div class="grid-12">
       <${Card} id="families" title="Families" value=${`${f.count(roots.length, "root")} · ${f.count(world.memes.size - roots.length, "variant")}`} class="span-8"
@@ -267,20 +333,22 @@ function OpeningPanel({ m }) {
     else act("Committed", "commitEth", [m.address, 0n], wei);
   };
   return html`<${Card} id="opening" title="Opening" class="action">
-    <div class="countdown" data-tip=${`Closes at ${f.hourMinute(m.openUntil)}\nThe whole batch buys at once, at one price for everyone`}>
-      <${I.Timer} /><strong class="tnum">${countdown(m.openUntil - world.now)}</strong>
+    <div class="countdown">
+      <div data-tip=${`Closes at ${f.hourMinute(m.openUntil)}\nThe whole batch buys at once, at one price for everyone`}>
+        <${Ring} fraction=${(m.openUntil - world.now) / session.params.openWindow} size=${112} stroke=${5}><strong class="tnum">${countdown(m.openUntil - world.now)}</strong></${Ring}>
+      </div>
+      <dl class="facts">
+        <div><dt>Committed</dt><dd class="tnum">${m.parent ? f.tokens(m.batchQuote, m.quoteSymbol) : `${compact(n(m.batchQuote))} ETH`}</dd></div>
+        <div><dt>Indicative price · 1M</dt><dd class="tnum">${compact(n(m.priceEth) * 1e6)} ETH</dd></div>
+        <div><dt>You</dt><dd class="tnum">${m.committed > 0n ? (m.parent ? f.tokens(m.committed, m.quoteSymbol) : `${compact(n(m.committed))} ETH`) : "—"}</dd></div>
+      </dl>
     </div>
-    <dl class="facts">
-      <div><dt>Committed</dt><dd class="tnum">${m.parent ? f.tokens(m.batchQuote, m.quoteSymbol) : `${compact(n(m.batchQuote))} ETH`}</dd></div>
-      <div><dt>Indicative price · 1M</dt><dd class="tnum">${compact(n(m.priceEth) * 1e6)} ETH</dd></div>
-      <div><dt>You</dt><dd class="tnum">${m.committed > 0n ? (m.parent ? f.tokens(m.committed, m.quoteSymbol) : `${compact(n(m.committed))} ETH`) : "—"}</dd></div>
-    </dl>
     <form onSubmit=${submit}>
       ${parent && parent.balance > 0n && html`<${Segmented} label="Pay with" value=${payWith} onChange=${setPayWith} options=${[["ETH", "ETH"], [parent.symbol, parent.symbol]]} size="sm" />`}
       <div class="amount">
         <input id="commit-amount" type="text" inputmode="decimal" autocomplete="off" aria-label="Amount" value=${value} onInput=${(e) => setValue(e.currentTarget.value)} />
-        <span class="unit" data-tip=${!viaParent && parent ? `ETH buys ${parent.symbol} first` : undefined}>${viaParent ? parent.symbol : "ETH"}</span>
         ${viaParent && html`<button type="button" class="link-btn" onClick=${() => setValue(f.exact(parent.balance))}>Max</button>`}
+        <span class="token" data-tip=${!viaParent && parent ? `ETH buys ${parent.symbol} first` : undefined}>${viaParent ? html`<${MemeAvatar} m=${parent} size="sm" />` : html`<${EthCoin} size="sm" />`}${viaParent ? parent.symbol : "ETH"}</span>
       </div>
       <button class="btn wide" disabled=${!wei || busy}>Commit</button>
       <p class="fine muted" data-tip=${"Vesting\nOpening tokens unlock gradually"}>Vesting ${f.duration(session.params.vestWindow)}</p>
@@ -328,26 +396,39 @@ function TradePanel({ m }) {
     if (ok && side === "sell") setValue("");
   };
   const spike = side === "sell" && m.premium > SPIKE_FLAG;
-  return html`<${Card} id="trade" class="action">
-    <${Segmented} label="Side" value=${side} onChange=${setSide} options=${[["buy", "Buy"], ["sell", "Sell"]]} />
+  const payBalance = side === "buy" ? (viaParent ? parent.balance : world.ethBalance) : m.balance;
+  const units = [m, parent];
+  return html`<${Card} id="trade" class="action trade">
+    <${Segmented} label="Side" value=${side} onChange=${setSide} options=${[["buy", "Buy"], ["sell", "Sell"]]} size="side" />
     ${parent && html`<div class="row-between"><span class="muted fine">${side === "buy" ? "Pay with" : "Receive in"}</span>
       <${Segmented} label=${side === "buy" ? "Pay with" : "Receive in"} value=${via} onChange=${setVia} options=${[["ETH", "ETH"], [parent.symbol, parent.symbol]]} size="sm" /></div>`}
     <form onSubmit=${submit}>
-      <label class="field-label" for="trade-amount">${side === "buy" ? "You pay" : "You sell"}</label>
-      <div class="amount">
-        <input id="trade-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0" value=${value} onInput=${(e) => setValue(e.currentTarget.value)} />
-        <span class="unit">${payUnit}</span>
-        ${(side === "sell" || viaParent) && html`<button type="button" class="link-btn" onClick=${() => setValue(f.exact(side === "sell" ? m.balance : parent.balance))}>Max</button>`}
-      </div>
-      <div class="receive">
-        <span class="muted">You receive</span>
-        <strong class="tnum" data-testid="receive">${over ? "Insufficient balance" : quote === null ? "—" : getUnit === "ETH" ? `${compact(n(quote), 4)} ETH` : f.tokens(quote, getUnit)}</strong>
+      <div class="swap">
+        <div class="swap-box">
+          <div class="swap-head">
+            <label for="trade-amount">${side === "buy" ? "You pay" : "You sell"}</label>
+            <span class="muted tnum">Balance ${payUnit === "ETH" ? compact(n(payBalance), 4) : f.tokens(payBalance)}</span>
+          </div>
+          <div class="swap-row">
+            <input id="trade-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0" value=${value} onInput=${(e) => setValue(e.currentTarget.value)} />
+            ${(side === "sell" || viaParent) && html`<button type="button" class="link-btn" onClick=${() => setValue(f.exact(side === "sell" ? m.balance : parent.balance))}>Max</button>`}
+            <span class="token"><${UnitCoin} unit=${payUnit} memes=${units} />${payUnit}</span>
+          </div>
+        </div>
+        <button type="button" class="swap-flip" aria-label=${side === "buy" ? "Switch to selling" : "Switch to buying"} onClick=${() => setSide(side === "buy" ? "sell" : "buy")}><${I.Swap} size=${16} /></button>
+        <div class="swap-box swap-out">
+          <div class="swap-head"><span>You receive</span></div>
+          <div class="swap-row">
+            <strong class=${`tnum ${over ? "down-text" : ""}`} data-testid="receive">${over ? "Insufficient balance" : quote === null ? "—" : getUnit === "ETH" ? compact(n(quote), 4) : f.tokens(quote)}</strong>
+            <span class="token"><${UnitCoin} unit=${getUnit} memes=${units} />${getUnit}</span>
+          </div>
+        </div>
       </div>
       <div class="route" data-tip=${`Route\n1% fee at each hop, paid to that meme's creator`}>
         ${shownRoute.map((s, i) => html`${i > 0 && html`<${I.Arrow} size=${13} />`}<span class="route-step">${s}</span>`)}
       </div>
-      ${spike && html`<p class="chip chip-warn spike" data-tip=${`${f.signedPercent(m.premium)} vs 1h ref.\nHalf of what you get above the reference stays with holders`}>Spike ${f.signedPercent(m.premium)}</p>`}
-      <button class="btn wide" disabled=${!wei || !quote || over || busy}>${side === "buy" ? `Buy ${m.symbol}` : `Sell ${m.symbol}`}</button>
+      ${spike && html`<p class="chip chip-hot spike" data-tip=${`${f.signedPercent(m.premium)} vs 1h ref.\nHalf of what you get above the reference stays with holders`}>Spike ${f.signedPercent(m.premium)}</p>`}
+      <button class=${`btn wide btn-lg ${side === "sell" ? "btn-sell" : "btn-buy"}`} disabled=${!wei || !quote || over || busy}>${side === "buy" ? `Buy ${m.symbol}` : `Sell ${m.symbol}`}</button>
       <p class="fine muted">Slippage 1%</p>
     </form>
   </${Card}>`;
@@ -384,7 +465,7 @@ function UnionBlock({ u }) {
   const status = u.executed ? ["Executed", "money"] : u.stale ? ["Void", ""] : open ? [countdown(u.deadline - world.now), "warn"] : ready ? ["Majority", "accent"] : ["Failed", ""];
   return html`<div class="union" data-union=${u.id}>
     <div class="row-between">
-      <span class="union-pair"><${MemeName} m=${meme} name=${false} /><${I.Arrow} size=${14} /><${MemeName} m=${target} name=${false} /></span>
+      <span class="union-pair"><${MemeName} m=${meme} name=${false} /><span class="union-arrow"><${I.Merge} size=${14} /></span><${MemeName} m=${target} name=${false} /></span>
       <span class=${`chip ${status[1] ? `chip-${status[1]}` : ""} tnum`} data-tip=${open ? `Vote open\nCloses ${f.fullDate(u.deadline)}` : undefined}>${status[0]}</span>
     </div>
     ${!u.executed && html`<${Bullet} value=${share} target=${0.5} max=${1} label=${`${f.percent(share, 0)} locked, majority at 50%`} />
@@ -399,7 +480,8 @@ function UnionBlock({ u }) {
         </div>
         <button class="btn btn-sm" disabled=${!wei || wei > meme.balance || busy}>Vote for</button>
       </form>`}
-      ${ready && html`<button type="button" class="btn btn-sm" disabled=${busy} onClick=${() => act("Union executed", "executeUnion", [u.id, 0n])}>Execute</button>`}
+      ${ready && html`<button type="button" class="btn btn-sm" disabled=${busy}
+        onClick=${async () => (await act("Union executed", "executeUnion", [u.id, 0n])) && celebrate({ symbol: target.symbol, hue: hueOf(world, target) })}>Execute</button>`}
       ${u.mine > 0n && html`<button type="button" class="btn btn-quiet btn-sm" disabled=${busy} onClick=${() => act("Tokens unlocked", "unlockUnion", [u.id])}>Unlock</button>`}
     </div>
   </div>`;
@@ -444,10 +526,10 @@ export function MemePage({ address }) {
       <${Phase} m=${m} />
     </header>
     <div class="kpis">
-      <${Kpi} id="price" label="Price · 1M" icon=${html`<${I.Pulse} />`} value=${compact(n(m.priceEth) * 1e6)} unit="ETH"
+      <${Kpi} id="price" label="Price · 1M" icon=${html`<${I.Pulse} />`} value=${html`<${Flash} value=${n(m.priceEth)}>${compact(n(m.priceEth) * 1e6)}</${Flash}>`} unit="ETH"
         tip=${`${f.perMillion(m.priceEth)}\n${m.parent ? `${f.perMillion(m.price, m.quoteSymbol)} in ${m.quoteSymbol}` : "Price of one million tokens"}`}
         delta=${m.opening ? null : html`<${Delta} cur=${n(m.priceEth) * 1e6} prev=${hourAgo(session, world, m)} vs="vs 1h" />`} />
-      <${Kpi} id="premium" label="vs 1h ref." icon=${html`<${I.Spark} />`} tone=${m.premium > SPIKE_FLAG ? "warn" : null}
+      <${Kpi} id="premium" label="vs 1h ref." icon=${html`<${I.Spark} />`} tone=${m.premium > SPIKE_FLAG ? "hot" : null}
         value=${m.opening ? "—" : f.signedPercent(m.premium)}
         tip=${`Reference: ${compact(n(m.refEth) * 1e6)} ETH · 1M\nOne-hour moving average. Above it, half the excess of a sale stays with holders`} />
       <${Kpi} id="cap" label="Market cap" icon=${html`<${I.Coins} />`} value=${compact(n(m.capEth))} unit="ETH"
@@ -512,11 +594,13 @@ export function Launch({ parentHint }) {
     e.preventDefault();
     if (!valid) return;
     if (await act("Meme launched", "launch", [name.trim(), symbol.trim(), parent || ZeroAddress], wei)) {
+      celebrate({ symbol: key, hue });
       const token = await session.hub.read("tokenOfKey", [await session.hub.read("symbolKey", [symbol.trim()])]);
       go(memeHref(token));
     }
   };
   const eligible = [...world.memes.values()].filter((m) => m.depth < 6);
+  const hue = p ? hueOf(world, p) : [...world.memes.values()].filter((m) => !m.parent).length;
   const lineage = p ? [...p.lineage.map((a) => world.memes.get(a).symbol), key || "…"] : [key || "…"];
   return html`<div class="page narrow-page">
     <header class="page-head"><h1>Launch</h1></header>
@@ -544,12 +628,12 @@ export function Launch({ parentHint }) {
           <label for="launch-amount">Commit <span class="info" data-tip=${"Commit\nOptional. Same price as every opening participant"}><${I.Info} size=${14} /></span></label>
           <div class="amount"><input id="launch-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0" value=${value} onInput=${(e) => setValue(e.currentTarget.value)} /><span class="unit">ETH</span></div>
         </div>
-        <button class="btn wide" disabled=${!valid || busy}>Launch ${key || ""}</button>
+        <button class="btn wide btn-lg" disabled=${!valid || busy}>Launch ${key || ""}</button>
       </form>
-      <${Card} id="preview" title="Preview" class="span-5">
+      <${Card} id="preview" title="Preview" class="span-5 preview-card">
         <div class="preview">
-          <${Avatar} symbol=${key || "?"} hue=${p ? hueOf(world, p) : world.memes.size % 6} size="lg" />
-          <div><p class="preview-sym">${key || "—"}</p><p class="muted fine">${name || "—"}</p></div>
+          <div class="spot-halo"><${Coin} symbol=${key || "?"} hue=${hue} depth=${p ? p.depth + 1 : 0} size="xl" /></div>
+          <div class="preview-id"><p class="preview-sym">${key || "—"}</p><p class="muted">${name || "—"}</p></div>
         </div>
         <div class="route">${["ETH", ...lineage].map((s, i) => html`${i > 0 && html`<${I.Arrow} size=${13} />`}<span class="route-step">${s}</span>`)}</div>
         <ol class="timeline" aria-label="After launch">

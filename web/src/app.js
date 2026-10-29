@@ -8,8 +8,8 @@ import { seed, DEMO_ACCOUNTS, SEED_SPAN } from "./seed.js";
 import { DEPLOYMENTS } from "./deployments.js";
 import * as f from "./format.js";
 import * as I from "./icons.js";
-import { html, installTooltip, Avatar, Popover, Skeleton, compact } from "./ui.js";
-import { App, Market, MemePage, Launch, Unions, Portfolio, Rules } from "./pages.js";
+import { html, installTooltip, Avatar, Coin, Defs, Popover, Skeleton, compact } from "./ui.js";
+import { App, Market, MemePage, Launch, Unions, Portfolio, Rules, memeHref } from "./pages.js";
 
 const DEMO_PARAMS = [300, 3600, 5000, 3 * 24 * 3600]; // opening, vesting, spike share (bps), union vote
 const WARPS = [
@@ -154,9 +154,63 @@ function useRoute() {
   return route;
 }
 
+// ------------------------------------------------------------------ theme
+
+// Dark is the house look; a viewer who picks light keeps it. A theme set by the page's host (data-theme) wins.
+const THEME_KEY = "community-coin-theme";
+function initialTheme() {
+  let saved = null;
+  try {
+    saved = localStorage.getItem(THEME_KEY);
+  } catch {}
+  return saved === "light" || saved === "dark" ? saved : document.documentElement.dataset.theme || "dark";
+}
+function useTheme() {
+  const [theme, setTheme] = useState(initialTheme);
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+  const toggle = () =>
+    setTheme((t) => {
+      const next = t === "dark" ? "light" : "dark";
+      try {
+        localStorage.setItem(THEME_KEY, next);
+      } catch {}
+      return next;
+    });
+  return [theme, toggle];
+}
+
 // ------------------------------------------------------------------ shell
 
-function Toolbar({ session, world, account, setAccount, onWarp, onReset, onConnect, canConnect, busy, route }) {
+const TICK_KINDS = { buy: ["Buy", "up"], sell: ["Sell", "down"], commit: ["Commit", "accent"], launch: ["Launch", "accent"], union: ["Union", "accent"] };
+
+/** The tape: the latest trades scrolling under the toolbar, paused on hover, still for viewers who ask for less motion. */
+function Ticker({ session, world }) {
+  const rows = session.activity.filter((r) => TICK_KINDS[r.kind] && world.memes.get(r.token)).slice(0, 14);
+  if (rows.length < 4) return null;
+  const roots = [...world.memes.values()].filter((m) => !m.parent).map((m) => m.address);
+  const nameOf = (a) => session.chain.accounts.find((x) => x.address === a)?.name ?? f.shortAddress(a);
+  const amount = (a) => (!a ? "" : a.unit === "ETH" ? `${compact(f.toNumber(a.wei))} ETH` : `${f.tokens(a.wei)} ${a.unit}`);
+  const items = (copy) =>
+    rows.map((r, i) => {
+      const m = world.memes.get(r.token);
+      const [label, tone] = TICK_KINDS[r.kind];
+      return html`<a key=${`${copy}-${i}`} class="tick" href=${memeHref(m.address)} tabindex=${copy ? -1 : null}>
+        <${Coin} symbol=${m.symbol} hue=${Math.max(0, roots.indexOf(m.root))} depth=${m.depth} size="sm" />
+        <b>${m.symbol}</b><span class=${`tick-kind ${tone}`}>${label}</span><span class="tnum">${amount(r.in ?? r.out)}</span>
+        <span class="muted">${nameOf(r.actor)}</span>
+      </a>`;
+    });
+  return html`<div class="ticker" role="region" aria-label="Latest trades">
+    <div class="ticker-track">
+      <div class="ticker-group">${items(0)}</div>
+      <div class="ticker-group" aria-hidden="true">${items(1)}</div>
+    </div>
+  </div>`;
+}
+
+function Toolbar({ session, world, account, setAccount, onWarp, onReset, onConnect, canConnect, busy, route, theme, onTheme }) {
   const [menu, setMenu] = useState(false);
   const local = session.chain.kind === "local";
   const section = route.startsWith("meme-") ? "market" : route.startsWith("launch") ? "launch" : route;
@@ -172,7 +226,7 @@ function Toolbar({ session, world, account, setAccount, onWarp, onReset, onConne
 
   return html`<header class="top">
     <div class="top-inner">
-      <a class="brand" href="#market"><span class="brand-mark" aria-hidden="true">CC</span><span>Community Coin</span></a>
+      <a class="brand" href="#market"><${Coin} symbol="CC" hue=${0} size="md" /><span>Community Coin</span></a>
       <nav class="tabs" aria-label="Pages">
         ${PAGES.map(([r, label, Icon]) => html`<a key=${r} href=${`#${r}`} aria-current=${section === r ? "page" : null}><${Icon} size=${16} />${label}</a>`)}
       </nav>
@@ -188,20 +242,23 @@ function Toolbar({ session, world, account, setAccount, onWarp, onReset, onConne
               <button type="button" role="menuitem" data-close onClick=${onReset}>Restart demo</button>
             </${Popover}>`
           : html`<span class="pill pill-static"><${I.Clock} size=${16} /><span class="tnum">${time}</span></span>`}
-        <${Popover} label="Account" class="account" trigger=${html`<${Avatar} symbol=${me?.name ?? "?"} hue=${5} size="sm" /><span class="account-name">${me?.name}</span><span class="tnum muted">${compact(f.toNumber(world.ethBalance), 4)} ETH</span><${I.Chevron} size=${14} />`}>
+        <button type="button" class="pill theme-toggle" aria-label=${theme === "dark" ? "Switch to light theme" : "Switch to dark theme"} onClick=${onTheme}>
+          ${theme === "dark" ? html`<${I.Sun} size=${16} />` : html`<${I.Moon} size=${16} />`}
+        </button>
+        <${Popover} label="Account" class="account" trigger=${html`<${Avatar} symbol=${me?.name ?? "?"} size="sm" /><span class="account-name">${me?.name}</span><span class="tnum muted">${compact(f.toNumber(world.ethBalance), 4)} ETH</span><${I.Chevron} size=${14} />`}>
           ${session.chain.accounts.map((a) => html`<button key=${a.address} type="button" role="menuitemradio" aria-checked=${a.address === account} data-close onClick=${() => setAccount(a.address)}>
-            <${Avatar} symbol=${a.name} hue=${5} size="sm" />${a.name}${a.address === account && html`<${I.Check} size=${16} class="menu-check" />`}
+            <${Avatar} symbol=${a.name} size="sm" />${a.name}${a.address === account && html`<${I.Check} size=${16} class="menu-check" />`}
           </button>`)}
           ${canConnect && html`<hr /><button type="button" role="menuitem" data-close onClick=${onConnect}>Connect wallet</button>`}
         </${Popover}>
-        <button type="button" class="pill menu-button" aria-expanded=${menu} aria-controls="phone-menu" onClick=${() => setMenu(!menu)}>
-          ${menu ? html`<${I.Close} size=${16} />` : html`<${I.Menu} size=${16} />`}Menu
+        <button type="button" class="pill menu-button" aria-label="Menu" aria-expanded=${menu} aria-controls="phone-menu" onClick=${() => setMenu(!menu)}>
+          ${menu ? html`<${I.Close} size=${16} />` : html`<${I.Menu} size=${16} />`}<span class="menu-label">Menu</span>
         </button>
       </div>
     </div>
     ${menu && html`<div class="phone-menu" id="phone-menu" onClick=${(e) => e.target === e.currentTarget && setMenu(false)}>
       <nav class="menu-grid" aria-label="Pages">
-        ${PAGES.map(([r, label, Icon]) => html`<a key=${r} href=${`#${r}`} aria-current=${section === r ? "page" : null}><${Icon} size=${22} /><span>${label}</span></a>`)}
+        ${PAGES.map(([r, label, Icon]) => html`<a key=${r} href=${`#${r}`} aria-current=${section === r ? "page" : null} onClick=${() => setMenu(false)}><${Icon} size=${22} /><span>${label}</span></a>`)}
       </nav>
     </div>`}
   </header>`;
@@ -216,10 +273,13 @@ function Toasts({ toasts }) {
 /** Loading: blocks the size of the market page, so nothing jumps when the numbers land. */
 function BootSkeleton() {
   return html`<div class="boot">
-    <header class="top"><div class="top-inner"><span class="brand"><span class="brand-mark" aria-hidden="true">CC</span><span>Community Coin</span></span></div></header>
+    <header class="top"><div class="top-inner"><span class="brand"><${Coin} symbol="CC" hue=${0} size="md" /><span>Community Coin</span></span></div></header>
     <main><div class="page">
       <div class="page-head"><h1>Market</h1></div>
-      <div class="kpis">${[0, 1, 2, 3].map((i) => html`<div class="card kpi" key=${i}><${Skeleton} lines=${2} /></div>`)}</div>
+      <div class="hero">
+        <div class="card spotlight"><div class="spot-stage"><span class="skeleton-coin"></span></div><div class="spot-body"><${Skeleton} lines=${4} /></div></div>
+        <div class="kpis kpis-grid">${[0, 1, 2, 3].map((i) => html`<div class="card kpi" key=${i}><${Skeleton} lines=${2} /></div>`)}</div>
+      </div>
       <div class="grid-12"><div class="card panel span-8"><${Skeleton} lines=${6} /></div><div class="card panel span-4"><${Skeleton} lines=${4} /></div></div>
     </div></main>
   </div>`;
@@ -235,6 +295,7 @@ function Root() {
   const [toasts, setToasts] = useState([]);
   const [, setTick] = useState(0);
   const route = useRoute();
+  const [theme, toggleTheme] = useTheme();
   const toastId = useRef(0);
   const loadSeq = useRef(0);
 
@@ -315,8 +376,8 @@ function Root() {
   };
 
   if (bootError)
-    return html`<div class="boot-error card panel"><p>${bootError}</p><button class="btn" onClick=${() => start(bootDemo)}>Back to the demo</button></div>`;
-  if (!session || !world) return html`<${BootSkeleton} />`;
+    return html`<${Defs} /><div class="boot-error card panel"><p>${bootError}</p><button class="btn" onClick=${() => start(bootDemo)}>Back to the demo</button></div>`;
+  if (!session || !world) return html`<${Defs} /><${BootSkeleton} />`;
 
   const live = { ...world, now: session.chain.now() };
   const ctx = { session, world: live, account, setAccount, act, busy, refresh, route };
@@ -330,8 +391,10 @@ function Root() {
   else page = html`<${Market} />`;
 
   return html`<${App.Provider} value=${ctx}>
+    <${Defs} />
     <${Toolbar} session=${session} world=${live} account=${account} setAccount=${setAccount} onWarp=${onWarp} busy=${busy} route=${route}
-      onReset=${() => start(bootDemo)} onConnect=${() => start(bootWallet)} canConnect=${canConnect} />
+      onReset=${() => start(bootDemo)} onConnect=${() => start(bootWallet)} canConnect=${canConnect} theme=${theme} onTheme=${toggleTheme} />
+    <${Ticker} session=${session} world=${live} />
     ${refreshError && html`<p class="page-note" role="alert">Showing the last data: reading the chain failed, retrying in 5s.</p>`}
     <main>${page}</main>
     <footer class="foot">
