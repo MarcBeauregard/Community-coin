@@ -75,11 +75,14 @@ GitHub Actions*.
 dédiée et un peu d'ETH de test :
 
 ```bash
-RPC_URL=https://sepolia.base.org DEPLOYER_KEY=0x... npm run deploy
+RPC_URL=https://sepolia.base.org DEPLOYER_KEY=0x... FEE_RECIPIENT=0x... npm run deploy
 ```
 
-Le script affiche la ligne à ajouter dans `web/src/deployments.js` ; reconstruire et republier l'application
-fait apparaître le bouton « Connect wallet ». Pas de mainnet avant un audit.
+`FEE_RECIPIENT` est l'adresse qui recevra la part du protocole (0,2 % par défaut, `PROTOCOL_FEE_BPS` pour une
+autre valeur jusqu'à 50) : elle ne pourra plus être changée, d'où l'intérêt d'un multisig plutôt que d'un wallet
+chaud. Le script refuse de déployer sur un vrai réseau sans elle, et la relit sur la chaîne après le déploiement.
+Il inscrit ensuite le hub dans `web/src/deployments.js` ; reconstruire et republier l'application fait
+apparaître le bouton « Connect wallet ». Pas de mainnet avant un audit.
 
 ## Le diagnostic
 
@@ -99,8 +102,8 @@ fait apparaître le bouton « Connect wallet ». Pas de mainnet avant un audit.
 2. **Lignée (anti-vamp).** Une variante se lance *dans la famille* du meme qu'elle copie : sa courbe est
    cotée en token parent, pas en ETH. Acheter la copie, c'est d'abord acheter l'original (le routeur le
    fait en une transaction), et l'argent qui sort d'une copie perdante retombe dans l'original au lieu de
-   quitter le meme. Il n'y a qu'un seul pool ETH par famille. Le créateur de l'original touche 1 % sur tout
-   le volume qui traverse son meme.
+   quitter le meme. Il n'y a qu'un seul pool ETH par famille. Le créateur de l'original touche 0,8 % sur
+   tout le volume qui traverse son meme (le 1 % de frais, moins la part du protocole).
 3. **Ouverture équitable.** Les 5 premières minutes de chaque lancement sont une enchère groupée : tous
    les participants paient le même prix, créateur compris. Snipe et bundle du premier bloc n'achètent rien.
    Ces places, les moins chères, **vestent sur une heure** : impossible de les revendre sur la première vague.
@@ -120,6 +123,13 @@ Socle commun : chaque token vit sur une courbe *constant product* à réserves v
 contrat, sans owner, sans upgrade, sans clé admin. Le contrat peut toujours racheter la totalité de l'offre
 en circulation de chaque token ; c'est l'invariant principal des tests.
 
+**Frais.** Chaque échange sur une courbe paie 1 % dans l'actif de cotation. Sur ce 1 %, `protocolFeeBps`
+(0,2 % de l'échange dans le déploiement prévu) va à `feeRecipient`, le reste (0,8 %) au créateur du meme :
+la part du protocole sort du 1 %, elle ne s'y ajoute jamais, et un échange ne coûte pas plus cher avec ou
+sans elle (c'est testé). Les deux valeurs sont fixées au déploiement et ne peuvent plus changer ; le code
+plafonne la part du protocole à 0,5 %, pour que le créateur garde toujours au moins la moitié. Les ouvertures
+et les Unions ne paient pas de frais. Le destinataire retire sa part avec `claimFees`, comme un créateur.
+
 ## Ce que montre la simulation
 
 `npm run simulate` joue 10 fois le même scénario sur les contrats : un original (`PNUT`, 24 acheteurs)
@@ -130,28 +140,31 @@ moitié des acheteurs de la vague (les « paper hands ») vend derrière lui. Qu
 monde vend ce qu'il reste dans un ordre aléatoire. Tout finit en ETH, donc la somme est exactement nulle :
 la seule question est qui paie qui.
 
+Les deux mondes paient le même 1 % de frais par échange, dont 0,2 % au protocole (`PROTOCOL=0` le retire).
 Résultat moyen en ETH, le bot sortant à un moment aléatoire de la fin (personne ne sait où est le sommet) :
 
 | | Aujourd'hui | Community Coin |
 |---|---:|---:|
-| Bot sniper | +53,00 | +46,95 |
-| Créateur de l'original | +0,43 | +1,16 |
-| Créateurs des copies | +1,20 | −1,44 |
-| Acheteurs de l'original | −17,25 | **−7,64** |
-| Acheteurs des copies | −37,38 | −39,02 |
-| **Tout le retail** | −54,63 | **−46,67** |
+| Bot sniper | +53,00 | +47,05 |
+| Créateur de l'original | +0,35 | +0,92 |
+| Créateurs des copies | +1,00 | −1,44 |
+| Acheteurs de l'original | −17,25 | **−7,78** |
+| Acheteurs des copies | −37,38 | −39,01 |
+| Protocole (0,2 %) | +0,28 | +0,27 |
+| **Tout le retail** | −54,63 | **−46,79** |
 | Somme (contrôle de somme nulle) | 0,00 | 0,00 |
-| Pic d'ETH derrière `PNUT` | 19,95 | 23,05 |
+| Pic d'ETH derrière `PNUT` | 19,95 | 23,17 |
 | Pools ETH pour le même meme | 6 | 1 |
 
-Si le bot connaît le sommet et sort le premier, les chiffres bougent à peine (bot +47,20, retail −46,95).
-Lancer une copie ne rapporte plus rien à celui qui la lance (+1,20 → −1,44) : le vamp cesse de payer.
+Si le bot connaît le sommet et sort le premier, les chiffres bougent à peine (bot +47,15, retail −46,91).
+Lancer une copie ne rapporte plus rien à celui qui la lance (+1,00 → −1,44) : le vamp cesse de payer.
 
 Les mêmes règles **sans lignée** (copies lancées comme racines indépendantes, `LINEAGE=0`, 10 scénarios) :
-bot +28,00, acheteurs de l'original −9,46, acheteurs des copies −18,75, **tout le retail −28,21**, soit
+bot +27,83, acheteurs de l'original −9,28, acheteurs des copies −18,75, **tout le retail −28,04**, soit
 presque deux fois moins de pertes qu'aujourd'hui.
 
-L'ablation (5 scénarios, mêmes hypothèses) dit d'où vient chaque effet :
+L'ablation (5 scénarios, mêmes hypothèses, mesurée avant l'ajout de la part du protocole, qui ne prend
+qu'environ 0,3 ETH par scénario sur les frais des créateurs) dit d'où vient chaque effet :
 
 | Configuration | Bot | Acheteurs de l'original | Acheteurs des copies | Tout le retail |
 |---|---:|---:|---:|---:|
@@ -233,13 +246,14 @@ le hub peut frapper, brûler ou déplacer les tokens, et uniquement ceux de `msg
 | `settle` / `claim` | Clôturer l'ouverture (n'importe qui) ; retirer la part vestée de son allocation. |
 | `buy` / `buyEth` | Acheter avec l'actif de cotation, ou avec de l'ETH routé à travers toute la lignée. |
 | `sell` / `sellToEth` | Vendre contre l'actif de cotation (le parent, donc l'argent reste dans la famille) ou jusqu'à l'ETH. |
-| `claimFees(asset)` | Le créateur retire ses frais (1 %), payés dans l'actif de cotation de son meme. |
+| `claimFees(asset)` | Le créateur retire ses frais (0,8 %), et le destinataire du protocole sa part (0,2 %), dans l'actif de cotation du meme. |
 | `proposeUnion` / `lockUnion` / `unlockUnion` / `executeUnion` | Le cycle de vote d'une Union. |
 | `quoteBuyEth` / `quoteSellToEth` / `quoteBuy` / `quoteSell` | Ce que rapporte un achat ou une vente, frais et part de pic compris. |
 | `priceInEth` / `referencePrice` / `lineageOf` / `circulatingSupply` | Vues pour les interfaces. |
 
 Paramètres (constructeur) : durée de l'ouverture, durée du vesting, part de pic (en points de base),
-durée d'un vote d'Union. Constantes : courbe de 1 milliard de tokens virtuels, 1 ETH virtuel pour une racine,
+durée d'un vote d'Union, part du protocole dans les frais (en points de base de l'échange, 50 au plus) et son
+destinataire. Constantes : courbe de 1 milliard de tokens virtuels, 1 ETH virtuel pour une racine,
 1 million de tokens parents virtuels pour une variante (les variantes d'un gros meme démarrent plus cher),
 1 % de frais, profondeur de lignée maximale de 6.
 

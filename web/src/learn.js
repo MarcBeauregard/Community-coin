@@ -136,7 +136,8 @@ function FollowTheMoney() {
     setSim(null);
     if (!m || !wei) return;
     readCurves(session.hub, m.lineage)
-      .then((c) => live && setSim(simulateTrade(c, { side: "buy", viaParent: false, lineage: m.lineage, amount: wei, spikeBps: BigInt(session.params.spikeShareBps), now: session.chain.now() })))
+      .then((c) => live && setSim(simulateTrade(c, { side: "buy", viaParent: false, lineage: m.lineage, amount: wei, spikeBps: BigInt(session.params.spikeShareBps),
+        now: session.chain.now(), protocolBps: BigInt(session.params.protocolFeeBps) })))
       .catch(() => live && setSim(null));
     return () => {
       live = false;

@@ -120,21 +120,28 @@ function spikeShare(vQuote, vToken, ref, tokensIn, gross, spikeBps) {
   return gross > atRef ? ((gross - atRef) * spikeBps) / BPS : 0n;
 }
 
+/** The contract's split of a trade fee: the protocol's cut in bps of the trade, the creator gets the rest. */
+export function splitFee(amount, fee, protocolBps) {
+  const protocolFee = (amount * protocolBps) / BPS;
+  return { protocolFee, creatorFee: fee > protocolFee ? fee - protocolFee : 0n };
+}
+
 /** One buy on one curve. `spot` is the curve's price just before it, quote per whole token (1e18-scaled). */
-function buyHop(token, m, quoteIn, takeFee, now) {
+function buyHop(token, m, quoteIn, takeFee, now, protocolBps = 0n) {
   tradable(m, now);
   updateRef(m, now);
   const spot = mulDiv(m.vQuote, WAD, m.vToken);
   const fee = takeFee ? (quoteIn * FEE_BPS) / BPS : 0n;
+  const split = takeFee ? splitFee(quoteIn, fee, protocolBps) : { protocolFee: 0n, creatorFee: 0n };
   const reserveBefore = m.vQuote - m.floor;
   const [out, vQuote, vToken] = buyOut(m.vQuote, m.vToken, quoteIn - fee);
   m.vQuote = vQuote;
   m.vToken = vToken;
-  return { token, isBuy: true, quoteIn, fee, toReserve: quoteIn - fee, spike: 0n, out, spot, reserveBefore, reserveAfter: m.vQuote - m.floor };
+  return { token, isBuy: true, quoteIn, fee, ...split, toReserve: quoteIn - fee, spike: 0n, out, spot, reserveBefore, reserveAfter: m.vQuote - m.floor };
 }
 
 /** One sale on one curve: `gross` comes off the curve, the fee goes to the creator, the spike share stays in. */
-function sellHop(token, m, tokensIn, spikeBps, now) {
+function sellHop(token, m, tokensIn, spikeBps, now, protocolBps = 0n) {
   tradable(m, now);
   updateRef(m, now);
   const [vQuote0, vToken0] = [m.vQuote, m.vToken];
@@ -148,14 +155,15 @@ function sellHop(token, m, tokensIn, spikeBps, now) {
   const reserve = m.vQuote - m.floor;
   const spike = nobodyLeft(reserve, m.vToken) ? 0n : spikeShare(vQuote0, vToken0, m.ref, tokensIn, gross, spikeBps);
   if (spike > 0n) rescale(m, reserve + spike);
-  return { token, isBuy: false, tokensIn, gross, fee, spike, out: gross - fee - spike, spot, reserveBefore, reserveAfter: m.vQuote - m.floor };
+  return { token, isBuy: false, tokensIn, gross, fee, ...splitFee(gross, fee, protocolBps), spike, out: gross - fee - spike, spot, reserveBefore, reserveAfter: m.vQuote - m.floor };
 }
 
 /**
  * What a trade would do, hop by hop. `side` is "buy" or "sell"; `viaParent` trades against the parent token only
  * (one hop) instead of routing through the whole lineage to ETH. `lineage` is root first, ending with the meme.
+ * `protocolBps` only splits each fee between creator and protocol; amounts do not depend on it.
  */
-export function simulateTrade(curves, { side, viaParent, lineage, amount, spikeBps, now }) {
+export function simulateTrade(curves, { side, viaParent, lineage, amount, spikeBps, now, protocolBps = 0n }) {
   const c = clone(curves);
   const t = BigInt(now);
   const hops = [];
@@ -163,7 +171,7 @@ export function simulateTrade(curves, { side, viaParent, lineage, amount, spikeB
     const path = viaParent ? lineage.slice(-1) : lineage;
     let x = amount;
     for (const token of path) {
-      const h = buyHop(token, c.get(token), x, true, t);
+      const h = buyHop(token, c.get(token), x, true, t, protocolBps);
       hops.push(h);
       x = h.out;
     }
@@ -172,7 +180,7 @@ export function simulateTrade(curves, { side, viaParent, lineage, amount, spikeB
   const path = viaParent ? lineage.slice(-1) : [...lineage].reverse();
   let x = amount;
   for (const token of path) {
-    const h = sellHop(token, c.get(token), x, spikeBps, t);
+    const h = sellHop(token, c.get(token), x, spikeBps, t, protocolBps);
     hops.push(h);
     x = h.out;
   }
@@ -234,12 +242,13 @@ export function simulateUnion(curves, { meme, targetLineage, now }) {
 }
 
 /** Rebuilds the hops of a transaction that already happened from its Trade events, in the same shape as above. */
-export function hopsFromEvents(events) {
+export function hopsFromEvents(events, protocolBps = 0n) {
   return events
     .filter((e) => e.name === "Trade")
-    .map(({ args: a }) =>
-      a.isBuy
-        ? { token: a.token, isBuy: true, quoteIn: a.quoteAmount, fee: a.fee, toReserve: a.quoteAmount - a.fee, spike: 0n, out: a.tokenAmount }
-        : { token: a.token, isBuy: false, tokensIn: a.tokenAmount, gross: a.quoteAmount, fee: a.fee, spike: a.spikeShare, out: a.quoteAmount - a.fee - a.spikeShare },
-    );
+    .map(({ args: a }) => {
+      const split = splitFee(a.quoteAmount, a.fee, protocolBps);
+      return a.isBuy
+        ? { token: a.token, isBuy: true, quoteIn: a.quoteAmount, fee: a.fee, ...split, toReserve: a.quoteAmount - a.fee, spike: 0n, out: a.tokenAmount }
+        : { token: a.token, isBuy: false, tokensIn: a.tokenAmount, gross: a.quoteAmount, fee: a.fee, ...split, spike: a.spikeShare, out: a.quoteAmount - a.fee - a.spikeShare };
+    });
 }

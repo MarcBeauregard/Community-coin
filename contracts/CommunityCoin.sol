@@ -23,6 +23,10 @@ import {MemeToken} from "./MemeToken.sol";
 ///     buys into the target and its curve is re-priced in the target token; balances are untouched and
 ///     dissenters can sell on the curve for the whole vote.
 ///
+/// Fees. Every continuous trade pays FEE_BPS (1%) in the quote asset. `protocolFeeBps` of it goes to `feeRecipient`
+/// and the rest to the meme's creator: the protocol's cut comes out of the 1%, never on top of it. Both are fixed at
+/// deployment and the cut can never exceed MAX_PROTOCOL_FEE_BPS (0.5%). Openings and unions pay no fee.
+///
 /// Every token trades on a virtual constant-product bonding curve whose reserve is held by this contract,
 /// so the hub can always buy back the whole circulating supply of every token. No owner, no upgrade.
 contract CommunityCoin is ReentrancyGuard {
@@ -34,8 +38,10 @@ contract CommunityCoin is ReentrancyGuard {
     uint256 public constant ROOT_VIRTUAL_QUOTE = 1 ether;
     /// @notice Virtual parent tokens a variant curve starts with: variants of big memes start bigger.
     uint256 public constant CHILD_VIRTUAL_QUOTE = 1_000_000e18;
-    /// @notice Fee on continuous trades, paid in the quote asset to the token's creator.
+    /// @notice Fee on continuous trades, paid in the quote asset: to the token's creator, minus the protocol's cut.
     uint256 public constant FEE_BPS = 100;
+    /// @notice Largest share of a trade the protocol can take out of FEE_BPS: the creator always keeps at least half.
+    uint256 public constant MAX_PROTOCOL_FEE_BPS = 50;
     uint256 public constant BPS = 10_000;
     /// @notice Longest lineage allowed (a root has depth 0); bounds the gas of routed trades.
     uint256 public constant MAX_DEPTH = 6;
@@ -56,6 +62,10 @@ contract CommunityCoin is ReentrancyGuard {
     uint256 public immutable spikeShareBps;
     /// @notice Length of a union vote, in seconds.
     uint256 public immutable unionWindow;
+    /// @notice Part of every trade, in basis points of the trade, paid to `feeRecipient` out of FEE_BPS.
+    uint256 public immutable protocolFeeBps;
+    /// @notice Receives the protocol's cut, claimable with claimFees like any creator fee.
+    address public immutable feeRecipient;
 
     // ------------------------------------------------------------------ state
 
@@ -145,12 +155,22 @@ contract CommunityCoin is ReentrancyGuard {
         _;
     }
 
-    constructor(uint256 openWindow_, uint256 vestWindow_, uint256 spikeShareBps_, uint256 unionWindow_) {
+    constructor(
+        uint256 openWindow_,
+        uint256 vestWindow_,
+        uint256 spikeShareBps_,
+        uint256 unionWindow_,
+        uint256 protocolFeeBps_,
+        address feeRecipient_
+    ) {
         if (spikeShareBps_ + FEE_BPS > BPS) revert InvalidConfig();
+        if (protocolFeeBps_ > MAX_PROTOCOL_FEE_BPS || (protocolFeeBps_ > 0 && feeRecipient_ == address(0))) revert InvalidConfig();
         openWindow = openWindow_;
         vestWindow = vestWindow_;
         spikeShareBps = spikeShareBps_;
         unionWindow = unionWindow_;
+        protocolFeeBps = protocolFeeBps_;
+        feeRecipient = feeRecipient_;
     }
 
     // ------------------------------------------------------------------ launch
@@ -630,9 +650,12 @@ contract CommunityCoin is ReentrancyGuard {
             : ref - Math.mulDiv(ref - spot, elapsed, REF_WINDOW);
     }
 
+    /// @dev The trade's fee, split between the protocol and the creator; the creator gets the rounding.
     function _takeFee(Meme storage m, uint256 amount) internal returns (uint256 fee) {
         fee = amount * FEE_BPS / BPS;
-        if (fee > 0) feesOf[m.creator][m.parent] += fee;
+        uint256 toProtocol = amount * protocolFeeBps / BPS;
+        if (toProtocol > 0) feesOf[feeRecipient][m.parent] += toProtocol;
+        if (fee > toProtocol) feesOf[m.creator][m.parent] += fee - toProtocol;
     }
 
     function _curveBuy(Meme storage m, uint256 quoteIn) internal returns (uint256 out) {

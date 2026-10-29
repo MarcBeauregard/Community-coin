@@ -45,7 +45,7 @@ async function expectedTotals() {
         import { seed, DEMO_ACCOUNTS } from "./seed.js";
         export async function run() {
           const chain = await LocalChain.create(DEMO_ACCOUNTS);
-          const hub = await Hub.deploy(chain, chain.accounts[0].address, [300, 3600, 5000, 259200]);
+          const hub = await Hub.deploy(chain, chain.accounts[0].address, [300, 3600, 5000, 259200, 20, chain.accounts.find((a) => a.name === "Treasury").address]);
           const accountOf = (n) => chain.accounts.find((a) => a.name === n).address;
           await seed({ hub, accountOf, run: (a, fn, args, v) => hub.write(accountOf(a), fn, args, v), warp: async (s) => chain.warp(s) });
           const out = { roots: {}, count: Number(await hub.read("memeCount")) };
@@ -209,11 +209,13 @@ const server = http.createServer((req, res) => {
   await quoted();
   const breakdown = page.locator("[data-testid=breakdown]");
   await breakdown.waitFor();
-  const hopsOf = (box) => box.locator(".flow-hop").evaluateAll((els) => els.map((e) => ({ fee: e.dataset.fee, reserve: e.dataset.reserve, out: e.dataset.out })));
+  const hopsOf = (box) => box.locator(".flow-hop").evaluateAll((els) =>
+    els.map((e) => ({ fee: e.dataset.fee, creatorFee: e.dataset.creatorFee, protocolFee: e.dataset.protocolFee, reserve: e.dataset.reserve, out: e.dataset.out })));
   const before = { hops: await hopsOf(breakdown), out: await breakdown.getAttribute("data-out") };
   check(before.hops.length === 2, "the breakdown shows both curves the ETH goes through");
-  const pnut = await tokenOf("PNUT"), dev = await addressOf("Dev Peanut");
-  const fees0 = BigInt(await read("feesOf", [dev, "0x0000000000000000000000000000000000000000"])), reserve0 = BigInt(await read("realReserve", [pnut]));
+  const pnut = await tokenOf("PNUT"), dev = await addressOf("Dev Peanut"), treasury = await addressOf("Treasury");
+  const ZERO = "0x0000000000000000000000000000000000000000";
+  const fees0 = BigInt(await read("feesOf", [dev, ZERO])), cut0 = BigInt(await read("feesOf", [treasury, ZERO])), reserve0 = BigInt(await read("realReserve", [pnut]));
   await collectTerms();
   await page.click("button:has-text('Buy PNUTWIFHAT')");
   await toast("Bought");
@@ -221,9 +223,11 @@ const server = http.createServer((req, res) => {
   await receipt.waitFor();
   const after = { hops: await hopsOf(receipt), out: await receipt.getAttribute("data-out") };
   check(JSON.stringify(after) === JSON.stringify(before), "the receipt equals the breakdown shown before, to the wei");
-  const fees1 = BigInt(await read("feesOf", [dev, "0x0000000000000000000000000000000000000000"])), reserve1 = BigInt(await read("realReserve", [pnut]));
-  check(String(fees1 - fees0) === after.hops[0].fee && String(reserve1 - reserve0) === after.hops[0].reserve,
-    "and the chain agrees: PNUT's creator fee and PNUT's reserve moved by exactly the receipt's amounts");
+  const fees1 = BigInt(await read("feesOf", [dev, ZERO])), cut1 = BigInt(await read("feesOf", [treasury, ZERO])), reserve1 = BigInt(await read("realReserve", [pnut]));
+  check(String(fees1 - fees0) === after.hops[0].creatorFee && String(cut1 - cut0) === after.hops[0].protocolFee && String(reserve1 - reserve0) === after.hops[0].reserve,
+    "and the chain agrees: PNUT's creator fee, the protocol's cut and PNUT's reserve moved by exactly the receipt's amounts");
+  check(BigInt(after.hops[0].creatorFee) * 2n === BigInt(after.hops[0].protocolFee) * 8n && BigInt(after.hops[0].fee) === BigInt(after.hops[0].creatorFee) + BigInt(after.hops[0].protocolFee),
+    "the 1% fee splits 0.8% to the creator and 0.2% to the protocol");
   await page.locator("[aria-label='Side'] button", { hasText: "Sell" }).click();
   await page.locator("[aria-label='Receive in'] button", { hasText: "PNUT" }).click();
   await page.locator("#trade form").getByRole("button", { name: "Max" }).click();

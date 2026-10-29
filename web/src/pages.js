@@ -406,6 +406,7 @@ export function Launch({ parentHint }) {
   const eligible = [...world.memes.values()].filter((m) => m.depth < 6);
   const lineage = p ? [...p.lineage.map((a) => world.memes.get(a).symbol), key || "…"] : [key || "…"];
   const quote = p ? p.symbol : "ETH";
+  const creatorCut = f.percent((100 - session.params.protocolFeeBps) / 10000, 1);
   return html`<div class="page narrow-page">
     <header class="page-head"><h1>Launch</h1></header>
     <div class="grid-12">
@@ -450,12 +451,12 @@ export function Launch({ parentHint }) {
           <li data-tip=${"Trading\nBuy and sell freely on the curve"}><span>Trading</span><b>∞</b></li>
         </ol>
         <dl class="facts">
-          <div><dt><${Term} k="creatorFee">You earn</${Term}></dt><dd>1% of every trade · in ${quote}</dd></div>
+          <div><dt><${Term} k="creatorFee">You earn</${Term}></dt><dd>${creatorCut} of every trade · in ${quote}</dd></div>
           <div><dt><${Term} k="spikeShare">Spike share</${Term}></dt><dd>${f.percent(session.params.spikeShareBps / 10000, 0)}</dd></div>
         </dl>
         <p class="explain">${p
-          ? `Every buy of your variant buys ${p.symbol} first, and you earn 1% of each trade on your curve, paid in ${p.symbol}.`
-          : "Your meme opens with a batch auction at one price for everyone, you included, and you earn 1% of every trade on its curve, paid in ETH."}</p>
+          ? `Every buy of your variant buys ${p.symbol} first, and you earn ${creatorCut} of each trade on your curve, paid in ${p.symbol}.`
+          : `Your meme opens with a batch auction at one price for everyone, you included, and you earn ${creatorCut} of every trade on its curve, paid in ETH.`}</p>
       </${Card}>
     </div>
   </div>`;
@@ -502,8 +503,8 @@ export function Portfolio({ onTour }) {
       <${Kpi} id="p-eth" label="ETH balance" icon=${html`<${I.Wallet} />`} value=${compact(n(world.ethBalance), 4)} unit="ETH" tip=${f.eth(world.ethBalance)} sub=${local ? "play money" : null} />
       <${Kpi} id="p-claim" label=${html`<${Term} k="claim">Claimable</${Term}>`} icon=${html`<${I.Lock} />`} value=${compact(n(claimValue))} unit="ETH"
         tip=${"Unlocked opening tokens\nValued at the current price"} sub=${f.count(claimables.length, "meme")} />
-      <${Kpi} id="p-fees" label=${html`<${Term} k="creatorFee">Creator fees</${Term}>`} icon=${html`<${I.Coins} />`} value=${compact(n(feeValue))} unit="ETH"
-        tip=${"Fees earned on the memes you launched\nValued at the current price"} sub=${f.count(world.fees.length, "asset")} />
+      <${Kpi} id="p-fees" label=${html`<${Term} k="creatorFee">Fees earned</${Term}>`} icon=${html`<${I.Coins} />`} value=${compact(n(feeValue))} unit="ETH"
+        tip=${"Fees waiting for you: on the memes you launched, or the protocol's cut for its treasury\nValued at the current price"} sub=${f.count(world.fees.length, "asset")} />
     </div>
     <div class="grid-12">
       <${Card} id="holdings" title="Memes" class="span-8">

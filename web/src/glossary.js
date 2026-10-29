@@ -1,6 +1,6 @@
 // Every word of the trade the interface uses, defined once. Each info button and the glossary on the How it works
 // page read from here, so a term means the same thing everywhere. One sentence each, plain words, no other jargon.
-// {open}, {vest}, {spike} and {vote} stand for the hub's own parameters, filled in by term().
+// {open}, {vest}, {spike}, {vote}, {creator} and {protocol} stand for the hub's own parameters, filled in by term().
 
 import { spoken, percent } from "./format.js";
 
@@ -20,7 +20,8 @@ export const GLOSSARY = {
   claim: ["Claim", "Moving the opening tokens that have unlocked into your balance."],
   spike: ["Spike", "How far the price sits above its 1h reference. A big spike usually means a wave of buyers just arrived."],
   spikeShare: ["Spike share", "{spike} of what a sale gets above the 1h reference stays in the reserve, which lifts the price for everyone still holding."],
-  creatorFee: ["Creator fee", "1% of every trade on a meme's curve goes to the person who launched it."],
+  creatorFee: ["Creator fee", "{creator} of every trade on a meme's curve goes to the person who launched it."],
+  protocolFee: ["Protocol fee", "{protocol} of every trade goes to Community Coin. It comes out of the 1% fee, never on top of it, and the contract caps it at 0.5% for good."],
   slippage: ["Slippage", "How far the price may move before your trade goes through. Beyond 1%, it is refused and nothing happens."],
   priceImpact: ["Price impact", "How much your own trade moves the price against you, fees left out. Bigger trades move it more."],
   union: ["Union", "A vote by which a rival root joins another family: its ETH buys the target, and its holders keep their tokens."],
@@ -28,10 +29,10 @@ export const GLOSSARY = {
   lock: ["Lock", "Voting for a union by depositing your tokens. You can take them back at any time."],
   settle: ["Settle", "The moment an opening closes and the whole batch buys on the curve. It happens on the first action after the timer."],
   ticker: ["Ticker", "The short name of a meme. Case, punctuation and look-alike digits are folded, so PNUT, $pnut and PNU7 are one ticker."],
-  demo: ["Demo", "Everything runs in this page with play ETH: the real contracts, six example accounts and a clock you can skip ahead."],
+  demo: ["Demo", "Everything runs in this page with play ETH: the real contracts, example accounts and a clock you can skip ahead."],
 };
 
-const DEFAULTS = { openWindow: 300, vestWindow: 3600, spikeShareBps: 5000, unionWindow: 259200 };
+const DEFAULTS = { openWindow: 300, vestWindow: 3600, spikeShareBps: 5000, unionWindow: 259200, protocolFeeBps: 20 };
 
 export const term = (key, params = DEFAULTS) => {
   const entry = GLOSSARY[key];
@@ -41,6 +42,8 @@ export const term = (key, params = DEFAULTS) => {
     vest: spoken(params.vestWindow),
     spike: percent(params.spikeShareBps / 10000, 0),
     vote: spoken(params.unionWindow),
+    creator: percent((100 - (params.protocolFeeBps ?? 0)) / 10000, 1),
+    protocol: percent((params.protocolFeeBps ?? 0) / 10000, 1),
   };
   const text = entry[1].replace(/\{(\w+)\}/g, (_, k) => fill[k]);
   return { key, name: entry[0], text };

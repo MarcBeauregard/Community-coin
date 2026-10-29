@@ -7,8 +7,14 @@ const OPEN = 300; // 5 minute opening batch
 const VOTE = 3 * 24 * 3600; // 3 day union vote
 const SPIKE = 5000; // half of what a sale fetches above the reference price stays in the reserve
 const REF_WINDOW = 3600;
+const PROTOCOL = 20; // 0.2% of every trade to the protocol, out of the 1% fee
 const ETH = ethers.ZeroAddress;
 const eth = (n) => ethers.parseEther(String(n));
+
+// The protocol's fee recipient: the last test account, which nothing else uses.
+const treasury = async () => (await ethers.getSigners()).at(-1);
+const deployHub = async (open, vest, spike, vote, protocol = PROTOCOL) =>
+  ethers.deployContract("CommunityCoin", [open, vest, spike, vote, protocol, (await treasury()).address]);
 
 // Quotes are evaluated at the latest block's timestamp: mine the next transaction at that same timestamp
 // so that the reference price has not moved in between.
@@ -16,7 +22,7 @@ const sameTimestamp = async () => time.setNextBlockTimestamp(await time.latest()
 
 async function deploy() {
   const signers = await ethers.getSigners();
-  const hub = await ethers.deployContract("CommunityCoin", [OPEN, 0, SPIKE, VOTE]);
+  const hub = await deployHub(OPEN, 0, SPIKE, VOTE);
 
   async function launch(signer, symbol, parent = ETH, value = 0n) {
     await hub.connect(signer).launch(`${symbol} coin`, symbol, parent, { value });
@@ -102,7 +108,7 @@ describe("CommunityCoin", function () {
 
     it("unlocks the launch price linearly, so it cannot be dumped on the first wave", async function () {
       const [dev, sniper] = await ethers.getSigners();
-      const hub = await ethers.deployContract("CommunityCoin", [OPEN, VEST, SPIKE, VOTE]);
+      const hub = await deployHub(OPEN, VEST, SPIKE, VOTE);
       await hub.connect(dev).launch("Vest", "VEST", ETH, { value: eth(1) });
       const token = await ethers.getContractAt("MemeToken", await hub.tokenOfKey(await hub.symbolKey("VEST")));
       await hub.connect(sniper).commit(token, eth(3), { value: eth(3) });
@@ -242,7 +248,7 @@ describe("CommunityCoin", function () {
     // then the batch buyer dumps on the wave.
     async function dumpOnTheWave(spikeShare, dumpAfter) {
       const [dev, flipper, ...wave] = await ethers.getSigners();
-      const hub = await ethers.deployContract("CommunityCoin", [OPEN, 0, spikeShare, VOTE]);
+      const hub = await deployHub(OPEN, 0, spikeShare, VOTE);
       await hub.connect(dev).launch("Wave", "WAVE", ETH);
       const token = await ethers.getContractAt("MemeToken", await hub.tokenOfKey(await hub.symbolKey("WAVE")));
       await hub.connect(flipper).commit(token, eth(1), { value: eth(1) });
@@ -275,7 +281,7 @@ describe("CommunityCoin", function () {
 
     it("charges a full dump only on the part of it executed above the reference price", async function () {
       const [dev, bot, ...wave] = await ethers.getSigners();
-      const hub = await ethers.deployContract("CommunityCoin", [OPEN, 0, SPIKE, VOTE]);
+      const hub = await deployHub(OPEN, 0, SPIKE, VOTE);
       await hub.connect(dev).launch("Dump", "DUMP", ETH, { value: eth(0.3) });
       const token = await ethers.getContractAt("MemeToken", await hub.tokenOfKey(await hub.symbolKey("DUMP")));
       await hub.connect(bot).commit(token, eth(2), { value: eth(2) });
@@ -345,28 +351,62 @@ describe("CommunityCoin", function () {
 
     it("refuses a spike share that could exceed the proceeds", async function () {
       const factory = await ethers.getContractFactory("CommunityCoin");
-      await expect(factory.deploy(OPEN, 0, 9901, VOTE)).to.be.revertedWithCustomError(factory, "InvalidConfig");
+      await expect(factory.deploy(OPEN, 0, 9901, VOTE, PROTOCOL, (await treasury()).address)).to.be.revertedWithCustomError(factory, "InvalidConfig");
     });
   });
 
-  describe("creator fees", function () {
-    it("pays creators in the asset their meme is quoted in", async function () {
+  describe("creator and protocol fees", function () {
+    it("pays creators in the asset their meme is quoted in, minus the protocol's cut", async function () {
       const { hub, signers, launch, liveRoot } = await loadFixture(deploy);
       const [dev, vamp, degen] = signers;
+      const protocol = await treasury();
       const pnut = await liveRoot("PNUT", dev);
       const variant = await launch(vamp, "PNUTY", await pnut.getAddress());
       await time.increase(OPEN);
-      await hub.connect(degen).buyEth(variant, 0, { value: eth(1) });
+      const tx = await hub.connect(degen).buyEth(variant, 0, { value: eth(1) });
 
+      // The first hop pays 1% of the ETH: 0.8% to PNUT's creator, 0.2% to the protocol.
       const devFee = await hub.feesOf(dev, ETH);
-      expect(devFee).to.equal(eth(0.01));
+      expect(devFee).to.equal(eth(0.008));
+      expect(await hub.feesOf(protocol, ETH)).to.equal(eth(0.002));
+      // The second hop pays 1% of the PNUT it spends, split the same way, in PNUT.
+      const hops = (await tx.wait()).logs.map((l) => { try { return hub.interface.parseLog(l); } catch { return null; } }).filter((e) => e?.name === "Trade");
+      const pnutIn = hops[1].args.quoteAmount;
       const vampFee = await hub.feesOf(vamp, await pnut.getAddress());
-      expect(vampFee).to.be.gt(0n);
+      const protocolPnut = await hub.feesOf(protocol, await pnut.getAddress());
+      expect(protocolPnut).to.equal((pnutIn * 20n) / 10_000n);
+      expect(vampFee + protocolPnut).to.equal(hops[1].args.fee);
+      expect(hops[1].args.fee).to.equal((pnutIn * 100n) / 10_000n);
 
       await expect(hub.connect(dev).claimFees(ETH)).to.changeEtherBalance(dev, devFee);
       await hub.connect(vamp).claimFees(pnut);
       expect(await pnut.balanceOf(vamp)).to.equal(vampFee);
       await expect(hub.connect(vamp).claimFees(pnut)).to.be.revertedWithCustomError(hub, "NothingToClaim");
+      await expect(hub.connect(protocol).claimFees(ETH)).to.changeEtherBalance(protocol, eth(0.002));
+      await hub.connect(protocol).claimFees(pnut);
+      expect(await pnut.balanceOf(protocol)).to.equal(protocolPnut);
+    });
+
+    it("never charges traders more than 1%: the protocol's cut comes out of the creator's fee", async function () {
+      const withCut = await deployHub(OPEN, 0, SPIKE, VOTE, PROTOCOL);
+      const without = await deployHub(OPEN, 0, SPIKE, VOTE, 0);
+      const [dev] = await ethers.getSigners();
+      for (const hub of [withCut, without]) {
+        await hub.connect(dev).launch("PNUT coin", "PNUT", ETH, { value: eth(0.1) });
+      }
+      await time.increase(OPEN);
+      const quote = async (hub) => hub.quoteBuyEth(await hub.tokenOfKey(await hub.symbolKey("PNUT")), eth(1));
+      expect(await quote(withCut)).to.equal(await quote(without));
+    });
+
+    it("caps the protocol's cut at half the fee and needs somewhere to send it", async function () {
+      const factory = await ethers.getContractFactory("CommunityCoin");
+      const to = (await treasury()).address;
+      await expect(factory.deploy(OPEN, 0, SPIKE, VOTE, 51, to)).to.be.revertedWithCustomError(factory, "InvalidConfig");
+      await expect(factory.deploy(OPEN, 0, SPIKE, VOTE, PROTOCOL, ETH)).to.be.revertedWithCustomError(factory, "InvalidConfig");
+      const hub = await factory.deploy(OPEN, 0, SPIKE, VOTE, 50, to);
+      expect(await hub.protocolFeeBps()).to.equal(50n);
+      expect(await hub.feeRecipient()).to.equal(to);
     });
   });
 
@@ -504,6 +544,7 @@ describe("CommunityCoin", function () {
       const pick = (arr) => arr[Math.floor(rand() * arr.length)];
       const creators = signers.slice(0, 3);
       const traders = signers.slice(3, 9);
+      const earners = [...creators, await treasury()]; // everyone fees are owed to
 
       const a = await launch(creators[0], "AAA", ETH, eth(1));
       const b = await launch(creators[1], "BBB", ETH, eth(0.5));
@@ -552,18 +593,18 @@ describe("CommunityCoin", function () {
           await hub.executeUnion(0, 0);
           for (const h of holders) if ((await hub.lockedOf(0, h)) > 0n) await hub.connect(h).unlockUnion(0);
         }
-        if (step % 10 === 0) await checkBooks(hub, tokens, creators, signers.slice(0, 9));
+        if (step % 10 === 0) await checkBooks(hub, tokens, earners, signers.slice(0, 9));
       }
-      await checkBooks(hub, tokens, creators, signers.slice(0, 9));
+      await checkBooks(hub, tokens, earners, signers.slice(0, 9));
 
       // Everybody exits, deepest memes first, creators cashing out their fees as they go.
       // Every sale must succeed and the whole system must unwind to nothing.
       const depths = new Map();
       for (const t of tokens) depths.set(t, await hub.depthOf(t));
       const byDepth = [...tokens].sort((x, y) => Number(depths.get(y) - depths.get(x)));
-      const everyone = signers.slice(0, 9);
+      const everyone = [...signers.slice(0, 9), await treasury()];
       for (let round = 0; round < 8; round++) {
-        for (const c of creators)
+        for (const c of earners)
           for (const asset of [ETH, ...(await Promise.all(tokens.map((t) => t.getAddress())))])
             if ((await hub.feesOf(c, asset)) > 0n) await hub.connect(c).claimFees(asset);
         for (const t of byDepth)
@@ -572,7 +613,7 @@ describe("CommunityCoin", function () {
             if (bal > 0n) await hub.connect(s).sellToEth(t, bal, 0);
           }
       }
-      await checkBooks(hub, tokens, creators, signers.slice(0, 9));
+      await checkBooks(hub, tokens, earners, signers.slice(0, 9));
       // Nobody holds anything any more. What is left is rounding dust, which always favours the reserve:
       // wei of parent tokens in the reserves of sold-out variants (scaled up by a union's exchange rate),
       // and the few wei of ETH backing them.
