@@ -53,7 +53,7 @@ export async function seed({ hub, accountOf, run, warp }) {
   const tokenOf = async (ticker) => hub.read("tokenOfKey", [await hub.read("symbolKey", [ticker])]);
   for (const step of STEPS) {
     if (step.warp) {
-      warp(step.warp);
+      await warp(step.warp);
       continue;
     }
     const [actor, fn, rawArgs, value] = step;

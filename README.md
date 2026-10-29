@@ -23,15 +23,23 @@ de créateur.
 
 - **Mode démo**, celui de la version en ligne : les vrais contrats compilés s'exécutent dans une EVM à
   l'intérieur de la page, avec des comptes de démo crédités d'ETH fictif et une horloge que l'on peut avancer
-  (+5 min, +1 h, +1 j, +3 j) pour vivre l'ouverture, le vesting et les votes. La page s'ouvre sur un marché
+  (5 min, 1 h, 1 jour, 3 jours) pour vivre l'ouverture, le vesting et les votes. La page s'ouvre sur un marché
   d'exemple : une famille `PNUT` avec ses variantes, un rival `PEANUT` en plein vote d'Union, une ouverture en
   cours.
 - **Mode wallet** : la même application se connecte à un hub déployé sur une vraie chaîne via un wallet du
   navigateur, dès qu'un déploiement est inscrit dans `web/src/deployments.js`. Ce mode demande un hébergement
   classique (GitHub Pages, ci-dessous), car la page hébergée sur claude.ai ne peut joindre ni wallet ni nœud.
 
+**L'interface** suit le skill [dashboard-design](https://github.com/abdiraimov-otabek/dashboard-design-skill)
+(MIT, installé dans `.claude/skills/dashboard-design/`). Chaque écran répond à une question au premier coup
+d'œil. Les explications sont dans les infobulles, pas à l'écran. La couleur est réservée à ce qui demande une
+action, et chaque chiffre clé est comparé à il y a une heure. Chaque point d'attention (ouverture en cours,
+Union prête, tokens à retirer, prix en pic) est signalé là où il apparaît, avec son action à côté.
+
 Le code est dans `web/` (Preact, ethers, EVM d'ethereumjs, regroupés par esbuild en un seul script). Pour la
-construire, puis la tester de bout en bout dans Chromium sous une politique de sécurité stricte :
+construire, puis la tester de bout en bout dans Chromium sous une politique de sécurité stricte (`test:web`
+recalcule aussi l'historique de démo à part pour vérifier les totaux affichés, et vérifie qu'aucune phrase
+ne traîne à l'écran) :
 
 ```bash
 npm run build:web
