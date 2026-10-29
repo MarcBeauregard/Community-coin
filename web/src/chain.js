@@ -8,8 +8,7 @@
 
 import { createEVM } from "@ethereumjs/evm";
 import { Common, Mainnet, Hardfork } from "@ethereumjs/common";
-import { createBlock } from "@ethereumjs/block";
-import { createAccount, createAddressFromString, hexToBytes, bytesToHex } from "@ethereumjs/util";
+import { createAccount, createAddressFromString, createZeroAddress, hexToBytes, bytesToHex } from "@ethereumjs/util";
 import { BrowserProvider, getAddress, keccak256, toUtf8Bytes } from "ethers";
 
 const GAS_LIMIT = 30_000_000n;
@@ -53,11 +52,21 @@ export class LocalChain {
     this.offset += seconds;
   }
 
+  /** The block a call runs in. The EVM only reads these header fields, so a plain object does (no block library). */
   _block(timestamp) {
-    return createBlock(
-      { header: { number: this.blockNumber, timestamp: BigInt(timestamp), gasLimit: GAS_LIMIT } },
-      { common: this.common },
-    );
+    return {
+      header: {
+        number: this.blockNumber,
+        coinbase: createZeroAddress(),
+        timestamp: BigInt(timestamp),
+        difficulty: 0n,
+        prevRandao: new Uint8Array(32),
+        gasLimit: GAS_LIMIT,
+        baseFeePerGas: 0n,
+        slotNumber: 0n,
+        getBlobGasPrice: () => 1n,
+      },
+    };
   }
 
   async _run({ from, to, data, value = 0n }, persist) {
@@ -167,7 +176,8 @@ export class WalletChain {
     }
   }
 
-  async send(from, to, data, value = 0n) {
+  /** `hooks.onSent(hash)` runs once the wallet has signed and the transaction is on its way. */
+  async send(from, to, data, value = 0n, hooks = {}) {
     const signer = await this.provider.getSigner(from);
     let tx;
     try {
@@ -176,13 +186,16 @@ export class WalletChain {
       if (e?.data) throw new Reverted(e.data);
       throw e;
     }
+    hooks.onSent?.(tx.hash);
     const receipt = await tx.wait();
+    if (receipt.status === 0) throw new Reverted("0x", "reverted");
     const block = await this.provider.getBlock(receipt.blockNumber);
     this.timestamp = block.timestamp;
     this.fetchedAt = Date.now();
     return {
       logs: receipt.logs.map((l) => ({ address: getAddress(l.address), topics: [...l.topics], data: l.data })),
       timestamp: block.timestamp,
+      hash: tx.hash,
     };
   }
 

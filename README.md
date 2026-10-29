@@ -32,14 +32,30 @@ de créateur.
 
 **L'interface** suit le skill [dashboard-design](https://github.com/abdiraimov-otabek/dashboard-design-skill)
 (MIT, installé dans `.claude/skills/dashboard-design/`). Chaque écran répond à une question au premier coup
-d'œil. Les explications sont dans les infobulles, pas à l'écran. La couleur est réservée à ce qui demande une
-action, et chaque chiffre clé est comparé à il y a une heure. Chaque point d'attention (ouverture en cours,
-Union prête, tokens à retirer, prix en pic) est signalé là où il apparaît, avec son action à côté.
+d'œil. La couleur est réservée à ce qui demande une action, et chaque chiffre clé est comparé à il y a une heure.
+Chaque point d'attention (ouverture en cours, Union prête, tokens à retirer, prix en pic) est signalé là où il
+apparaît, avec son action à côté.
+
+Pour qu'un nouveau venu comprenne sans rien lire ailleurs :
+
+- un **bandeau d'accueil** (thèse et quatre règles animées) et une page **How it works** construite sur les
+  données vivantes de la démo, avec un calculateur « suivez votre ETH » et les résultats du simulateur
+  (`npm run simulate:web` les écrit dans `web/src/simulation.json`) ;
+- une **visite guidée** de deux minutes qui attend de vraies transactions : s'engager dans une ouverture,
+  avancer l'horloge, retirer, acheter une copie, revendre dans le pic, regarder un vote d'Union ;
+- un **glossaire** unique (`web/src/glossary.js`) derrière chaque bouton « i », au clic, au toucher ou au clavier ;
+- avant chaque échange, la **décomposition exacte** de ce que fait la transaction (impact sur le prix, frais par
+  étape et bénéficiaire, part de pic retenue, réserve qui reçoit l'ETH), puis un **reçu** tiré des événements de
+  la transaction. Les montants viennent de `web/src/curve.js`, qui rejoue l'arithmétique du contrat à l'unité
+  près ; `node web/curve-check.mjs` le vérifie contre les cotations du contrat, et la décomposition n'est
+  affichée que si elle est égale à la cotation du hub ;
+- pour une Union, l'**avant/après** calculé sur les courbes actuelles ; pour une ouverture, l'estimation de sa
+  part et le calendrier du vesting ; pour une famille, son arbre.
 
 Le code est dans `web/` (Preact, ethers, EVM d'ethereumjs, regroupés par esbuild en un seul script). Pour la
 construire, puis la tester de bout en bout dans Chromium sous une politique de sécurité stricte (`test:web`
-recalcule aussi l'historique de démo à part pour vérifier les totaux affichés, et vérifie qu'aucune phrase
-ne traîne à l'écran) :
+recalcule aussi l'historique de démo à part pour vérifier les totaux affichés, vérifie que le reçu, la
+décomposition et la chaîne concordent au wei près, déroule la visite guidée, et contrôle cinq largeurs d'écran) :
 
 ```bash
 npm run build:web
