@@ -26,3 +26,6 @@ export const Timer = icon(html`<circle cx="10" cy="11" r="5.5" /><path d="M10 8.
 export const Arrow = icon(html`<path d="M5 10h10" /><path d="M11 6l4 4-4 4" />`);
 export const Info = icon(html`<circle cx="10" cy="10" r="6.5" /><path d="M10 9v4" /><path d="M10 6.6v.1" />`);
 export const Check = icon(html`<path d="M5 10.5l3 3 7-7" />`);
+export const Sun = icon(html`<circle cx="10" cy="10" r="3.2" /><path d="M10 2.8v1.6" /><path d="M10 15.6v1.6" /><path d="M2.8 10h1.6" /><path d="M15.6 10h1.6" /><path d="M4.9 4.9l1.1 1.1" /><path d="M14 14l1.1 1.1" /><path d="M15.1 4.9L14 6" /><path d="M6 14l-1.1 1.1" />`);
+export const Moon = icon(html`<path d="M15.5 12.2A6 6 0 0 1 7.8 4.5a6 6 0 1 0 7.7 7.7z" />`);
+export const Swap = icon(html`<path d="M7 4v12" /><path d="M4 13l3 3 3-3" /><path d="M13 16V4" /><path d="M10 7l3-3 3 3" />`);

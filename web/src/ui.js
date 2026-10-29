@@ -1,8 +1,9 @@
-// Interface primitives, after the dashboard-design skill's component patterns:
-// one tooltip for the whole screen, letter avatars, delta badges with a one-word baseline, KPI cards,
-// slim share bars, bullet graphs, segmented share bars, segmented controls, popover menus and one chart.
+// Interface primitives, after the dashboard-design skill's component patterns: one tooltip for the whole screen,
+// minted coins for memes and round initials for people, delta badges with a one-word baseline, KPI cards, slim share
+// bars, sparklines, progress rings, bullet graphs, segmented share bars, segmented controls, popover menus, one chart
+// and the minting celebration.
 
-import { h } from "preact";
+import { h, render } from "preact";
 import { useState, useEffect, useRef } from "preact/hooks";
 import htm from "htm";
 
@@ -69,11 +70,149 @@ export function compact(n, digits = 3) {
   return nf({ maximumSignificantDigits: digits }).format(n);
 }
 
-// ------------------------------------------------------------------ avatars
+// ------------------------------------------------------------------ avatars and coins
 
-/** Letter avatar tinted with the family's hue, so a meme and its variants read as one family. */
-export function Avatar({ symbol, hue = 0, size = "md" }) {
-  return html`<span class=${`avatar avatar-${size}`} style=${`--hue: var(--cat-${hue % 6})`} aria-hidden="true">${symbol.slice(0, 2)}</span>`;
+/** A person: round initials on a neutral disc. Memes are coins, people are not. */
+export function Avatar({ symbol, size = "md" }) {
+  return html`<span class=${`avatar avatar-${size}`} aria-hidden="true">${symbol.slice(0, 2)}</span>`;
+}
+
+export const METALS = 6; // gold, sapphire, jade, ruby, amethyst, silver: one per family, in launch order
+
+/**
+ * Gradients shared by every coin and chart on the page, drawn once. Kept out of display:none so browsers still
+ * paint them.
+ */
+export function Defs() {
+  const mix = (i, pct, with_) => `stop-color: color-mix(in srgb, var(--metal-${i}) ${pct}%, ${with_})`;
+  return html`<svg class="defs" aria-hidden="true" focusable="false" width="0" height="0">
+    <defs>
+      ${Array.from({ length: METALS }, (_, i) => html`
+        <radialGradient key=${`f${i}`} id=${`coin-face-${i}`} cx="34%" cy="28%" r="82%">
+          <stop offset="0" style=${mix(i, 38, "white")} />
+          <stop offset="0.5" style=${`stop-color: var(--metal-${i})`} />
+          <stop offset="1" style=${mix(i, 52, "black")} />
+        </radialGradient>
+        <linearGradient key=${`r${i}`} id=${`coin-rim-${i}`} x1="0.1" y1="0" x2="0.9" y2="1">
+          <stop offset="0" style=${mix(i, 55, "white")} />
+          <stop offset="0.48" style=${mix(i, 62, "black")} />
+          <stop offset="0.75" style=${mix(i, 80, "white")} />
+          <stop offset="1" style=${mix(i, 45, "black")} />
+        </linearGradient>`)}
+      <linearGradient id="chart-fill" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" style="stop-color: var(--gold); stop-opacity: 0.34" />
+        <stop offset="1" style="stop-color: var(--gold); stop-opacity: 0" />
+      </linearGradient>
+    </defs>
+  </svg>`;
+}
+
+/**
+ * A minted coin: reeded rim, beaded ring, the ticker struck into the face. The family sets the metal, so a meme
+ * and its variants are the same metal; dots above the legend count how many generations a variant is from its root.
+ */
+export function Coin({ symbol, hue = 0, size = "md", depth = 0, glyph }) {
+  const text = glyph ?? (symbol.replace(/[^A-Za-z0-9]/g, "").slice(0, 2).toUpperCase() || "?");
+  const m = ((hue % METALS) + METALS) % METALS;
+  const dots = Math.min(depth, 3);
+  return html`<span class=${`coin coin-${size}`} style=${`--metal: var(--metal-${m})`} aria-hidden="true">
+    <svg viewBox="0 0 64 64">
+      <circle cx="32" cy="32" r="31.5" fill=${`url(#coin-rim-${m})`} />
+      <circle class="coin-reed" cx="32" cy="32" r="29.8" />
+      <circle cx="32" cy="32" r="26.2" fill=${`url(#coin-face-${m})`} />
+      <circle class="coin-bead" cx="32" cy="32" r="23" />
+      ${Array.from({ length: dots }, (_, i) => html`<circle key=${i} class="coin-dot" cx=${32 + (i - (dots - 1) / 2) * 5} cy="14.5" r="1.4" />`)}
+      <text class="coin-hi" x="32" y="33.4" font-size=${text.length > 1 ? 18 : 22}>${text}</text>
+      <text class="coin-lo" x="32" y="32.4" font-size=${text.length > 1 ? 18 : 22}>${text}</text>
+    </svg>
+  </span>`;
+}
+
+/** A progress ring around whatever it holds: the share of an opening still to run. */
+export function Ring({ fraction, size = 120, stroke = 5, tone = "hot", children, label }) {
+  const r = 50 - stroke / 2 - 1, c = 2 * Math.PI * r;
+  const f = Math.max(0, Math.min(1, fraction));
+  return html`<div class=${`ring ring-${tone}`} style=${`--size:${size}px`} role=${label ? "img" : null} aria-label=${label}>
+    <svg viewBox="0 0 100 100" aria-hidden="true">
+      <circle class="ring-track" cx="50" cy="50" r=${r} stroke-width=${stroke} />
+      <circle class="ring-arc" cx="50" cy="50" r=${r} stroke-width=${stroke} stroke-dasharray=${`${(c * f).toFixed(2)} ${c.toFixed(2)}`} />
+    </svg>
+    <div class="ring-inner">${children}</div>
+  </div>`;
+}
+
+/** Price steps since the first recorded trade, as a line with a soft fill; green when it ends above where it began. */
+export function Sparkline({ points, width = 88, height = 26 }) {
+  if (!points || points.length < 2) return html`<span class="spark spark-empty" style=${`width:${width}px`} aria-hidden="true"></span>`;
+  const t0 = points[0].t, t1 = Math.max(points.at(-1).t, t0 + 1);
+  const vs = points.map((p) => p.v);
+  const lo = Math.min(...vs), hi = Math.max(...vs);
+  if (hi - lo <= hi * 1e-9)
+    return html`<svg class="spark spark-flat" viewBox=${`0 0 ${width} ${height}`} width=${width} height=${height} aria-hidden="true">
+      <path class="spark-line" d=${`M1,${height / 2} H${width - 3}`} />
+    </svg>`;
+  const span = Math.max(hi - lo, hi * 0.04); // a move under 4% stays a near-flat line instead of filling the box
+  const floor = (hi + lo) / 2 - span / 2;
+  const x = (t) => 1 + ((t - t0) / (t1 - t0)) * (width - 4);
+  const y = (v) => 2 + (1 - (v - floor) / span) * (height - 5);
+  let d = `M${x(points[0].t).toFixed(1)},${y(points[0].v).toFixed(1)}`;
+  for (const p of points.slice(1)) d += ` H${x(p.t).toFixed(1)} V${y(p.v).toFixed(1)}`;
+  const last = points.at(-1);
+  const dir = last.v >= points[0].v ? "up" : "down";
+  return html`<svg class=${`spark spark-${dir}`} viewBox=${`0 0 ${width} ${height}`} width=${width} height=${height} aria-hidden="true">
+    <path class="spark-area" d=${`${d} V${height} H${x(t0).toFixed(1)} Z`} />
+    <path class="spark-line" d=${d} />
+    <circle class="spark-dot" cx=${x(last.t).toFixed(1)} cy=${y(last.v).toFixed(1)} r="2" />
+  </svg>`;
+}
+
+/** Wraps a number that can change while you watch: it glows green or red for a moment when it moves. */
+export function Flash({ value, children, class: cls = "" }) {
+  const prev = useRef(value);
+  const [state, setState] = useState({ dir: null, n: 0 });
+  useEffect(() => {
+    const before = prev.current;
+    prev.current = value;
+    if (before === null || before === undefined || value === null || value === undefined || before === value) return;
+    setState((s) => ({ dir: value > before ? "up" : "down", n: s.n + 1 }));
+    const t = setTimeout(() => setState((s) => ({ ...s, dir: null })), 1100);
+    return () => clearTimeout(t);
+  }, [value]);
+  return html`<span key=${state.n} class=${`flash ${state.dir ? `flash-${state.dir}` : ""} ${cls}`}>${children}</span>`;
+}
+
+const reducedMotion = () => globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+/**
+ * The minting moment: the new coin drops in and spins while a burst of smaller coins of the same metal flies out.
+ * Purely decorative, gone after two seconds, skipped when the viewer asks for less motion.
+ */
+export function celebrate({ symbol, hue = 0 }) {
+  if (reducedMotion()) return;
+  const box = document.createElement("div");
+  box.className = "mint";
+  box.setAttribute("aria-hidden", "true");
+  const coin = document.createElement("div");
+  coin.className = "mint-coin";
+  box.append(coin);
+  for (let i = 0; i < 26; i++) {
+    const piece = document.createElement("i");
+    const angle = (i / 26) * Math.PI * 2 + Math.random() * 0.4;
+    const dist = 140 + Math.random() * 220;
+    piece.style.setProperty("--x", `${(Math.cos(angle) * dist).toFixed(0)}px`);
+    piece.style.setProperty("--y", `${(Math.sin(angle) * dist * 0.8 - 60).toFixed(0)}px`);
+    piece.style.setProperty("--spin", `${(360 + Math.random() * 720).toFixed(0)}deg`);
+    piece.style.setProperty("--delay", `${(Math.random() * 120).toFixed(0)}ms`);
+    piece.style.setProperty("--metal", `var(--metal-${i % 3 === 0 ? 0 : ((hue % METALS) + METALS) % METALS})`);
+    piece.style.setProperty("--s", `${(8 + Math.random() * 10).toFixed(0)}px`);
+    box.append(piece);
+  }
+  document.body.append(box);
+  render(html`<${Coin} symbol=${symbol} hue=${hue} size="xl" />`, coin);
+  setTimeout(() => {
+    render(null, coin);
+    box.remove();
+  }, 2100);
 }
 
 // ------------------------------------------------------------------ delta
@@ -233,12 +372,12 @@ export function StepChart({ points, compare, label, compareLabel, unit, timeOf }
       </g>`)}
       ${xTicks.map((t, i) => html`<text key=${i} class="axis" x=${x(t)} y=${H - 6}
         text-anchor=${i === 0 ? "start" : i === xTicks.length - 1 ? "end" : "middle"}>${timeOf(t)}</text>`)}
-      <path class="area" d=${area} />
+      <path class="area" d=${area} fill="url(#chart-fill)" />
       ${compare && compare.length > 1 && html`<path class="compare" d=${path(compare)} />`}
       <path class="line" d=${line} />
       ${at
         ? html`<g><line class="hair" x1=${x(at.t)} x2=${x(at.t)} y1=${T} y2=${H - B} /><circle class="dot" cx=${x(at.t)} cy=${y(at.v)} r="4" /></g>`
-        : html`<circle class="dot" cx=${x(last.t)} cy=${y(last.v)} r="3.5" />`}
+        : html`<g><circle class="dot-halo" cx=${x(last.t)} cy=${y(last.v)} r="9" /><circle class="dot" cx=${x(last.t)} cy=${y(last.v)} r="3.5" /></g>`}
     </svg>
     ${at && html`<div class="chart-tip" style=${`left:${((x(at.t) / W) * 100).toFixed(2)}%`}>
       <strong>${compact(at.v)} ${unit}</strong>

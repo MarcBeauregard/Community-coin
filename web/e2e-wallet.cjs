@@ -77,6 +77,11 @@ async function rpc(method, params = []) {
       page.locator(".toast", { hasText: text }).first().waitFor({ timeout: 20000 }).catch(async (e) => {
         throw new Error(`${e.message.split("\n")[0]}\ntoasts on screen: ${(await page.locator(".toast").allInnerTexts()).join(" | ") || "none"}`);
       });
+    const quoted = () =>
+      page.waitForFunction(() => {
+        const t = document.querySelector("[data-testid=receive]")?.textContent.trim();
+        return t && t !== "—";
+      }, null, { timeout: 20000 });
     const warp = async (s) => {
       await rpc("evm_increaseTime", [s]);
       await rpc("evm_mine");
@@ -111,12 +116,12 @@ async function rpc(method, params = []) {
     await page.locator("#position").getByRole("button", { name: /Claim/ }).click();
     await toast("Claimed");
     await page.fill("#trade-amount", "0.2");
-    await page.locator("[data-testid=receive]", { hasText: /WALLET/ }).waitFor({ timeout: 20000 });
+    await quoted();
     await page.click("button:has-text('Buy WALLET')");
     await toast("Bought");
     await page.locator("[aria-label='Side'] button", { hasText: "Sell" }).click();
     await page.fill("#trade-amount", "1000000");
-    await page.locator("[data-testid=receive]", { hasText: /ETH/ }).waitFor({ timeout: 20000 });
+    await quoted();
     await page.click("button:has-text('Sell WALLET')");
     await toast("Sold");
     check(true, "claim, buy and sell go through the wallet");

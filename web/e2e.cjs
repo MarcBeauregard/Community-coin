@@ -92,8 +92,18 @@ const server = http.createServer((req, res) => {
   page.on("console", (m) => {
     if (m.type() === "error" && !/fonts\.(googleapis|gstatic)/.test(m.text())) problems.push(`console: ${m.text()}`);
   });
-  const shot = async (name) => shots && page.screenshot({ path: join(shots, `${name}.png`), fullPage: true });
+  const shot = async (name) => {
+    if (!shots) return;
+    await page.waitForFunction(() => !document.querySelector(".mint")); // let the minting moment finish
+    await page.screenshot({ path: join(shots, `${name}.png`), fullPage: true });
+  };
   const toast = (text) => page.locator(".toast", { hasText: text }).first().waitFor({ timeout: 5000 });
+  /** Waits until the trade panel shows a quote for the amount just typed. */
+  const quoted = () =>
+    page.waitForFunction(() => {
+      const t = document.querySelector("[data-testid=receive]")?.textContent.trim();
+      return t && t !== "—";
+    });
   const kpi = (id) => page.locator(`[data-kpi="${id}"] .kpi-value`).innerText();
   const warp = async (label) => {
     await page.click("button[aria-label='Demo clock']");
@@ -174,13 +184,13 @@ const server = http.createServer((req, res) => {
   await page.locator("[aria-label='Side']").waitFor();
   check((await page.locator(".route").first().innerText()).replace(/\s+/g, " ").includes("ETH PNUT PNUTWIFHAT"), "the route goes through the original");
   await page.fill("#trade-amount", "1");
-  await page.locator("[data-testid=receive]", { hasText: /PNUTWIFHAT/ }).waitFor();
+  await quoted();
   await page.click("button:has-text('Buy PNUTWIFHAT')");
   await toast("Bought");
   await page.locator("[aria-label='Side'] button", { hasText: "Sell" }).click();
   await page.locator("[aria-label='Receive in'] button", { hasText: "PNUT" }).click();
   await page.locator("#trade form").getByRole("button", { name: "Max" }).click();
-  await page.locator("[data-testid=receive]", { hasText: /PNUT/ }).waitFor();
+  await quoted();
   await page.click("button:has-text('Sell PNUTWIFHAT')");
   await toast("Sold");
   check(num(await page.locator("[data-testid=position]").innerText()) === 0, "selling everything into PNUT empties the position");
@@ -198,6 +208,7 @@ const server = http.createServer((req, res) => {
   await page.fill("#launch-symbol", "FLYSQUIRREL");
   await page.selectOption("#launch-parent", { label: "Variant of PNUT" });
   await page.fill("#launch-amount", "0.2");
+  await shot("launch-desktop");
   await page.click("button:has-text('Launch FLYSQUIRREL')");
   await toast("Meme launched");
   await page.locator("h1", { hasText: "FLYSQUIRREL" }).waitFor();
@@ -208,7 +219,7 @@ const server = http.createServer((req, res) => {
   await page.locator(".ranked-row", { hasText: "PEANUT" }).filter({ hasNotText: "PNUT " }).last().click();
   await page.locator("h1", { hasText: "PEANUT" }).waitFor();
   await page.fill("#trade-amount", "3");
-  await page.locator("[data-testid=receive]", { hasText: /PEANUT/ }).waitFor();
+  await quoted();
   await page.click("button:has-text('Buy PEANUT')");
   await toast("Bought");
   await page.locator("[data-union='0']").getByRole("button", { name: "Max" }).click();
@@ -252,12 +263,19 @@ const server = http.createServer((req, res) => {
   await page.locator("h1", { hasText: "Unions" }).waitFor();
   check((await page.locator(".phone-menu").count()) === 0, "the phone menu closes on navigation");
   await shot("unions-phone");
-  await page.emulateMedia({ colorScheme: "dark" });
   await page.goto(url + "#market");
   await page.locator(".ranked-row", { hasText: "PNUT" }).first().click();
   await page.locator("#chart-title").waitFor();
   check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "no horizontal scroll on a meme page at phone width");
+  check((await page.evaluate(() => document.documentElement.dataset.theme)) === "dark", "the house theme is dark");
   await shot("meme-phone-dark");
+  await page.click("button[aria-label='Switch to light theme']");
+  check((await page.evaluate(() => document.documentElement.dataset.theme)) === "light", "the theme switch turns the page light");
+  await shot("meme-phone-light");
+  await page.goto(url + "#market");
+  await page.locator(".ranked-row:not(.head)").first().waitFor();
+  check((await page.evaluate(() => document.documentElement.dataset.theme)) === "light", "and the choice is remembered");
+  await shot("market-phone-light");
 
   check(problems.length === 0, `no errors in the page${problems.length ? `:\n${problems.join("\n")}` : ""}`);
   await browser.close();
