@@ -63,7 +63,7 @@ RPC_URL=https://sepolia.base.org DEPLOYER_KEY=0x... npm run deploy
 ```
 
 Le script affiche la ligne à ajouter dans `web/src/deployments.js` ; reconstruire et republier l'application
-fait apparaître le bouton « Connecter un wallet ». Pas de mainnet avant un audit.
+fait apparaître le bouton « Connect wallet ». Pas de mainnet avant un audit.
 
 ## Le diagnostic
 

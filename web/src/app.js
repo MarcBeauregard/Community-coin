@@ -14,17 +14,19 @@ import { App, Market, MemePage, Launch, Unions, Portfolio, Rules } from "./pages
 const DEMO_PARAMS = [300, 3600, 5000, 3 * 24 * 3600]; // opening, vesting, spike share (bps), union vote
 const WARPS = [
   [300, "5 min"],
-  [3600, "1 h"],
-  [86400, "1 jour"],
-  [3 * 86400, "3 jours"],
+  [3600, "1 hour"],
+  [86400, "1 day"],
+  [3 * 86400, "3 days"],
 ];
 const PAGES = [
-  ["explorer", "Marché", I.Market],
-  ["lancer", "Lancer", I.Launch],
+  ["market", "Market", I.Market],
+  ["launch", "Launch", I.Launch],
   ["unions", "Unions", I.Merge],
-  ["portefeuille", "Portefeuille", I.Wallet],
-  ["regles", "Règles", I.Book],
+  ["portfolio", "Portfolio", I.Wallet],
+  ["rules", "Rules", I.Book],
 ];
+// Links shared before the site went English keep working.
+const OLD_ROUTES = { explorer: "market", lancer: "launch", portefeuille: "portfolio", regles: "rules" };
 
 // ------------------------------------------------------------------ sessions
 
@@ -98,7 +100,7 @@ async function bootDemo() {
   const chain = await LocalChain.create(DEMO_ACCOUNTS);
   chain.startChain -= SEED_SPAN + 40; // the example history ends about now
   const hub = await Hub.deploy(chain, chain.accounts[0].address, DEMO_PARAMS);
-  const session = newSession(chain, hub, "Démo");
+  const session = newSession(chain, hub, "Demo");
   const accountOf = (name) => chain.accounts.find((a) => a.name === name).address;
   await seed({
     hub,
@@ -116,7 +118,7 @@ async function bootDemo() {
 async function bootWallet() {
   const chain = await WalletChain.connect(DEPLOYMENTS);
   const deployment = DEPLOYMENTS[String(chain.chainId)];
-  if (!deployment) throw new Error("Community Coin n'est pas déployé sur le réseau de ton wallet.");
+  if (!deployment) throw new Error("Community Coin is not deployed on your wallet's network.");
   const hub = new Hub(chain, deployment.hub);
   const session = newSession(chain, hub, deployment.name);
   session.explorer = deployment.explorer;
@@ -136,7 +138,10 @@ async function bootWallet() {
 // ------------------------------------------------------------------ routing
 
 function useRoute() {
-  const read = () => (location.hash || "#explorer").slice(1);
+  const read = () => {
+    const [head, ...rest] = (location.hash.slice(1) || "market").split("-");
+    return [OLD_ROUTES[head] ?? head, ...rest].join("-");
+  };
   const [route, setRoute] = useState(read);
   useEffect(() => {
     const on = () => {
@@ -154,7 +159,7 @@ function useRoute() {
 function Toolbar({ session, world, account, setAccount, onWarp, onReset, onConnect, canConnect, busy, route }) {
   const [menu, setMenu] = useState(false);
   const local = session.chain.kind === "local";
-  const section = route.startsWith("meme-") ? "explorer" : route.startsWith("lancer") ? "lancer" : route;
+  const section = route.startsWith("meme-") ? "market" : route.startsWith("launch") ? "launch" : route;
   const me = session.chain.accounts.find((a) => a.address === account);
   useEffect(() => setMenu(false), [route]);
   useEffect(() => {
@@ -163,31 +168,31 @@ function Toolbar({ session, world, account, setAccount, onWarp, onReset, onConne
     document.addEventListener("keydown", esc);
     return () => document.removeEventListener("keydown", esc);
   }, [menu]);
-  const time = new Date(world.now * 1000).toLocaleString("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const time = f.clock(world.now);
 
   return html`<header class="top">
     <div class="top-inner">
-      <a class="brand" href="#explorer"><span class="brand-mark" aria-hidden="true">CC</span><span>Community Coin</span></a>
+      <a class="brand" href="#market"><span class="brand-mark" aria-hidden="true">CC</span><span>Community Coin</span></a>
       <nav class="tabs" aria-label="Pages">
         ${PAGES.map(([r, label, Icon]) => html`<a key=${r} href=${`#${r}`} aria-current=${section === r ? "page" : null}><${Icon} size=${16} />${label}</a>`)}
       </nav>
       <div class="pills">
-        <span class="pill pill-static" data-tip=${local ? "Démo\nLes contrats tournent dans ton navigateur, avec de l'ETH fictif" : `${session.label}\nHub ${session.hub.address}`}>
+        <span class="pill pill-static" data-tip=${local ? "Demo\nThe contracts run in your browser, with play ETH" : `${session.label}\nHub ${session.hub.address}`}>
           <i class=${`dot ${local ? "dot-demo" : "dot-live"}`}></i>${session.label}
         </span>
         ${local
-          ? html`<${Popover} label="Horloge de la démo" class="clock" trigger=${html`<${I.Clock} size=${16} /><span class="tnum">${time}</span><${I.Chevron} size=${14} />`}>
-              <p class="menu-title">Avancer de</p>
+          ? html`<${Popover} label="Demo clock" class="clock" trigger=${html`<${I.Clock} size=${16} /><span class="tnum">${time}</span><${I.Chevron} size=${14} />`}>
+              <p class="menu-title">Skip ahead</p>
               ${WARPS.map(([s, l]) => html`<button key=${s} type="button" role="menuitem" data-close disabled=${busy} onClick=${() => onWarp(s)}>${l}</button>`)}
               <hr />
-              <button type="button" role="menuitem" data-close onClick=${onReset}>Recommencer la démo</button>
+              <button type="button" role="menuitem" data-close onClick=${onReset}>Restart demo</button>
             </${Popover}>`
           : html`<span class="pill pill-static"><${I.Clock} size=${16} /><span class="tnum">${time}</span></span>`}
-        <${Popover} label="Compte" class="account" trigger=${html`<${Avatar} symbol=${me?.name ?? "?"} hue=${5} size="sm" /><span class="account-name">${me?.name}</span><span class="tnum muted">${compact(f.toNumber(world.ethBalance), 4)} ETH</span><${I.Chevron} size=${14} />`}>
+        <${Popover} label="Account" class="account" trigger=${html`<${Avatar} symbol=${me?.name ?? "?"} hue=${5} size="sm" /><span class="account-name">${me?.name}</span><span class="tnum muted">${compact(f.toNumber(world.ethBalance), 4)} ETH</span><${I.Chevron} size=${14} />`}>
           ${session.chain.accounts.map((a) => html`<button key=${a.address} type="button" role="menuitemradio" aria-checked=${a.address === account} data-close onClick=${() => setAccount(a.address)}>
             <${Avatar} symbol=${a.name} hue=${5} size="sm" />${a.name}${a.address === account && html`<${I.Check} size=${16} class="menu-check" />`}
           </button>`)}
-          ${canConnect && html`<hr /><button type="button" role="menuitem" data-close onClick=${onConnect}>Connecter un wallet</button>`}
+          ${canConnect && html`<hr /><button type="button" role="menuitem" data-close onClick=${onConnect}>Connect wallet</button>`}
         </${Popover}>
         <button type="button" class="pill menu-button" aria-expanded=${menu} aria-controls="phone-menu" onClick=${() => setMenu(!menu)}>
           ${menu ? html`<${I.Close} size=${16} />` : html`<${I.Menu} size=${16} />`}Menu
@@ -213,7 +218,7 @@ function BootSkeleton() {
   return html`<div class="boot">
     <header class="top"><div class="top-inner"><span class="brand"><span class="brand-mark" aria-hidden="true">CC</span><span>Community Coin</span></span></div></header>
     <main><div class="page">
-      <div class="page-head"><h1>Marché</h1></div>
+      <div class="page-head"><h1>Market</h1></div>
       <div class="kpis">${[0, 1, 2, 3].map((i) => html`<div class="card kpi" key=${i}><${Skeleton} lines=${2} /></div>`)}</div>
       <div class="grid-12"><div class="card panel span-8"><${Skeleton} lines=${6} /></div><div class="card panel span-4"><${Skeleton} lines=${4} /></div></div>
     </div></main>
@@ -310,7 +315,7 @@ function Root() {
   };
 
   if (bootError)
-    return html`<div class="boot-error card panel"><p>${bootError}</p><button class="btn" onClick=${() => start(bootDemo)}>Revenir à la démo</button></div>`;
+    return html`<div class="boot-error card panel"><p>${bootError}</p><button class="btn" onClick=${() => start(bootDemo)}>Back to the demo</button></div>`;
   if (!session || !world) return html`<${BootSkeleton} />`;
 
   const live = { ...world, now: session.chain.now() };
@@ -318,25 +323,25 @@ function Root() {
   const canConnect = Boolean(globalThis.ethereum) && Object.keys(DEPLOYMENTS).length > 0 && session.chain.kind === "local";
   let page;
   if (route.startsWith("meme-")) page = html`<${MemePage} address=${route.slice(5)} />`;
-  else if (route.startsWith("lancer")) page = html`<${Launch} parentHint=${route.slice(7) || null} />`;
+  else if (route.startsWith("launch")) page = html`<${Launch} parentHint=${route.slice(7) || null} />`;
   else if (route === "unions") page = html`<${Unions} />`;
-  else if (route === "portefeuille") page = html`<${Portfolio} />`;
-  else if (route === "regles") page = html`<${Rules} />`;
+  else if (route === "portfolio") page = html`<${Portfolio} />`;
+  else if (route === "rules") page = html`<${Rules} />`;
   else page = html`<${Market} />`;
 
   return html`<${App.Provider} value=${ctx}>
     <${Toolbar} session=${session} world=${live} account=${account} setAccount=${setAccount} onWarp=${onWarp} busy=${busy} route=${route}
       onReset=${() => start(bootDemo)} onConnect=${() => start(bootWallet)} canConnect=${canConnect} />
-    ${refreshError && html`<p class="page-note" role="alert">Dernières données affichées : la lecture de la chaîne a échoué, nouvel essai dans 5 s.</p>`}
+    ${refreshError && html`<p class="page-note" role="alert">Showing the last data: reading the chain failed, retrying in 5s.</p>`}
     <main>${page}</main>
     <footer class="foot">
       <span>Hub ${session.explorer
         ? html`<a href=${`${session.explorer}/address/${session.hub.address}`} target="_blank" rel="noopener">${f.shortAddress(session.hub.address)}</a>`
         : f.shortAddress(session.hub.address)}</span>
-      <span>Ouverture ${f.duration(session.params.openWindow)}</span>
+      <span>Opening ${f.duration(session.params.openWindow)}</span>
       <span>Vesting ${f.duration(session.params.vestWindow)}</span>
-      <span>Part de pic ${f.percent(session.params.spikeShareBps / 10000, 0)}</span>
-      <span>Non audité</span>
+      <span>Spike share ${f.percent(session.params.spikeShareBps / 10000, 0)}</span>
+      <span>Unaudited</span>
     </footer>
     <${Toasts} toasts=${toasts} />
   </${App.Provider}>`;

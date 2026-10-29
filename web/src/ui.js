@@ -52,7 +52,7 @@ export function installTooltip() {
 
 // ------------------------------------------------------------------ numbers
 
-const nf = (opts) => new Intl.NumberFormat("fr-FR", opts);
+const nf = (opts) => new Intl.NumberFormat("en-US", opts);
 
 /** 0 and evenly spaced round ticks covering max: steps of 1, 2, 2.5 or 5 × 10^n. */
 export function niceTicks(max, count = 4) {
@@ -62,7 +62,7 @@ export function niceTicks(max, count = 4) {
   return Array.from({ length: Math.ceil(max / step - 1e-9) + 1 }, (_, i) => +(i * step).toPrecision(12));
 }
 
-/** Compact number with a few significant digits: 0,0162 · 12,9 M · 1,2 k. */
+/** Compact number with a few significant digits: 0.0162 · 12.9M · 1.2K. */
 export function compact(n, digits = 3) {
   if (n === 0) return "0";
   if (Math.abs(n) >= 1000) return nf({ notation: "compact", maximumFractionDigits: 1 }).format(n);
@@ -84,13 +84,13 @@ export function Avatar({ symbol, hue = 0, size = "md" }) {
  */
 export function Delta({ cur, prev, vs, min = 0, invert = false, neutral = false, format = compact, tip }) {
   if (prev === null || prev === undefined || cur === null || cur === undefined) return null;
-  if (prev === 0 || prev < min) return html`<span class="delta muted" data-tip=${tip}>${`avant ${format(prev)}`}</span>`;
+  if (prev === 0 || prev < min) return html`<span class="delta muted" data-tip=${tip}>${`was ${format(prev)}`}</span>`;
   const d = ((cur - prev) / prev) * 100;
   const r = Math.round(d);
-  if (r === 0) return html`<span class="delta muted" data-tip=${tip}>±0 % <span>${vs}</span></span>`;
+  if (r === 0) return html`<span class="delta muted" data-tip=${tip}>±0% <span>${vs}</span></span>`;
   const good = invert ? d < 0 : d > 0;
-  const text = Math.abs(d) > 999 ? (d > 0 ? "10×+" : "−99 %") : `${d > 0 ? "▲" : "▼"} ${Math.abs(r)} %`;
-  return html`<span class="delta" data-tip=${tip ?? `${vs} : ${format(prev)}`}>
+  const text = Math.abs(d) > 999 ? (d > 0 ? "10×+" : "−99%") : `${d > 0 ? "▲" : "▼"} ${Math.abs(r)}%`;
+  return html`<span class="delta" data-tip=${tip ?? `${vs}: ${format(prev)}`}>
     <b class=${neutral ? "" : good ? "up" : "down"}>${text}</b> <span class="muted">${vs}</span>
   </span>`;
 }
@@ -222,7 +222,7 @@ export function StepChart({ points, compare, label, compareLabel, unit, timeOf }
     e.preventDefault();
   };
   const last = points.at(-1);
-  const summary = `${label} : ${compact(last.v)} ${unit} au ${timeOf(last.t)}, entre ${compact(Math.min(...points.map((p) => p.v)))} et ${compact(max)}`;
+  const summary = `${label}: ${compact(last.v)} ${unit} at ${timeOf(last.t)}, ranging ${compact(Math.min(...points.map((p) => p.v)))} to ${compact(max)}`;
 
   return html`<figure class="chart" ref=${box}>
     <svg viewBox="0 0 ${W} ${H}" role="img" aria-label=${summary} tabindex="0" onKeyDown=${onKey}

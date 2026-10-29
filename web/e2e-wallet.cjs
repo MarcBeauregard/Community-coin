@@ -73,7 +73,10 @@ async function rpc(method, params = []) {
         removeListener() {},
       };
     }, rpcUrl);
-    const toast = (text) => page.locator(".toast", { hasText: text }).first().waitFor({ timeout: 20000 });
+    const toast = (text) =>
+      page.locator(".toast", { hasText: text }).first().waitFor({ timeout: 20000 }).catch(async (e) => {
+        throw new Error(`${e.message.split("\n")[0]}\ntoasts on screen: ${(await page.locator(".toast").allInnerTexts()).join(" | ") || "none"}`);
+      });
     const warp = async (s) => {
       await rpc("evm_increaseTime", [s]);
       await rpc("evm_mine");
@@ -81,41 +84,41 @@ async function rpc(method, params = []) {
 
     const connect = async () => {
       await page.locator(".ranked-row:not(.head)").first().waitFor({ timeout: 20000 });
-      await page.click("button[aria-label='Compte']");
-      await page.click(".menu button:has-text('Connecter un wallet')");
+      await page.click("button[aria-label='Account']");
+      await page.click(".menu button:has-text('Connect wallet')");
       await page.locator(".pill", { hasText: "Hardhat local" }).waitFor({ timeout: 20000 });
     };
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
     await connect();
     check(true, "the app connects to the deployed hub through the wallet");
-    check((await page.locator("button[aria-label='Horloge de la démo']").count()) === 0, "no time travel on a real network");
+    check((await page.locator("button[aria-label='Demo clock']").count()) === 0, "no time travel on a real network");
 
-    await page.goto(page.url().split("#")[0] + "#lancer");
+    await page.goto(page.url().split("#")[0] + "#launch");
     await page.fill("#launch-name", "Wallet Coin");
     await page.fill("#launch-symbol", "WALLET");
     await page.fill("#launch-amount", "0.5");
-    await page.click("button:has-text('Lancer WALLET')");
-    await toast("Meme lancé");
+    await page.click("button:has-text('Launch WALLET')");
+    await toast("Meme launched");
     await page.locator("h1", { hasText: "WALLET" }).waitFor({ timeout: 20000 });
     check(true, "a meme launches with a signed transaction");
     await page.locator("#opening-title").waitFor();
 
     await warp(3700); // past the opening and the vesting
-    await page.goto(page.url().split("#")[0] + "#explorer");
+    await page.goto(page.url().split("#")[0] + "#market");
     await page.reload();
     await connect();
     await page.locator(".ranked-row", { hasText: "WALLET" }).first().click();
-    await page.locator("#position").getByRole("button", { name: /Retirer/ }).click();
-    await toast("Retiré");
+    await page.locator("#position").getByRole("button", { name: /Claim/ }).click();
+    await toast("Claimed");
     await page.fill("#trade-amount", "0.2");
     await page.locator("[data-testid=receive]", { hasText: /WALLET/ }).waitFor({ timeout: 20000 });
-    await page.click("button:has-text('Acheter WALLET')");
-    await toast("Acheté");
-    await page.locator("[aria-label='Sens'] button", { hasText: "Vendre" }).click();
+    await page.click("button:has-text('Buy WALLET')");
+    await toast("Bought");
+    await page.locator("[aria-label='Side'] button", { hasText: "Sell" }).click();
     await page.fill("#trade-amount", "1000000");
     await page.locator("[data-testid=receive]", { hasText: /ETH/ }).waitFor({ timeout: 20000 });
-    await page.click("button:has-text('Vendre WALLET')");
-    await toast("Vendu");
+    await page.click("button:has-text('Sell WALLET')");
+    await toast("Sold");
     check(true, "claim, buy and sell go through the wallet");
     check(problems.length === 0, `no errors in the page${problems.length ? `:\n${problems.join("\n")}` : ""}`);
   } finally {
