@@ -2,8 +2,9 @@
 
 import { formatEther, parseEther } from "ethers";
 
+export const LOCALE = "en-US";
 const WAD = 10n ** 18n;
-const nf = (digits) => new Intl.NumberFormat("fr-FR", { maximumFractionDigits: digits, minimumFractionDigits: 0 });
+const nf = (digits) => new Intl.NumberFormat(LOCALE, { maximumFractionDigits: digits, minimumFractionDigits: 0 });
 
 export const toNumber = (wei) => Number(formatEther(wei));
 
@@ -17,10 +18,10 @@ export function eth(wei, digits) {
   return `${nf(d).format(n)} ETH`;
 }
 
-/** Token amounts in thousands, millions or billions. */
+/** Token amounts in thousands, millions or billions: 12.9M. */
 export function tokens(wei, symbol) {
   const n = toNumber(wei);
-  const unit = n >= 1e9 ? [1e9, " Md"] : n >= 1e6 ? [1e6, " M"] : n >= 1e3 ? [1e3, " k"] : [1, ""];
+  const unit = n >= 1e9 ? [1e9, "B"] : n >= 1e6 ? [1e6, "M"] : n >= 1e3 ? [1e3, "K"] : [1, ""];
   const v = n / unit[0];
   const out = `${nf(v >= 100 ? 0 : v >= 10 ? 1 : 2).format(v)}${unit[1]}`;
   return symbol ? `${out} ${symbol}` : out;
@@ -34,46 +35,75 @@ export function perMillion(priceWad, unit = "ETH") {
 }
 
 export function percent(x, digits = 1) {
-  return `${nf(digits).format(x * 100)} %`;
+  return `${nf(digits).format(x * 100)}%`;
 }
 
 export function signedPercent(x) {
-  if (Math.abs(x) < 0.0005) return "0 %";
+  if (Math.abs(x) < 0.0005) return "0%";
   return `${x >= 0 ? "+" : "−"}${percent(Math.abs(x))}`;
 }
 
 /** How long ago, for the activity feed. */
 export function ago(seconds) {
   const s = Math.max(0, Math.round(seconds));
-  if (s < 60) return "à l'instant";
-  if (s < 3600) return `il y a ${Math.floor(s / 60)} min`;
-  if (s < 86400) return `il y a ${Math.floor(s / 3600)} h`;
-  return `il y a ${Math.floor(s / 86400)} j`;
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
 }
 
 export function shortAddress(a) {
   return `${a.slice(0, 6)}…${a.slice(-4)}`;
 }
 
+/** 45s · 5m · 5m 07s · 1h · 1h 05m · 3d · 2d 22h */
 export function duration(seconds) {
   const s = Math.max(0, Math.round(seconds));
-  if (s < 60) return `${s} s`;
-  if (s < 3600) return `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")} s`;
-  if (s < 86400) return `${Math.floor(s / 3600)} h ${String(Math.floor((s % 3600) / 60)).padStart(2, "0")} min`;
-  return `${Math.floor(s / 86400)} j ${Math.floor((s % 86400) / 3600)} h`;
+  const pair = (big, bigUnit, small, smallUnit, pad = true) =>
+    small ? `${big}${bigUnit} ${pad ? String(small).padStart(2, "0") : small}${smallUnit}` : `${big}${bigUnit}`;
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return pair(Math.floor(s / 60), "m", s % 60, "s");
+  if (s < 86400) return pair(Math.floor(s / 3600), "h", Math.floor((s % 3600) / 60), "m");
+  return pair(Math.floor(s / 86400), "d", Math.floor((s % 86400) / 3600), "h", false);
 }
 
+/** 5 minutes · 1 hour · 3 days, for sentences; falls back to the short form when the span is not whole. */
+export function spoken(seconds) {
+  for (const [unit, word] of [[86400, "day"], [3600, "hour"], [60, "minute"]]) {
+    if (seconds >= unit && seconds % unit === 0) {
+      const k = seconds / unit;
+      return `${k} ${word}${k === 1 ? "" : "s"}`;
+    }
+  }
+  return duration(seconds);
+}
+
+/** 1 root · 3 variants */
+export const count = (k, word) => `${k} ${word}${k === 1 ? "" : "s"}`;
+
+/** A date and time on the chain's clock, 24-hour: Oct 29, 00:22:40. */
 export function clock(seconds) {
-  return new Date(seconds * 1000).toLocaleString("fr-FR", {
-    day: "numeric",
+  return new Date(seconds * 1000).toLocaleString(LOCALE, {
     month: "short",
+    day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
+    hourCycle: "h23",
   });
 }
 
-/** Parses a user-typed decimal amount ("1,5" or "1.5") into wei; null when invalid or not positive. */
+/** Hours and minutes only, 24-hour: 00:22. */
+export function hourMinute(seconds) {
+  return new Date(seconds * 1000).toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+}
+
+/** A full date for tooltips. */
+export function fullDate(seconds) {
+  return new Date(seconds * 1000).toLocaleString(LOCALE, { dateStyle: "medium", timeStyle: "medium", hourCycle: "h23" });
+}
+
+/** Parses a typed decimal amount ("1.5", or "1,5" from a comma keyboard) into wei; null when invalid or not positive. */
 export function parseAmount(text) {
   const clean = String(text ?? "").trim().replace(",", ".");
   if (!/^\d*\.?\d+$|^\d+\.$/.test(clean)) return null;

@@ -8,38 +8,38 @@ export const hubAbi = new Interface(contracts.CommunityCoin.abi);
 export const tokenAbi = new Interface(contracts.MemeToken.abi);
 
 const MESSAGES = {
-  MemeExists: "Ce ticker existe déjà : achète l'original ou lance une variante.",
-  UnknownMeme: "Ce meme n'existe pas.",
-  InvalidSymbol: "Ticker invalide : il faut 1 à 16 lettres ou chiffres.",
-  TooDeep: "Lignée trop profonde : 6 niveaux au maximum.",
-  OpeningClosed: "L'ouverture est terminée : achète directement sur la courbe.",
-  StillOpening: "L'ouverture est encore en cours : engage-toi dans l'enchère ou attends sa clôture.",
-  AlreadySettled: "L'ouverture est déjà clôturée.",
-  NothingToClaim: "Rien à retirer pour l'instant.",
-  ZeroAmount: "Le montant doit être supérieur à zéro.",
-  WrongValue: "Montant ETH incohérent avec la cotation de ce meme.",
-  Slippage: "Le prix a bougé au-delà de ta tolérance. Réessaie.",
-  NotRoot: "Seul un meme racine (coté en ETH) peut rejoindre une autre famille.",
-  CycleDetected: "Impossible : ces deux memes sont déjà dans la même famille.",
-  UnknownUnion: "Cette proposition d'Union n'existe pas.",
-  VotingOpen: "Le vote est encore ouvert : l'Union s'exécute après la date limite.",
-  VotingClosed: "Le vote est clos.",
-  QuorumNotReached: "Majorité non atteinte : plus de la moitié de l'offre en circulation doit être verrouillée.",
-  ReserveTooSmall: "Réserve trop petite pour une Union (0,001 ETH minimum).",
-  EthTransferFailed: "Le transfert d'ETH a échoué.",
-  ERC20InsufficientBalance: "Solde de tokens insuffisant.",
+  MemeExists: "This ticker is taken. Buy the original or launch a variant.",
+  UnknownMeme: "This meme does not exist.",
+  InvalidSymbol: "Invalid ticker: use 1 to 16 letters or digits.",
+  TooDeep: "Lineage too deep: 6 levels at most.",
+  OpeningClosed: "The opening is over. Buy on the curve instead.",
+  StillOpening: "The opening is still running. Commit to the auction or wait for it to close.",
+  AlreadySettled: "The opening is already settled.",
+  NothingToClaim: "Nothing to claim yet.",
+  ZeroAmount: "The amount must be above zero.",
+  WrongValue: "The ETH amount does not match how this meme is quoted.",
+  Slippage: "The price moved beyond your slippage. Try again.",
+  NotRoot: "Only a root meme (quoted in ETH) can join another family.",
+  CycleDetected: "These two memes are already in the same family.",
+  UnknownUnion: "This union proposal does not exist.",
+  VotingOpen: "The vote is still open. The union executes after the deadline.",
+  VotingClosed: "The vote is closed.",
+  QuorumNotReached: "No majority: more than half of the circulating supply must be locked.",
+  ReserveTooSmall: "Reserve too small for a union (0.001 ETH minimum).",
+  EthTransferFailed: "The ETH transfer failed.",
+  ERC20InsufficientBalance: "Insufficient token balance.",
 };
 
 export function explain(error) {
   if (!(error instanceof Reverted)) return error?.shortMessage ?? error?.message ?? String(error);
-  if (error.reason === "insufficient balance") return "Solde ETH insuffisant.";
+  if (error.reason === "insufficient balance") return "Insufficient ETH balance.";
   for (const abi of [hubAbi, tokenAbi]) {
     try {
       const parsed = abi.parseError(error.data);
       if (parsed) return MESSAGES[parsed.name] ?? parsed.name;
     } catch {}
   }
-  return "Transaction refusée par le contrat.";
+  return "The contract rejected the transaction.";
 }
 
 export class Hub {
