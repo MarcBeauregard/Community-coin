@@ -125,59 +125,93 @@ export function families(world) {
   return out;
 }
 
-/** Turns the hub events of one transaction into feed entries. */
-export function describe(events, { fn, actorName, symbolOf, timestamp }) {
-  const trades = events.filter((e) => e.name === "Trade");
-  // An amount of the quote asset of `token`: ETH for a root, the parent token for a variant.
-  const quoted = (wei, token) => {
-    const sym = symbolOf(token, true);
-    return sym === "ETH" ? f.eth(wei) : f.tokens(wei, sym);
+/** A meme's family: every root followed by its descendants, depth first. */
+export function familyOf(world, root) {
+  const out = [];
+  const visit = (address) => {
+    const m = world.memes.get(address);
+    out.push(m);
+    for (const c of m.children) visit(c);
   };
-  const entries = [];
+  visit(root);
+  return out;
+}
+
+/**
+ * Turns the hub events of one transaction into activity rows: one row per thing that happened, in columns
+ * (who, what, which meme, amount in, amount out) rather than sentences. Routed trades collapse into the one
+ * trade the person made: "1 ETH → 5,5 M PNUTWIFHAT", not three hops.
+ */
+export function activityFrom(events, { fn, actor, timestamp, cache, unionMeme }) {
+  const isRoot = (token) => cache.get(token)?.parent === ZeroAddress;
+  const sym = (token) => cache.get(token)?.symbol ?? "?";
+  const quoteSym = (token) => (isRoot(token) ? "ETH" : sym(cache.get(token)?.parent));
+  const trades = events.filter((e) => e.name === "Trade").map((e) => e.args);
+  const rows = [];
+  const row = (kind, token, extra = {}) => rows.push({ t: timestamp, actor, kind, token, ...extra });
+
+  // ETH that moved through a root curve in this transaction: the market's volume.
+  let eth = 0n;
+  for (const e of events) {
+    if (e.name === "Trade" && isRoot(e.args.token)) eth += e.args.quoteAmount;
+    if (e.name === "Settled" && isRoot(e.args.token)) eth += e.args.quote;
+  }
+
+  if (trades.length && ["buyEth", "buy", "sellToEth", "sell"].includes(fn)) {
+    const first = trades[0], last = trades.at(-1);
+    const spikeTrade = trades.find((t) => t.spikeShare > 0n);
+    const spike = spikeTrade ? { wei: spikeTrade.spikeShare, unit: quoteSym(spikeTrade.token) } : null;
+    if (fn === "buyEth") row("buy", last.token, { in: { wei: first.quoteAmount, unit: "ETH" }, out: { wei: last.tokenAmount, unit: sym(last.token) } });
+    if (fn === "buy") row("buy", first.token, { in: { wei: first.quoteAmount, unit: quoteSym(first.token) }, out: { wei: first.tokenAmount, unit: sym(first.token) } });
+    if (fn === "sellToEth")
+      row("sell", first.token, { in: { wei: first.tokenAmount, unit: sym(first.token) }, out: { wei: last.quoteAmount - last.fee - last.spikeShare, unit: "ETH" }, spike });
+    if (fn === "sell")
+      row("sell", first.token, { in: { wei: first.tokenAmount, unit: sym(first.token) }, out: { wei: first.quoteAmount - first.fee - first.spikeShare, unit: quoteSym(first.token) }, spike });
+  }
   for (const e of events) {
     const a = e.args;
-    const entry = (token, text) => entries.push({ t: timestamp, token, text, actor: actorName });
     switch (e.name) {
       case "Launched":
-        entry(a.token, a.parent === ZeroAddress ? `lance ${a.symbol}, coté en ETH` : `lance ${a.symbol}, variante de ${symbolOf(a.parent)}`);
+        row("launch", a.token, { parent: a.parent === ZeroAddress ? null : a.parent });
         break;
-      case "Committed":
-        entry(a.token, `engage ${quoted(a.quote, a.token)} dans l'ouverture de ${symbolOf(a.token)}`);
-        break;
-      case "Settled":
-        entry(a.token, `clôture l'ouverture : ${f.tokens(a.tokens, symbolOf(a.token))} au même prix pour tous`);
-        break;
-      case "Claimed":
-        entry(a.token, `retire ${f.tokens(a.amount, symbolOf(a.token))} de son allocation`);
-        break;
-      case "Trade": {
-        const routed = fn === "buyEth" ? e !== trades.at(-1) : fn === "sellToEth" ? e !== trades[0] : false;
-        const quote = quoted(a.quoteAmount, a.token);
-        let text = a.isBuy
-          ? `achète ${f.tokens(a.tokenAmount, symbolOf(a.token))} pour ${quote}`
-          : `vend ${f.tokens(a.tokenAmount, symbolOf(a.token))} pour ${quote}`;
-        if (a.spikeShare > 0n) text += ` · ${quoted(a.spikeShare, a.token)} laissés aux détenteurs`;
-        if (fn === "executeUnion") text = `fait acheter à la réserve de l'Union ${text.replace("achète ", "")}`;
-        else if (routed) text += " · routage";
-        entry(a.token, text);
+      case "Committed": {
+        const paidEth = trades.length && (fn === "commitEth" || fn === "launch") ? trades[0].quoteAmount : null;
+        row("commit", a.token, { in: paidEth !== null ? { wei: paidEth, unit: "ETH" } : { wei: a.quote, unit: quoteSym(a.token) } });
         break;
       }
+      case "Settled":
+        row("settle", a.token, { out: { wei: a.tokens, unit: sym(a.token) } });
+        break;
+      case "Claimed":
+        row("claim", a.token, { out: { wei: a.amount, unit: sym(a.token) } });
+        break;
       case "FeesClaimed":
-        entry(a.asset === ZeroAddress ? null : a.asset, `retire ${a.asset === ZeroAddress ? f.eth(a.amount) : f.tokens(a.amount, symbolOf(a.asset))} de frais de créateur`);
+        row("fees", a.asset === ZeroAddress ? null : a.asset, { out: { wei: a.amount, unit: a.asset === ZeroAddress ? "ETH" : sym(a.asset) } });
         break;
       case "UnionProposed":
-        entry(a.meme, `propose que ${symbolOf(a.meme)} rejoigne la famille de ${symbolOf(a.target)}`);
+        row("propose", a.meme, { target: a.target });
         break;
       case "UnionLocked":
-        entry(null, `verrouille ${f.tokens(a.amount)} pour l'Union n° ${a.id}`);
+        row("vote", unionMeme(a.id), { in: { wei: a.amount, unit: sym(unionMeme(a.id)) } });
         break;
       case "UnionUnlocked":
-        entry(null, `récupère ${f.tokens(a.amount)} verrouillés pour l'Union n° ${a.id}`);
+        row("unvote", unionMeme(a.id), { out: { wei: a.amount, unit: sym(unionMeme(a.id)) } });
         break;
       case "UnionExecuted":
-        entry(a.meme, `exécute l'Union : ${symbolOf(a.meme)} rejoint la famille de ${symbolOf(a.target)} avec ${f.eth(a.ethIn)} de réserve`);
+        row("union", a.meme, { target: a.target, in: { wei: a.ethIn, unit: "ETH" } });
         break;
     }
   }
-  return entries;
+  if (rows.length) rows[0].eth = eth;
+  return rows;
+}
+
+/** The last point at or before `t`, or null when the history starts later. */
+export function pointAt(points, t) {
+  let found = null;
+  for (const p of points ?? []) {
+    if (p.t <= t) found = p;
+    else break;
+  }
+  return found;
 }

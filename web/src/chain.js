@@ -111,12 +111,39 @@ export class LocalChain {
   }
 }
 
+// What a wallet needs to add a network it does not know yet.
+const NETWORKS = {
+  8453: { chainName: "Base", rpcUrls: ["https://mainnet.base.org"], blockExplorerUrls: ["https://basescan.org"] },
+  84532: { chainName: "Base Sepolia", rpcUrls: ["https://sepolia.base.org"], blockExplorerUrls: ["https://sepolia.basescan.org"] },
+};
+
+/** Asks the wallet to move to `chainId`, adding the network first if the wallet does not know it. */
+async function switchNetwork(ethereum, chainId) {
+  const hex = `0x${Number(chainId).toString(16)}`;
+  try {
+    await ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: hex }] });
+  } catch (e) {
+    if (e?.code !== 4902 || !NETWORKS[chainId]) throw e;
+    const network = NETWORKS[chainId];
+    await ethereum.request({
+      method: "wallet_addEthereumChain",
+      params: [{ chainId: hex, ...network, nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 } }],
+    });
+  }
+}
+
 export class WalletChain {
-  static async connect() {
-    if (!globalThis.ethereum) throw new Error("No wallet found in this browser.");
+  /** Connects to the injected wallet; when it is on another network than every hub in `deployments`, asks it to switch. */
+  static async connect(deployments = {}) {
+    const ethereum = globalThis.ethereum;
+    if (!ethereum) throw new Error("No wallet found in this browser.");
     const chain = new WalletChain();
-    chain.provider = new BrowserProvider(globalThis.ethereum);
-    const addresses = await chain.provider.send("eth_requestAccounts", []);
+    await ethereum.request({ method: "eth_requestAccounts" });
+    const current = BigInt(await ethereum.request({ method: "eth_chainId" }));
+    const ids = Object.keys(deployments);
+    if (ids.length && !deployments[String(current)]) await switchNetwork(ethereum, ids[0]);
+    chain.provider = new BrowserProvider(ethereum);
+    const addresses = await chain.provider.send("eth_accounts", []);
     chain.accounts = addresses.map((a, i) => ({ name: i === 0 ? "Wallet" : `Wallet ${i + 1}`, address: getAddress(a) }));
     chain.chainId = (await chain.provider.getNetwork()).chainId;
     chain.timestamp = (await chain.provider.getBlock("latest")).timestamp;
