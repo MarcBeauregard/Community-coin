@@ -88,4 +88,6 @@ pub enum CoinError {
     TickerFree,
     #[msg("This ticker is held by a lobby's race")]
     TickerHeld,
+    #[msg("A pledge is at least 0.001 SOL (or withdrawn in full)")]
+    PledgeTooSmall,
 }

@@ -22,7 +22,8 @@ export function memoryStore() {
 /** The same log on disk, one JSON record per line; rewritten through a temporary file so a crash never loses it. */
 export function fileStore(path) {
   return {
-    load: () => (existsSync(path) ? readFileSync(path, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []),
+    // A line torn by a crash mid-write is skipped, not fatal.
+    load: () => (existsSync(path) ? readFileSync(path, "utf8").split("\n").flatMap((l) => { try { return l ? [JSON.parse(l)] : []; } catch { return []; } }) : []),
     append: (r) => appendFileSync(path, `${JSON.stringify(r)}\n`),
     rewrite(rs) {
       writeFileSync(`${path}.tmp`, rs.map((r) => `${JSON.stringify(r)}\n`).join(""));

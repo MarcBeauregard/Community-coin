@@ -9,6 +9,9 @@ export const NO_WINNER = 255;
 export const MAX_IDEAS = 16;
 export const MAX_LOBBY_LENGTH = 4 * 3600;
 export const LAMPORTS = 1_000_000_000n;
+/** The program's MIN_PLEDGE (above a wallet's rent-exempt minimum) and MIN_BOND. */
+export const MIN_PLEDGE = 1_000_000n;
+export const MIN_BOND = 10_000_000n;
 
 export class RuleError extends Error {
   constructor(name) {
@@ -56,7 +59,7 @@ export class LobbyRules {
   create({ host, id, opensAt, proposeSecs, lockSecs, length, maxPledge, bond }) {
     require(!this.lobby, "AccountInUse");
     require(0 < proposeSecs && proposeSecs <= lockSecs && lockSecs <= length && length <= MAX_LOBBY_LENGTH, "InvalidLobby");
-    require(BigInt(maxPledge) > 0n, "InvalidLobby");
+    require(BigInt(maxPledge) >= MIN_PLEDGE && BigInt(bond) >= MIN_BOND, "InvalidLobby");
     this.lobby = { id: BigInt(id), host, opens_at: BigInt(opensAt), proposals_close: BigInt(opensAt + proposeSecs), lock_at: BigInt(opensAt + lockSecs),
       launch_at: BigInt(opensAt + length), max_pledge: BigInt(maxPledge), bond: BigInt(bond), idea_count: 0, pledgers: 0, total: 0n,
       finalized: false, winner: NO_WINNER, launched: false, mint: DEFAULT_KEY };
@@ -99,6 +102,7 @@ export class LobbyRules {
     require(current === 0n || existing.idea === i.index, "OnAnotherIdea");
     const userTotal = current + a;
     require(userTotal <= l.max_pledge, "PledgeCap");
+    require(userTotal >= MIN_PLEDGE, "PledgeTooSmall");
     let p = existing;
     if (!p) {
       p = { user, seq: l.pledgers, idea: i.index, amount: 0n, settled: false };
@@ -122,6 +126,7 @@ export class LobbyRules {
     require(i.index === p.idea, "OnAnotherIdea");
     require(BigInt(now) < l.lock_at, "PledgesLocked");
     require(a > 0n && a <= p.amount, "ZeroAmount");
+    require(p.amount - a === 0n || p.amount - a >= MIN_PLEDGE, "PledgeTooSmall");
     p.amount -= a;
     i.pledged -= a;
     l.total -= a;

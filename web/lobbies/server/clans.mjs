@@ -13,7 +13,7 @@ export function createClans({ store = null } = {}) {
         if (!KEEP.has(e.event)) continue;
         if (!replay) store?.append({ ...e, at, amount: e.amount === undefined ? undefined : String(e.amount), pot: e.pot === undefined ? undefined : String(e.pot) });
         if (e.event === "Launched") names.set(e.mint, { name: e.name, symbol: e.symbol, creator: e.creator });
-        if (e.event === "LobbyLaunched") {
+        if (e.event === "LobbyLaunched" && !clans.has(e.mint)) {
           clans.set(e.mint, { mint: e.mint, lobby: e.lobby, idea: e.idea, pot: e.pot, born: at, founders: new Map(), ...(names.get(e.mint) ?? {}) });
         }
         if (e.event === "FounderJoined") clans.get(e.mint)?.founders.set(e.user, { seq: e.seq, amount: e.amount });

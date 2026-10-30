@@ -36,11 +36,18 @@ const json = (res, status, body) => {
   res.writeHead(status, { "content-type": "application/json", "x-content-type-options": "nosniff", "cache-control": "no-store", ...CORS });
   res.end(JSON.stringify(body));
 };
+// A small JSON object body (4 KB at most); anything else reads as {}.
 const readBody = (req) => new Promise((resolve) => {
   let b = "";
-  req.on("data", (c) => { b += c; if (b.length > 4096) req.destroy(); });
-  req.on("end", () => { try { resolve(JSON.parse(b || "{}")); } catch { resolve({}); } });
+  let over = false;
+  req.on("data", (c) => { if (!over) { b += c; over = b.length > 4096; } });
+  req.on("end", () => {
+    if (over) return resolve({});
+    try { const v = JSON.parse(b || "{}"); resolve(v && typeof v === "object" && !Array.isArray(v) ? v : {}); } catch { resolve({}); }
+  });
+  req.on("error", () => resolve({}));
 });
+const decode = (s) => { try { return decodeURIComponent(s); } catch { return null; } };
 // A raw body up to `max` bytes; null if it is larger (refused at once if it says so, else the rest is drained
 // unread so the answer still reaches the client).
 const readBytes = (req, max) => new Promise((resolve) => {
@@ -90,10 +97,18 @@ export function createServer({ port = 0, guests = false, devSessions = false, da
   for (const l of lobbies) {
     const room = rooms.get(String(l.id));
     const onEvents = (events) => { clans.apply(events, now()); room.announce(events, clans); };
-    if (l.crank) room.setCrank(l.crank(onEvents));
+    // On a cluster the indexer reads every event of the lobby's transactions, whoever sent them (someone else may
+    // crank first): those feed the room and the clans, and the crank's own results are not counted twice.
+    if (l.source.onEvents) l.source.onEvents(onEvents);
+    if (l.crank) room.setCrank(l.crank(l.source.onEvents ? () => {} : onEvents));
     else if (l.source.chain) room.setCrank(createCrank({ state: () => stateOfRules(l.source.chain), execute: rulesExecutor(l.source.chain), onEvents }));
   }
-  const server = http.createServer(async (req, res) => {
+  const server = http.createServer((req, res) => handle(req, res).catch((e) => {
+    // A request that breaks something answers 500; it never takes the server down.
+    console.error(`${req.method} ${req.url}: ${e.message}`);
+    if (!res.headersSent) json(res, 500, { error: "Server error" }); else res.end();
+  }));
+  async function handle(req, res) {
     if (req.method === "OPTIONS") return json(res, 204, {});
     if (tooMany(ipOf(req))) return json(res, 429, { error: "Too many requests" });
     const url = new URL(req.url, "http://x");
@@ -115,7 +130,7 @@ export function createServer({ port = 0, guests = false, devSessions = false, da
     const up = /^\/clans\/([^/]+)\/media$/.exec(url.pathname);
     if (req.method === "POST" && up) {
       const session = auth.session(bearer(req, url));
-      const room = clanRoom(decodeURIComponent(up[1]));
+      const room = clanRoom(decode(up[1]) ?? "");
       if (!session || session.guest || !room?.isMember(session.sub)) return json(res, 403, { error: "Members only" });
       const buf = await readBytes(req, media.maxBytes);
       if (!buf) return json(res, 413, { error: "File too large" });
@@ -151,13 +166,13 @@ export function createServer({ port = 0, guests = false, devSessions = false, da
     }
     const c = /^\/clans\/([^/]+)$/.exec(url.pathname);
     if (req.method === "GET" && c) {
-      const clan = clans.toJSON(decodeURIComponent(c[1]));
+      const clan = clans.toJSON(decode(c[1]) ?? "");
       return json(res, clan ? 200 : 404, clan ?? { error: "No clan for this mint" });
     }
     const m = /^\/lobbies\/(\d+)$/.exec(url.pathname);
     if (req.method === "GET" && m && rooms.has(m[1])) return json(res, 200, rooms.get(m[1]).snapshot());
     json(res, 404, { error: "Not found" });
-  });
+  }
 
   const wss = new WebSocketServer({ server, maxPayload: 2048 });
   wss.on("connection", (ws, req) => {
@@ -174,7 +189,8 @@ export function createServer({ port = 0, guests = false, devSessions = false, da
       if (!clan) return ws.close(4404, "Unknown clan");
       const id = randomUUID();
       const send = (s) => { if (ws.readyState === ws.OPEN && ws.bufferedAmount < 1 << 20) ws.send(s); };
-      const hello = clan.join(id, session, send);
+      let hello;
+      try { hello = clan.join(id, session, send); } catch (e) { console.error(e.message); return ws.close(1011, "Server error"); }
       if (!hello) return ws.close(4403, "Founders only");
       send(JSON.stringify(hello));
       ws.on("message", (data) => {

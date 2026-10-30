@@ -17,7 +17,7 @@ async function rpc(url, method, params) {
 }
 
 /** Follows the given lobbies. `poll()` reads every new transaction since the last poll, oldest first. */
-export function createIndexer({ rpc: url, programId = PROGRAM_ID, lobbies }) {
+export function createIndexer({ rpc: url, programId = PROGRAM_ID, lobbies, onEvents = null }) {
   const addresses = new Addresses(programId);
   const followed = new Map(lobbies.map((id) => [String(id), { address: addresses.lobby(id), view: emptyView(), last: null }]));
   async function pollOne(f) {
@@ -34,7 +34,10 @@ export function createIndexer({ rpc: url, programId = PROGRAM_ID, lobbies }) {
       if (!s.err) {
         const tx = await rpc(url, "getTransaction", [s.signature, { commitment: "confirmed", maxSupportedTransactionVersion: 0 }]);
         // One transaction may touch several lobbies (or none): keep this lobby's events.
-        for (const e of eventsFromLogs(tx?.meta?.logMessages)) if (e.lobby === f.address) apply(f.view, e);
+        const events = eventsFromLogs(tx?.meta?.logMessages);
+        for (const e of events) if (e.lobby === f.address) apply(f.view, e);
+        // Listeners get the whole transaction's events (a launch's `Launched` carries no lobby, only its mint).
+        if (onEvents && events.some((e) => e.lobby === f.address)) onEvents(events);
       }
       f.last = s.signature;
     }

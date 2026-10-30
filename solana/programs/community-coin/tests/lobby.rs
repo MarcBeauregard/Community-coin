@@ -197,6 +197,21 @@ async fn if_the_winners_ticker_is_taken_after_its_hold_everyone_is_refunded() {
 }
 
 #[tokio::test]
+async fn dust_cannot_get_stuck() {
+    let mut hub = Hub::start(Params::default(), 3).await;
+    let t = hub.now;
+    expect_err(hub.create_lobby(0, ID, t, 5 * SOL, 0).await, CoinError::InvalidLobby);
+    open_lobby(&mut hub, &[(0, "WIF")]).await;
+    let min = community_coin::MIN_PLEDGE;
+    expect_err(hub.pledge(1, ID, "WIF", min - 1).await, CoinError::PledgeTooSmall);
+    hub.pledge(1, ID, "WIF", min).await.unwrap();
+    hub.pledge(2, ID, "WIF", SOL).await.unwrap();
+    expect_err(hub.withdraw(2, ID, "WIF", SOL - min + 1).await, CoinError::PledgeTooSmall);
+    hub.withdraw(2, ID, "WIF", SOL - min).await.unwrap();
+    hub.withdraw(1, ID, "WIF", min).await.unwrap();
+}
+
+#[tokio::test]
 async fn lobby_windows_are_checked() {
     let mut hub = Hub::start(Params::default(), 1).await;
     let host = hub.user(0).pubkey();

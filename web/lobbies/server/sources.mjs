@@ -31,12 +31,15 @@ export function simulatedSource({ everySec = 3, random = Math.random } = {}) {
 
 /** A lobby on a cluster, through the indexer. `tick` polls at most every `pollMs`. */
 export function chainSource({ rpc, programId, lobby, pollMs = 2000, now = () => Date.now() }) {
-  const indexer = createIndexer({ rpc, programId, lobbies: [lobby] });
+  const listeners = [];
+  const indexer = createIndexer({ rpc, programId, lobbies: [lobby], onEvents: (events) => listeners.forEach((f) => f(events)) });
   let polledAt = 0;
   let polling = null;
   return {
     ideas: () => rows((indexer.view(lobby)?.ideas ?? []).filter(Boolean)),
     host: () => indexer.view(lobby)?.lobby?.host ?? null,
+    /** Every program event of the lobby's transactions, in order (the crank's, anyone else's). */
+    onEvents: (f) => listeners.push(f),
     tick() {
       if (polling || now() - polledAt < pollMs) return;
       polledAt = now();

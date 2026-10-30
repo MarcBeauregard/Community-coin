@@ -153,6 +153,31 @@ if (existsSync(join(dist, "index.html")) && !process.env.NO_BROWSER) {
   console.log("  --  browser part skipped (app not built, or NO_BROWSER set)");
 }
 
+// ------------------------------------------------------------------ malformed requests never take the server down
+{
+  const { createCrank } = await import("./server/crank.mjs");
+  const sturdy = await createServer({ guests: true, voice: { url: "wss://sfu", apiKey: "k", apiSecret: "s", fetch: async () => ({ ok: true }) },
+    lobbies: [{ id: 1, opensAt: Date.now(), source: simulatedSource() }] });
+  const b = `http://localhost:${sturdy.port}`;
+  const bad = [
+    await fetch(`${b}/clans/%E0%A4%A`).then((r) => r.status),
+    await fetch(`${b}/clans/%E0%A4%A/media`, { method: "POST", body: "x" }).then((r) => r.status),
+    await fetch(`${b}/voice/token`, { method: "POST", headers: { authorization: `Bearer ${sturdy.auth.issue("a")}` }, body: "null" }).then((r) => r.status),
+    await fetch(`${b}/auth/verify`, { method: "POST", body: "[1,2]" }).then((r) => r.status),
+    await fetch(`${b}/auth/verify`, { method: "POST", body: "x".repeat(10000) }).then((r) => r.status),
+  ];
+  const alive = (await fetch(`${b}/lobbies/1`)).status === 200;
+  check(alive && bad.every((x) => x >= 400 && x < 500), `bad URLs and bodies get 4xx and the server stays up (${bad.join(", ")})`);
+  let calls = 0;
+  const crank = createCrank({ state: () => ({ lobby: { lockAt: 0, launchAt: 10, finalized: false, launched: false, winner: 255 }, ideas: [], pledges: [] }),
+    execute: async () => { calls++; throw new Error("RPC down"); }, onEvents: () => {} });
+  const quiet = console.error; console.error = () => {};
+  await crank.tick(1); await crank.tick(2); await crank.tick(4);
+  console.error = quiet;
+  check(calls === 2, "a failing crank run is caught and retried after a back-off, never fatal");
+  await sturdy.close();
+}
+
 // ------------------------------------------------------------------ abuse limits
 {
   const tight = await createServer({ guests: true, maxPerIp: 2, httpPerMin: 4, origins: ["https://app.example"], lobbies: [{ id: 1, opensAt: Date.now(), source: simulatedSource() }] });

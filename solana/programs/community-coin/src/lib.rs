@@ -50,6 +50,10 @@ pub const MAX_IDEAS: u8 = 16;
 pub const NO_WINNER: u8 = u8::MAX;
 /// The longest a lobby can last, from opening to launch.
 pub const MAX_LOBBY_LENGTH: i64 = 4 * 3600;
+/// The smallest pledge: above the rent-exempt minimum of a wallet, so a refund to an emptied wallet always lands.
+pub const MIN_PLEDGE: u64 = 1_000_000;
+/// The smallest proposal bond a lobby may ask: holding a ticker for a day is not free.
+pub const MIN_BOND: u64 = 10_000_000;
 /// How long after a lobby's launch time its ideas' tickers stay held: time for anyone to crank the launch.
 pub const HOLD_GRACE: i64 = 24 * 3600;
 
@@ -538,7 +542,7 @@ pub mod community_coin {
     #[allow(clippy::too_many_arguments)]
     pub fn create_lobby(ctx: Context<CreateLobby>, id: u64, opens_at: i64, propose_secs: i64, lock_secs: i64, length: i64, max_pledge: u64, bond: u64) -> Result<()> {
         require!(0 < propose_secs && propose_secs <= lock_secs && lock_secs <= length && length <= MAX_LOBBY_LENGTH, CoinError::InvalidLobby);
-        require!(max_pledge > 0, CoinError::InvalidLobby);
+        require!(max_pledge >= MIN_PLEDGE && bond >= MIN_BOND, CoinError::InvalidLobby);
         let key = ctx.accounts.lobby.key();
         let l = &mut ctx.accounts.lobby;
         l.id = id;
@@ -616,6 +620,7 @@ pub mod community_coin {
         require!(p.amount == 0 || p.idea == ctx.accounts.idea.index, CoinError::OnAnotherIdea);
         let user_total = p.amount.checked_add(amount).ok_or(CoinError::MathOverflow)?;
         require!(user_total <= l.max_pledge, CoinError::PledgeCap);
+        require!(user_total >= MIN_PLEDGE, CoinError::PledgeTooSmall);
         system_program::transfer(
             CpiContext::new(ctx.accounts.system_program.to_account_info(), system_program::Transfer { from: ctx.accounts.user.to_account_info(), to: ctx.accounts.lobby.to_account_info() }),
             amount,
@@ -646,6 +651,8 @@ pub mod community_coin {
         let t = now()?;
         require!(t < ctx.accounts.lobby.lock_at, CoinError::PledgesLocked);
         require!(amount > 0 && amount <= ctx.accounts.pledge.amount, CoinError::ZeroAmount);
+        let left = ctx.accounts.pledge.amount - amount;
+        require!(left == 0 || left >= MIN_PLEDGE, CoinError::PledgeTooSmall);
         pay_lamports(&ctx.accounts.lobby.to_account_info(), &ctx.accounts.user.to_account_info(), amount)?;
         let lobby_key = ctx.accounts.lobby.key();
         let (l, i, p) = (&mut ctx.accounts.lobby, &mut ctx.accounts.idea, &mut ctx.accounts.pledge);

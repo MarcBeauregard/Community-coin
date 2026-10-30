@@ -123,7 +123,7 @@ const ERROR_TEXT = {
   LobbyNotOpen: "The lobby is not open yet.", ProposalsClosed: "Proposals are closed.", PledgesLocked: "Pledges are locked.",
   OnAnotherIdea: "Your pledge is on another idea: move it instead.", PledgeCap: "That is above this lobby’s pledge limit.",
   MemeExists: "This ticker already exists on the launchpad.", AccountInUse: "This ticker is already in the race.", ZeroAmount: "Enter an amount above zero.",
-  TooManyIdeas: "This lobby is full.", PledgeSettled: "Already refunded or committed.", TickerHeld: "Another lobby is racing this ticker right now.",
+  TooManyIdeas: "This lobby is full.", PledgeSettled: "Already refunded or committed.", TickerHeld: "Another lobby is racing this ticker right now.", PledgeTooSmall: "A pledge is at least 0.001 SOL, or withdrawn in full.",
 };
 /** What a person reads when the program refuses an operation. */
 export const errorText = (name) => ERROR_TEXT[name] || `The program refused it (${name}).`;

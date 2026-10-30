@@ -4,10 +4,11 @@
 // that clan's members, with headers that stop a browser from reading it as anything else.
 
 import { createHash } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync, existsSync, renameSync } from "node:fs";
 import { join } from "node:path";
 
 export const MAX_BYTES = 8 * 1024 * 1024;
+export const QUOTA_BYTES = 200 * 1024 * 1024; // per member, all clans
 
 const startsWith = (b, bytes, at = 0) => bytes.every((x, i) => b[at + i] === x);
 const ascii = (s) => [...s].map((c) => c.charCodeAt(0));
@@ -28,7 +29,7 @@ export function sniff(b) {
 }
 
 /** Media storage: in memory, or in `dir` (one file per hash, plus its metadata) so it survives restarts. */
-export function createMedia({ dir = null, maxBytes = MAX_BYTES } = {}) {
+export function createMedia({ dir = null, maxBytes = MAX_BYTES, quota = QUOTA_BYTES } = {}) {
   const meta = new Map(); // id -> { type, size, clan, by, at }
   const bytes = new Map(); // id -> Buffer, in memory mode
   if (dir) {
@@ -36,7 +37,12 @@ export function createMedia({ dir = null, maxBytes = MAX_BYTES } = {}) {
     const index = join(dir, "index.json");
     if (existsSync(index)) for (const [id, m] of Object.entries(JSON.parse(readFileSync(index, "utf8")))) meta.set(id, m);
   }
-  const save = () => dir && writeFileSync(join(dir, "index.json"), JSON.stringify(Object.fromEntries(meta)));
+  const save = () => {
+    if (!dir) return;
+    writeFileSync(join(dir, "index.json.tmp"), JSON.stringify(Object.fromEntries(meta)));
+    renameSync(join(dir, "index.json.tmp"), join(dir, "index.json"));
+  };
+  const used = (by) => { let n = 0; for (const m of meta.values()) if (m.by === by) n += m.size; return n; };
   return {
     maxBytes,
     /** Stores a file shared in `clan` by `by`. Returns `{ id, type, size }` or throws with the reason. */
@@ -45,6 +51,7 @@ export function createMedia({ dir = null, maxBytes = MAX_BYTES } = {}) {
       if (buf.length > maxBytes) throw new Error("File too large");
       const type = sniff(buf);
       if (!type) throw new Error("Only PNG, JPEG, GIF, WebP, MP4, MOV and WebM files can be shared");
+      if (used(by) + buf.length > quota) throw new Error("You have reached the 200 MB sharing limit");
       const id = createHash("sha256").update(buf).update(clan).digest("hex");
       if (!meta.has(id)) {
         meta.set(id, { type, size: buf.length, clan, by, at });

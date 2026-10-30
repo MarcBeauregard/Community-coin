@@ -25,6 +25,7 @@ export function createRoom({ id, opensAt, source, host = null, onStage = null, c
   const history = [];
   let sent = { phase: null, race: new Map(), inside: -1, listening: -1, clockAt: 0 };
   let outcome = { locked: null, launch: null }; // what the crank announced, for late joiners
+  const settled = new Map(); // user -> their settled message, for when they come back
   let seq = 0;
   // The stage: the lobby's host speaks first; `onStage(user, canPublish)` tells the SFU when someone's right changes.
   const stage = createStage({ host: host ?? (() => source.host?.() ?? null) });
@@ -53,6 +54,7 @@ export function createRoom({ id, opensAt, source, host = null, onStage = null, c
     size: () => conns.size,
     join(connId, session, send) {
       conns.set(connId, { session, send, listening: false, lastChat: -Infinity, tokens: rate.burst, at: now() });
+      if (settled.has(session.sub)) queueMicrotask(() => send(settled.get(session.sub))); // after the hello
       return { t: "hello", lobby: id, now: now(), opensAt, phase: phaseAt(elapsed()), race: raceRows(), ...presence(), chat: history.slice(-50), you: session.sub, guest: !!session.guest, stage: stage.view(), ...outcome };
     },
     leave(connId) {
@@ -141,6 +143,7 @@ export function createRoom({ id, opensAt, source, host = null, onStage = null, c
           const msg = JSON.stringify(e.event === "PledgeRefunded"
             ? { t: "settled", kind: "refund", amount: String(e.amount) }
             : { t: "settled", kind: "founder", amount: String(e.amount), rank: clans?.rankOf(e.mint, e.user) ?? null, mint: e.mint });
+          settled.set(e.user, msg);
           for (const c of conns.values()) if (c.session.sub === e.user) c.send(msg);
         }
       }
@@ -150,7 +153,7 @@ export function createRoom({ id, opensAt, source, host = null, onStage = null, c
     tick() {
       const t = now();
       source.tick?.(elapsed());
-      crank?.tick(elapsed());
+      crank?.tick(elapsed())?.catch?.((e) => console.error(`crank: ${e.message}`));
       const phase = phaseAt(elapsed());
       if (phase !== sent.phase) {
         if (sent.phase !== null) broadcast({ t: "phase", phase, now: t });

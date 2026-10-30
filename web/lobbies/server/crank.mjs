@@ -26,11 +26,11 @@ export function clusterExecutor({ connection, programId, secretKey, lobbyId, min
     const events = [];
     for (const { op, args } of ops) {
       const ix = lobbyInstruction(addr, op, { id: lobbyId, payer: payer.publicKey.toBase58(), mint: mintOf?.(), ...args });
-      const tx = new Transaction().add(toInstruction(programId, ix));
-      tx.feePayer = payer.publicKey;
-      tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
-      tx.sign(payer);
       try {
+        const tx = new Transaction().add(toInstruction(programId, ix));
+        tx.feePayer = payer.publicKey;
+        tx.recentBlockhash = (await connection.getLatestBlockhash()).blockhash;
+        tx.sign(payer);
         const sig = await connection.sendRawTransaction(tx.serialize());
         const done = await connection.confirmTransaction(sig);
         if (done.value.err) { console.error(`${op}: ${programError(done.value.err)}`); continue; }
@@ -47,15 +47,22 @@ export function clusterExecutor({ connection, programId, secretKey, lobbyId, min
 /** Runs the plan whenever it has something due; at most one run at a time. */
 export function createCrank({ state, execute, onEvents }) {
   let running = false;
+  let failures = 0;
+  let pauseUntil = -Infinity; // backs off after failures: 2 s, 4 s, … up to a minute
   return {
     async tick(now) {
-      if (running) return;
+      if (running || now < pauseUntil) return;
       const ops = planCrank(state(), now);
       if (!ops.length) return;
       running = true;
       try {
         const events = await execute(ops, now);
         if (events.length) onEvents(events);
+      } catch (e) {
+        // A failed run (an RPC hiccup, a refused operation) is retried on a later tick, never fatal.
+        console.error(`crank: ${e.message}`);
+        failures++;
+        pauseUntil = now + Math.min(60, 2 ** failures);
       } finally {
         running = false;
       }

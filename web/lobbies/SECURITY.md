@@ -22,6 +22,11 @@ Invariants checked by `tests/lobby.rs` and the random walk `tests/lobby_walk.rs`
 | 2 | Lobby ids are global (`[b"lobby", id]`): anyone can take an id first. | Low | Accepted: it costs the squatter rent and only makes the server pick another id. Namespacing by host is an option if it becomes a nuisance. |
 | 3 | `create_lobby` accepts any `opens_at`, including the past. | Info | Accepted: a host can only shorten their own lobby; windows are bounded (`MAX_LOBBY_LENGTH` 4 h). |
 | 4 | Repeated identical transactions in tests could be dropped as already processed (flaky test, not a program bug). | Info | Fixed in the tests: repeats come from another sender. |
+| 5 | **Dust could get stuck** (final audit): a pledge below a wallet's rent-exempt minimum could never be refunded to an emptied wallet, and the crank would retry it forever. | Medium | Fixed: `MIN_PLEDGE` 0.001 SOL; a withdrawal leaves 0 or at least that (`PledgeTooSmall`). Test: `dust_cannot_get_stuck`. |
+| 6 | Holding tickers cheaply (final audit): a lobby with a zero bond could hold any ticker for a day, renewably. | Low | Mitigated: `MIN_BOND` 0.01 SOL per proposal; the hold still blocks for at most the lobby plus a day. |
+
+Finding 2 also means a server must check that the lobby it follows has the host it expects (the voice stage's host
+is the lobby's on-chain host).
 
 Not found: missing signer or owner checks, unchecked arithmetic on amounts (all `checked_*` or bounded by a prior
 check), PDA substitution (every account is re-derived from seeds), double settlement.
@@ -38,7 +43,19 @@ check), PDA substitution (every account is re-derived from seeds), double settle
 - Voice: the server decides who publishes; tokens carry it and the SFU's admin API is told at once when it changes.
 - Load: `load-check.mjs` holds 5,000 people in one lobby (chat to all in p95 ~110 ms, ~140 MB).
 
-Known limits: the session token travels in the WebSocket URL (keep it out of access logs); one server process per
+Fixed in the final audit (an independent review of this code, see `AUDIT.md`):
+
+- Two unauthenticated crashes: a malformed `%`-escape in a path (`decodeURIComponent` threw in the async handler)
+  and a JSON body of `null`. Bodies are now objects or `{}`, paths are decoded safely, and every request runs under
+  a catch that answers 500 instead of stopping the process.
+- A failing crank run (an RPC error, a refused operation) was an unhandled rejection: now caught, with back-off.
+- On a cluster, clans are built from every event the indexer reads, not only the transactions our crank sent, so a
+  launch or a founder's claim cranked by someone else still makes the clan and its members.
+- A founder who reconnects is sent their settlement again; clan logs skip a torn line; the media index is written
+  atomically; media has a 200 MB quota per member; an oversized JSON body no longer leaves a request hanging.
+
+Known limits: the session token travels in the WebSocket URL and in media URLs (keep both out of access logs; a
+short-lived media token would be better); one server process per
 lobby set (several instances need a pub/sub between them).
 
 ## The app

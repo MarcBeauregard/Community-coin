@@ -110,6 +110,10 @@ await until(() => late.some((m) => m.t === "hello"));
 const hello = late.find((m) => m.t === "hello");
 check(hello.locked?.winner === winner.index && hello.launch?.mint === launch.mint, "a late joiner's hello carries the lock and the launch");
 cl.close();
+const back = [];
+const ca = connectLobby({ base, lobby: 412, token: server.auth.issue("alice"), onMessage: (m) => back.push(m) });
+check(await until(() => back.some((m) => m.t === "settled" && m.kind === "founder" && m.rank === a.rank)), "a founder who comes back is told again what their pledge became");
+ca.close();
 links.forEach((l) => l.close());
 
 // ------------------------------------------------------------------ the app, live, from the lock to the launch
