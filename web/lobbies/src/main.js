@@ -1,6 +1,6 @@
 // Lobbies app: Discover, Lobby, Launch and Clan on one demo store, with the phone layout below 900 px.
 // URL: #/discover, #/lobby, #/launch, #/clan. `?scene=<name>` seeds a state and `?freeze` stops the clock
-// (screenshots and tests); see demo/store.js for the scenes.
+// (screenshots and tests); see demo/store.js for the scenes. `?live=<server>` plays the lobby on the realtime server.
 
 import { render } from "preact";
 import { useEffect, useState } from "preact/hooks";
@@ -8,6 +8,7 @@ import { html, IconButton, Avatar, Toast } from "./ui.js";
 import * as I from "./icons.js";
 import { phoneBreakpoint } from "./tokens.js";
 import { createStore } from "./demo/store.js";
+import { guestSession } from "./realtime/client.js";
 import { person, SPEAKERS, FEATURED } from "./demo/data.js";
 import { Discover } from "./screens/discover.js";
 import { Lobby } from "./screens/lobby.js";
@@ -17,6 +18,17 @@ import { Sheets } from "./screens/sheets.js";
 
 const params = new URLSearchParams(location.search);
 const store = createStore({ scene: params.get("scene"), freeze: params.has("freeze") });
+// A link to a screen opens on it (#/lobby, #/clan); #/launch only once there is a launch to show.
+{
+  const screen = location.hash.replace("#/", "");
+  if (screen === "lobby" || (screen === "launch" && store.get().launched)) store.actions.go({ screen });
+  else if (screen === "clan") store.actions.openClan(store.get().clan);
+}
+// ?live=<server> joins the realtime server (as a guest until wallet sign-in is wired to a deployment).
+if (params.get("live")) {
+  const base = params.get("live");
+  guestSession(base).then((token) => store.actions.goLive({ base, lobby: FEATURED.id === "fnd" ? 412 : FEATURED.id, token })).catch((e) => console.error(e.message));
+}
 const SCREENS = ["discover", "lobby", "launch", "clan"];
 
 function usePhone() {

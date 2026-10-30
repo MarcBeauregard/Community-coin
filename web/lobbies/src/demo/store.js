@@ -7,6 +7,7 @@
 
 import { CLANS, CROWD, CHATTER, ME, seedClanMessages, seedLobbyChat, message } from "./data.js";
 import { HOUR, sol } from "../format.js";
+import { connectLobby } from "../realtime/client.js";
 import { createDemoLobby, ideasFrom, ideaMeta, myPledge, act, crank, launchSummary, toLamports, toSol, errorText, receiptFor } from "./lobby.js";
 
 export const PHASES = [
@@ -106,10 +107,39 @@ export function createStore({ scene, freeze } = {}) {
   }
   const receiptOf = (e, s) => receiptFor(e, s.chain);
 
+  // ------------------------------------------------------------------ live (realtime server)
+  // When connected, the server owns the clock, the race, the chat and the presence; the demo's crowd stops.
+  let link = null;
+  const LIVE_ERRORS = { SlowMode: "Slow mode: one message every 3 seconds.", SignInToChat: "Connect a wallet to chat.", EmptyMessage: "Write something first.", LobbyNotOpen: "The lobby is not open yet." };
+  const short = (who) => (who.length > 20 ? `${who.slice(0, 4)}…${who.slice(-4)}` : who);
+  const lineToChat = (line, you) => ({ who: line.from === you ? ME : short(line.from), text: line.text });
+  const raceIdeas = (rows, meta) => ideasFrom({ ideas: rows.map((r) => ({ ...r, pledged: BigInt(r.pledged), proposer: "" })) }, meta);
+  function onLive(m) {
+    const s = state;
+    switch (m.t) {
+      case "hello":
+        set({ live: { connected: true, inside: m.inside, listening: m.listening, opensAt: m.opensAt, you: m.you, guest: m.guest, race: m.race },
+          elapsed: Math.floor((m.now - m.opensAt) / 1000), ideas: raceIdeas(m.race, s.meta), chat: m.chat.map((l) => lineToChat(l, m.you)) });
+        break;
+      case "race": {
+        const rows = s.live.race.map((r) => m.ideas.find((x) => x.index === r.index) ?? r);
+        for (const x of m.ideas) if (!rows.some((r) => r.index === x.index)) rows.push(x);
+        set({ live: { ...s.live, race: rows }, ideas: raceIdeas(rows, s.meta) });
+        break;
+      }
+      case "presence": set({ live: { ...s.live, inside: m.inside, listening: m.listening } }); break;
+      case "chat": set({ chat: chatLine(lineToChat(m.line, s.live.you)) }); break;
+      case "error": toast(LIVE_ERRORS[m.code] || m.code, "white"); break;
+      case "closed": if (s.live) set({ live: { ...s.live, connected: false } }); break;
+      default:
+    }
+  }
+
   function tick() {
     const s = state;
     const beat = s.beat + 1;
     if (s.launched) return set({ beat });
+    if (link && s.live && s.live.connected) return set({ beat, elapsed: Math.floor((link.now() - s.live.opensAt) / 1000) });
     const elapsed = s.elapsed + 1;
     const patch = { elapsed, beat };
     if (elapsed < LOCK_AT && beat % 3 === 0) {
@@ -133,6 +163,10 @@ export function createStore({ scene, freeze } = {}) {
   const selectedIdea = () => state.ideas.find((i) => i.id === state.selected) || state.ideas[0];
 
   const actions = {
+    goLive({ base, lobby, token }) {
+      if (link) link.close();
+      link = connectLobby({ base, lobby, token, onMessage: onLive });
+    },
     go(route) { set({ route, sheet: null }); },
     openClan(id) {
       set((s) => ({ route: { screen: "clan" }, clan: id, clanView: "list", sheet: null, clans: s.clans.map((c) => (c.id === id ? { ...c, unread: 0 } : c)) }));
@@ -155,6 +189,7 @@ export function createStore({ scene, freeze } = {}) {
     // Voice on the lobby stage.
     toggleListen() {
       const listening = !state.voice.listening;
+      if (link) link.listen(listening);
       set({ voice: { listening, hand: false, onStage: listening && state.voice.onStage, mic: true } });
       if (listening) toast("Listening to the stage", "sky");
     },
@@ -226,7 +261,9 @@ export function createStore({ scene, freeze } = {}) {
     setDraft(draft) { set({ draft }); },
     send() {
       const text = state.draft.trim();
-      if (text) set({ draft: "", chat: chatLine({ who: ME, text }) });
+      if (!text) return;
+      if (link) return link.chat(text), set({ draft: "" });
+      set({ draft: "", chat: chatLine({ who: ME, text }) });
     },
     shareArt() {
       const idea = selectedIdea();
@@ -296,7 +333,7 @@ export function createStore({ scene, freeze } = {}) {
     subscribe(fn) { subscribers.add(fn); return () => subscribers.delete(fn); },
     actions,
     start() { if (!freeze && !interval) interval = setInterval(tick, 1000); },
-    stop() { clearInterval(interval); interval = null; timers.forEach(clearTimeout); timers.clear(); },
+    stop() { clearInterval(interval); interval = null; timers.forEach(clearTimeout); timers.clear(); if (link) link.close(); },
     tick,
   };
 }

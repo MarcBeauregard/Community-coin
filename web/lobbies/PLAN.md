@@ -52,3 +52,16 @@ Sheets: propose (invalid, valid, ticker taken), pledge (idle, signing), host, wa
 - Wallet mode in the screens (the client is ready; the screens still run on the demo store).
 - Postgres behind the indexer, and the crank as a service.
 - The lobby tests in CI (they need the Rust toolchain and Playwright on the runner).
+
+# Step 3: the live lobby
+
+## Done
+- Realtime server (`server/`): Sign-In With Solana sessions, a room per lobby with presence, chat, race deltas,
+  phases and the server clock; race from the chain (indexer) or from the simulated lobby.
+- App: `?live=` joins the server as a guest; presence, chat, race and clock then come from it; deep links to a
+  screen (#/lobby, #/clan) open on it.
+- Checks: `realtime-check.mjs` (room rules, sign-in, sockets, the app in Chromium).
+
+## Left
+- Wallet sign-in in the screens (the server and client support it; the screens offer guest only until wallet mode).
+- Several server instances behind one lobby (a pub/sub between them), for step 7's load.

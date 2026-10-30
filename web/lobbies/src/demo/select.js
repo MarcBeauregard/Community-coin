@@ -105,3 +105,9 @@ export function myFounderRank(s, clan) {
 export function allocation(l) {
   return l && l.founder ? Math.floor(l.allocation) : 0;
 }
+
+/** Who is in the featured lobby: the realtime server's count when connected, the demo's otherwise. */
+export function presence(s) {
+  if (s.live && s.live.connected) return { inside: s.live.inside, listening: s.live.listening };
+  return { inside: FEATURED.inside, listening: FEATURED.listeners + (s.voice.listening ? 1 : 0) };
+}

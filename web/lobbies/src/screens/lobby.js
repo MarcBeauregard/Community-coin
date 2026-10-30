@@ -4,7 +4,7 @@
 import { html, Button, IconButton, Segmented, Chip, Coin, Avatar, Bar, GestationTimeline, Equalizer, Composer } from "../ui.js";
 import * as I from "../icons.js";
 import { person, coin, FEATURED, SPEAKERS, MUTED_SPEAKERS, CROWD, PEOPLE, ME } from "../demo/data.js";
-import { race, timeline, lobbyClock, dock } from "../demo/select.js";
+import { race, timeline, lobbyClock, dock, presence } from "../demo/select.js";
 import { sol, int, ticker } from "../format.js";
 
 const AMOUNTS = [0.5, 1, 2, 5];
@@ -19,7 +19,8 @@ function speakers(s) {
 
 function Stage({ s, a, phone }) {
   const v = s.voice;
-  const listeners = int(FEATURED.listeners + (v.listening ? 1 : 0));
+  const pres = presence(s);
+  const listeners = int(pres.listening);
   const status = v.onStage ? (v.mic ? "You’re on stage · mic live" : "You’re on stage · muted") : v.hand ? "Hand raised · the host will bring you up" : "Listening · you can raise your hand";
   const size = phone ? 76 : 58;
   return html`<section class=${phone ? "scroll" : "stage scroll"} style=${phone ? "padding:8px 16px 24px;display:flex;flex-direction:column;gap:20px" : ""} aria-label="Voice stage">
@@ -48,7 +49,7 @@ function Stage({ s, a, phone }) {
       <span class="t2 num" style="font-size:13px;font-weight:600">${phone ? `In the room · ${listeners} listening` : "In the room"}</span>
       <div class="row" style="gap:6px">
         ${Object.keys(PEOPLE).slice(0, 15).map((who) => html`<${Avatar} key=${who} person=${person(who)} size=${phone ? 34 : 28} />`)}
-        <span class="num" style="height:28px;padding:0 10px;border-radius:14px;background:var(--fill);font-size:12px;font-weight:600;display:inline-flex;align-items:center">+${int(FEATURED.inside - 15)}</span>
+        <span class="num" style="height:28px;padding:0 10px;border-radius:14px;background:var(--fill);font-size:12px;font-weight:600;display:inline-flex;align-items:center">+${int(Math.max(0, pres.inside - 15))}</span>
       </div>
     </div>
     ${phone && html`<${Button} variant="ghost" size="sm" style="align-self:center" disabled=${s.elapsed >= 3594} onClick=${a.skipToLock}>Demo · skip to lock</${Button}>`}
@@ -163,7 +164,7 @@ function Chat({ s, a, phone }) {
   return html`<aside class="chat" aria-label="Lobby chat">
     ${!phone && html`<div class="chat-head"><h2 style="font-size:15px;font-weight:600">Chat</h2><span class="t2" style="font-size:12px">Slow mode · 3 s</span></div>`}
     <ol class="feed scroll" aria-live="off">${s.chat.slice().reverse().map((m, i) => html`<${ChatLine} key=${s.chat.length - i} m=${m} ideas=${byId} />`)}</ol>
-    <${Composer} label="Message the lobby" value=${s.draft} placeholder=${phone ? "Message" : `Message ${int(FEATURED.inside)} people`} maxLength=${200}
+    <${Composer} label="Message the lobby" value=${s.draft} placeholder=${phone ? "Message" : `Message ${int(presence(s).inside)} people`} maxLength=${200}
       onInput=${a.setDraft} onSend=${a.send}
       leading=${html`<${IconButton} label="Share the selected idea's art" onClick=${a.shareArt}><${I.Image} size=${17} /></${IconButton}>`} />
   </aside>`;
@@ -176,7 +177,7 @@ export function Lobby({ s, a, phone }) {
     <${IconButton} label="Back to lobbies" size=${phone ? "sm" : undefined} onClick=${() => a.go({ screen: "discover" })}><${I.Back} size=${15} /></${IconButton}>
     <div class="title" style=${phone ? "flex:1" : ""}>
       <h1 class="ellipsis">${FEATURED.name}</h1>
-      <span class="t2 num" style="font-size:13px">${phone ? t.label : `Hosted by ${FEATURED.host} · ${int(FEATURED.inside)} inside`}</span>
+      <span class="t2 num" style="font-size:13px">${phone ? t.label : `Hosted by ${FEATURED.host} · ${int(presence(s).inside)} inside`}</span>
     </div>
     ${!phone && html`<div class="tl"><${GestationTimeline} phases=${timeline(s.elapsed)} /></div>`}
     <div class="row" style="flex-wrap:nowrap;gap:14px">

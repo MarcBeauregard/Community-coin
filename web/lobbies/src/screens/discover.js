@@ -4,7 +4,7 @@ import { html, Button, IconButton, Segmented, Chip, Coin, Avatar, Bar, Gestation
 import * as I from "../icons.js";
 import { ambient } from "../tokens.js";
 import { person, coin, PEOPLE, FEATURED } from "../demo/data.js";
-import { race, timeline, lobbyClock, lobbyCards } from "../demo/select.js";
+import { race, timeline, lobbyClock, lobbyCards, presence } from "../demo/select.js";
 import { sol, int, signedPct, ticker } from "../format.js";
 
 const STEPS = [
@@ -30,6 +30,7 @@ function Hero({ s, a, phone }) {
   const ideas = race(s);
   const lead = ideas[0];
   const t = lobbyClock(s);
+  const pres = presence(s);
   return html`<section class="hero" aria-labelledby="hero-title" style=${{ background: heroGlow(lead.hue) }}>
     <div class="hero-copy">
       <div class="row">
@@ -67,9 +68,9 @@ function Hero({ s, a, phone }) {
           : html`<${Button} variant="fill" size="lg" aria-pressed=${String(s.voice.listening)} onClick=${a.toggleListen}>
               ${s.voice.listening ? html`<span class="eq" style="color:var(--sky)" aria-hidden="true"><i /><i /><i /></span>Listening` : html`<${I.Headphones} />Listen in`}
             </${Button}>`}
-        ${!phone && html`<span class="t2 num" style="font-size:14px;margin-left:4px">${int(FEATURED.inside)} inside · ${int(FEATURED.listeners + (s.voice.listening ? 1 : 0))} listening</span>`}
+        ${!phone && html`<span class="t2 num" style="font-size:14px;margin-left:4px">${int(pres.inside)} inside · ${int(pres.listening)} listening</span>`}
       </div>
-      ${phone && html`<span class="t2 num" style="font-size:12px;text-align:center;margin-top:-6px">${int(FEATURED.inside)} inside · ${int(FEATURED.listeners + (s.voice.listening ? 1 : 0))} listening</span>`}
+      ${phone && html`<span class="t2 num" style="font-size:12px;text-align:center;margin-top:-6px">${int(pres.inside)} inside · ${int(pres.listening)} listening</span>`}
     </div>
     <div class="hero-art">
       <div class="ring"><${Orbit} people=${ROOM} base=${40} /></div>

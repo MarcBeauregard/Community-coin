@@ -3,7 +3,7 @@
 The social launchpad: an hour-long lobby where a crowd proposes coin ideas, pledges SOL on them (the pledge is the
 vote), launches the winner at one price for every backer, and keeps them together in a clan that never closes.
 
-Step 1 (design system, components, every screen) and step 2 (the lobby on chain) of the plan in `PLAN.md`.
+Steps 1 (design system, components, every screen), 2 (the lobby on chain) and 3 (the live lobby) of the plan in `PLAN.md`.
 
 ```
 npm run build:lobbies   # → web/dist/lobbies (open index.html)
@@ -36,3 +36,11 @@ winning pledge becomes a commitment to the opening, then the hub's claim and ves
 - `src/demo/`: fixtures, the store (state, actions, the clock) and derived views. Later steps replace the store's
   actions with the lobby program and the realtime channel; the screens stay.
 - URL parameters: `?scene=<name>` opens a seeded state (see `demo/store.js`), `?freeze` stops the clock.
+
+The live lobby (`server/`): `npm run serve:lobbies` starts the realtime server; open the app with
+`?live=http://localhost:8790` to play the lobby on it. One WebSocket room per lobby: Sign-In With Solana (a wallet
+signs a one-time nonce; guests can read but not write), the server's clock (clients render from it), presence
+(people, not tabs), chat (cleaned of control and bidi characters, 200 characters, slow mode, flood protection), the
+race as deltas batched every 250 ms, and phase changes. The race comes from the chain through the indexer
+(`--rpc`), or from the demo lobby on the program's rules. `npm run test:realtime` checks the room on a fake clock,
+sign-in, the server over real sockets, and the app joining it in Chromium.
