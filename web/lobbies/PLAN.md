@@ -127,3 +127,25 @@ Sheets: propose (invalid, valid, ticker taken), pledge (idle, signing), host, wa
 ## Left
 - The audio transport in the app (LiveKit's client, connecting with the token the app already gets) and its
   speaking levels for the talking lights; it needs an SFU deployment to test against.
+
+# Step 7: hardening
+
+## Done
+- Program security review (`SECURITY.md`). One high finding, fixed: a ticker in a lobby's race could be launched by
+  anyone on the launchpad to void the lobby; `propose_idea` now holds it (`Hold`, until a day after the launch
+  time) and `launch` refuses it. Rust tests for the hold; the JavaScript clients carry the new account.
+- Money copy matched to the program: losing pledges and bonds now go back right at the lock (the crank does it at
+  once), as the pledge sheet always said; the host sheet no longer promises a fee share that does not exist.
+- Server limits: HTTP requests and sockets per address, capped sign-in nonces, origin allowlist, `nosniff` and
+  `no-store` on JSON.
+- Load (`load-check.mjs`): 5,000 people in one lobby, each message to all of them, the race and presence, memory.
+- Accessibility (`a11y-check.mjs`, WCAG 2.2 AA on every scene at phone and desktop sizes): names, alt text, labels,
+  unique ids, measured contrast (red fills darkened to `#d70015` under white text), 24 px targets, landmarks;
+  sheets trap Tab, close on Escape and give focus back; nothing loops with reduced motion.
+- Legal copy (`LEGAL.md`): a "Risks and terms" sheet linked from the pledge sheet, the wallet and the footer, and
+  the questions counsel must answer before launch.
+
+## Left (outside this repository's reach)
+- Deploy to devnet (`solana/DEPLOY.md`) and an external audit of the program before mainnet.
+- An SFU (LiveKit) for the audio; the app's audio transport against it.
+- Counsel's review of the terms in each launch market.

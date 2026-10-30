@@ -25,7 +25,8 @@ function tryKey(symbol) {
 
 /**
  * One lobby. `env` gives what the lobby needs from outside it: `lobbyKey`, `mintOf(tickerKey)` (the launchpad
- * address of a ticker) and `isTaken(tickerKey)` (whether that ticker is already a meme on the launchpad).
+ * address of a ticker), `isTaken(tickerKey)` (whether that ticker is already a meme on the launchpad) and, optionally,
+ * `isHeld(tickerKey, now)` (whether another lobby's race holds it).
  */
 export class LobbyRules {
   constructor(env) {
@@ -76,6 +77,8 @@ export class LobbyRules {
     require(t < l.proposals_close, "ProposalsClosed");
     require(l.idea_count < MAX_IDEAS, "TooManyIdeas");
     require(!this.taken(key), "MemeExists");
+    // Another lobby racing this ticker holds it (the program's Hold account); `env.isHeld` answers for the others.
+    require(!this.env.isHeld?.(key, t), "TickerHeld");
     this.balance += l.bond;
     const idea = { index: l.idea_count, proposer, key, name, symbol, uri, pledged: 0n, backers: 0, bond_returned: false };
     this.ideas.push(idea);

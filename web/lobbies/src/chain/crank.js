@@ -4,7 +4,8 @@
 export const NO_WINNER = 255;
 
 /**
- * The operations due now, in order. `state`: `{ lobby: { lockAt, launchAt, finalized, launched, winner },
+ * The operations due now, in order: the lock, then at once every refund and bond; at launch time the coin and
+ * every founder's commitment. `state`: `{ lobby: { lockAt, launchAt, finalized, launched, winner },
  * ideas: [{ symbol, bondReturned }], pledges: [{ user, idea, amount, settled }] }`, times in seconds of lobby time.
  */
 export function planCrank(state, now) {
@@ -14,12 +15,15 @@ export function planCrank(state, now) {
     if (now >= l.lockAt) ops.push({ op: "finalize", args: { symbols: ideas.map((d) => d.symbol) } });
     return ops;
   }
-  if (now < l.launchAt) return ops;
-  // The winner's ticker was launched elsewhere meanwhile: it cannot launch, so everyone is refunded.
-  if (l.winner !== NO_WINNER && !l.launched && state.winnerTaken) return [{ op: "void_winner", args: { symbol: ideas[l.winner].symbol } }];
   const hasWinner = l.winner !== NO_WINNER;
-  if (hasWinner && !l.launched) ops.push({ op: "launch_winner", args: { symbol: ideas[l.winner].symbol } });
-  const launched = l.launched || hasWinner;
+  if (now >= l.launchAt && hasWinner && !l.launched) {
+    // The winner's ticker was launched elsewhere meanwhile (its hold lapsed): it cannot launch, everyone is refunded.
+    if (state.winnerTaken) return [{ op: "void_winner", args: { symbol: ideas[l.winner].symbol } }];
+    ops.push({ op: "launch_winner", args: { symbol: ideas[l.winner].symbol } });
+  }
+  const launched = l.launched || ops.length > 0;
+  // From the lock, a pledge that did not back the winner goes back at once, and the bonds too; a winning pledge
+  // becomes its founder's commitment once the coin exists.
   for (const p of pledges) {
     if (p.settled || p.amount === 0n) continue;
     if (!hasWinner || p.idea !== l.winner) ops.push({ op: "refund", args: { user: p.user } });

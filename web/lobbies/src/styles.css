@@ -10,6 +10,7 @@
   --sky: #64d2ff;
   --amber: #ff9f0a;
   --red: #ff453a;
+  --redFill: #d70015;
   --glass: rgba(24, 24, 28, 0.62);
   --line: rgba(255, 255, 255, 0.08);
   --fill: rgba(118, 118, 128, 0.24);
@@ -81,7 +82,7 @@ ol, ul { list-style: none; padding: 0; }
 .btn.fill[aria-pressed="true"] { background: rgba(100, 210, 255, 0.18); color: var(--sky); }
 .btn.ghost { color: rgba(235, 235, 245, 0.72); }
 .btn.ghost:hover:not(:disabled) { color: var(--text); background: rgba(118, 118, 128, 0.18); }
-.btn.danger { background: var(--red); color: #fff; }
+.btn.danger { background: var(--redFill); color: #fff; }
 .ibtn {
   width: 40px; height: 40px; flex: none; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center;
   background: rgba(118, 118, 128, 0.22); transition: background 0.2s, transform 0.25s var(--spring), color 0.2s;
@@ -107,7 +108,7 @@ ol, ul { list-style: none; padding: 0; }
 .chip.sky { background: rgba(100, 210, 255, 0.14); color: var(--sky); }
 .chip.amber { background: rgba(255, 159, 10, 0.16); color: #ffb340; }
 .chip.neutral { background: rgba(255, 255, 255, 0.08); color: rgba(235, 235, 245, 0.8); }
-.chip.red { background: var(--red); color: #fff; }
+.chip.red { background: var(--redFill); color: #fff; }
 .chip .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .chip.pink { background: rgba(255, 143, 177, 0.14); color: #ff8fb1; }
 .chip.role { height: 20px; padding: 0 7px; font-size: 11px; }
@@ -164,7 +165,7 @@ textarea.inp { height: 84px; padding: 12px 14px; resize: none; line-height: 1.45
 .inp[aria-invalid="true"] { border-color: rgba(255, 69, 58, 0.7); }
 .field .err { font-size: 12px; color: #ff6961; }
 .search { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px; border-radius: 12px; background: rgba(118, 118, 128, 0.2); }
-.search input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; color: var(--text); font: inherit; font-size: 15px; }
+.search input { flex: 1; min-width: 0; align-self: stretch; background: transparent; border: 0; outline: none; color: var(--text); font: inherit; font-size: 15px; }
 .composer { display: flex; align-items: center; gap: 8px; }
 .composer .box { flex: 1; min-width: 0; display: flex; align-items: center; height: 42px; border-radius: 21px; background: rgba(118, 118, 128, 0.2); padding: 0 5px 0 14px; gap: 6px; }
 .composer input { flex: 1; min-width: 0; height: 100%; background: transparent; border: 0; outline: none; color: var(--text); font: inherit; font-size: 15px; }
@@ -361,3 +362,6 @@ textarea.inp { height: 84px; padding: 12px 14px; resize: none; line-height: 1.45
 .msg-tool { height: 32px; padding: 0 10px; border-radius: 10px; font-size: 12px; font-weight: 600; color: var(--text2); background: none; }
 .msg-tool:hover, .msg-tool:focus-visible { color: var(--text); background: rgba(118,118,128,.18); }
 .media > img, .media > video { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; border-radius: 14px; display: block; background: #141416; border: 1px solid rgba(255, 255, 255, 0.07); }
+
+/* An inline text link: underlined, a full-height target. */
+.link { display: inline-flex; align-items: center; min-height: 28px; padding: 0 2px; color: var(--text); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; background: none; }

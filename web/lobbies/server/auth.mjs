@@ -7,6 +7,7 @@ import { PublicKey } from "@solana/web3.js";
 
 const NONCE_TTL = 5 * 60 * 1000;
 const SESSION_TTL = 24 * 3600 * 1000;
+const MAX_NONCES = 100_000;
 // DER prefix of an Ed25519 SubjectPublicKeyInfo; the 32 raw key bytes follow it.
 const ED25519_SPKI = Buffer.from("302a300506032b6570032100", "hex");
 
@@ -24,8 +25,10 @@ export function createAuth({ secret = randomBytes(32), domain = "lobbies.communi
     nonce() {
       const n = randomBytes(16).toString("hex");
       const t = now();
+      // Expired nonces go first (oldest at the front of the map); a flood beyond the cap is refused.
+      for (const [k, at] of nonces) { if (t - at <= NONCE_TTL) break; nonces.delete(k); }
+      if (nonces.size >= MAX_NONCES) throw new Error("Too many sign-ins in progress");
       nonces.set(n, t);
-      for (const [k, at] of nonces) if (t - at > NONCE_TTL) nonces.delete(k);
       return { nonce: n, issuedAt: t };
     },
     /** Checks a signed sign-in message; returns a session token, or throws with the reason. */

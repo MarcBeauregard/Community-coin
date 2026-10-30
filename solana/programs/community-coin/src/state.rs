@@ -154,3 +154,14 @@ pub struct Pledge {
     pub settled: bool,
     pub bump: u8,
 }
+
+/// A ticker held for a lobby: while an idea with this ticker is in a lobby's race, and for a day after its launch
+/// time, nobody can launch it on the launchpad, so the lobby's winner cannot be front-run (or voided) by a copycat.
+#[account]
+#[derive(InitSpace)]
+pub struct Hold {
+    pub lobby: Pubkey,
+    /// Unix time after which the hold lapses: the lobby's launch time plus `HOLD_GRACE`.
+    pub until: i64,
+    pub bump: u8,
+}

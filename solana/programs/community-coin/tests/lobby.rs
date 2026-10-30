@@ -46,7 +46,8 @@ async fn the_winner_launches_with_its_pot_and_every_backer_gets_the_same_price()
     expect_err(hub.pledge(4, ID, "WIF", SOL).await, CoinError::PledgesLocked);
     expect_err(hub.withdraw(1, ID, "WIF", SOL).await, CoinError::PledgesLocked);
     hub.finalize(4, ID, &["WIF", "POPCAT"]).await.unwrap();
-    expect_err(hub.finalize(4, ID, &["WIF", "POPCAT"]).await, CoinError::AlreadyFinalized);
+    // (Repeats come from another sender: the same transaction twice would be dropped as already processed.)
+    expect_err(hub.finalize(3, ID, &["WIF", "POPCAT"]).await, CoinError::AlreadyFinalized);
     let l = hub.lobby(ID).await;
     assert!(l.finalized && l.winner == 0);
 
@@ -55,7 +56,7 @@ async fn the_winner_launches_with_its_pot_and_every_backer_gets_the_same_price()
     let before = hub.lamports(&k3).await;
     hub.refund(4, ID, 3).await.unwrap();
     assert_eq!(hub.lamports(&k3).await - before, 3 * SOL);
-    expect_err(hub.refund(4, ID, 3).await, CoinError::PledgeSettled);
+    expect_err(hub.refund(2, ID, 3).await, CoinError::PledgeSettled);
     expect_err(hub.refund(4, ID, 1).await, CoinError::WinnerNoRefund);
 
     expect_err(hub.launch_winner(4, ID, "WIF").await, CoinError::NotLaunchTime);
@@ -70,7 +71,7 @@ async fn the_winner_launches_with_its_pot_and_every_backer_gets_the_same_price()
 
     hub.claim_founder(4, ID, 1).await.unwrap();
     hub.claim_founder(4, ID, 2).await.unwrap();
-    expect_err(hub.claim_founder(4, ID, 2).await, CoinError::PledgeSettled);
+    expect_err(hub.claim_founder(3, ID, 2).await, CoinError::PledgeSettled);
     expect_err(hub.claim_founder(4, ID, 3).await, CoinError::PledgeSettled);
     hub.warp(OPEN).await;
     hub.claim(1, mint).await.unwrap();
@@ -151,7 +152,31 @@ async fn a_lobby_without_pledges_has_no_winner_and_returns_the_bonds() {
 }
 
 #[tokio::test]
-async fn if_the_winners_ticker_is_taken_meanwhile_everyone_is_refunded() {
+async fn a_ticker_in_the_race_is_held_for_its_lobby() {
+    let mut hub = Hub::start(Params::default(), 3).await;
+    open_lobby(&mut hub, &[(0, "WIF")]).await;
+    // Nobody can launch it on the launchpad to front-run the lobby, and no other lobby can race it.
+    expect_err(hub.launch(2, "WIF", None, 0).await, CoinError::TickerHeld);
+    let t = hub.now;
+    hub.create_lobby(1, ID + 1, t, 5 * SOL, BOND).await.unwrap();
+    expect_err(hub.propose(1, ID + 1, "WIF").await, CoinError::TickerHeld);
+    hub.pledge(1, ID, "WIF", SOL).await.unwrap();
+    hub.warp(LOCK).await;
+    hub.finalize(0, ID, &["WIF"]).await.unwrap();
+    hub.warp(LENGTH - LOCK).await;
+    expect_err(hub.launch(2, "WIF", None, 0).await, CoinError::TickerHeld);
+    hub.launch_winner(0, ID, "WIF").await.unwrap();
+    // A losing idea's ticker is free again once its hold lapses, a day after the lobby's launch time.
+    let mut hub = Hub::start(Params::default(), 3).await;
+    open_lobby(&mut hub, &[(0, "MEW")]).await;
+    hub.warp(LENGTH + community_coin::HOLD_GRACE).await;
+    expect_err(hub.launch(2, "MEW", None, 0).await, CoinError::TickerHeld);
+    hub.warp(1).await;
+    hub.launch(2, "MEW", None, 0).await.unwrap();
+}
+
+#[tokio::test]
+async fn if_the_winners_ticker_is_taken_after_its_hold_everyone_is_refunded() {
     let mut hub = Hub::start(Params::default(), 3).await;
     open_lobby(&mut hub, &[(0, "WIF"), (0, "MEW")]).await;
     hub.pledge(1, ID, "WIF", 2 * SOL).await.unwrap();
@@ -159,6 +184,8 @@ async fn if_the_winners_ticker_is_taken_meanwhile_everyone_is_refunded() {
     hub.warp(LOCK).await;
     hub.finalize(0, ID, &["WIF", "MEW"]).await.unwrap();
     expect_err(hub.void_winner(0, ID, "WIF").await, CoinError::TickerFree);
+    // Nobody cranked the launch for a whole day: the hold lapses and someone else launches the ticker.
+    hub.warp(LENGTH - LOCK + community_coin::HOLD_GRACE + 1).await;
     hub.launch(0, "WIF", None, 0).await.unwrap();
     hub.void_winner(0, ID, "WIF").await.unwrap();
     assert_eq!(hub.lobby(ID).await.winner, NO_WINNER);

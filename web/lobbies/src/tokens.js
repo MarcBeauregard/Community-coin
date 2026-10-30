@@ -12,6 +12,7 @@ export const color = {
   sky: "#64d2ff",
   amber: "#ff9f0a",
   red: "#ff453a",
+  redFill: "#d70015", // under white text (5.3:1); the brighter red is for icons and text on black
   glass: "rgba(24, 24, 28, 0.62)",
   line: "rgba(255, 255, 255, 0.08)",
   fill: "rgba(118, 118, 128, 0.24)",

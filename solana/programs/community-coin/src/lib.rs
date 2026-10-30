@@ -50,6 +50,8 @@ pub const MAX_IDEAS: u8 = 16;
 pub const NO_WINNER: u8 = u8::MAX;
 /// The longest a lobby can last, from opening to launch.
 pub const MAX_LOBBY_LENGTH: i64 = 4 * 3600;
+/// How long after a lobby's launch time its ideas' tickers stay held: time for anyone to crank the launch.
+pub const HOLD_GRACE: i64 = 24 * 3600;
 
 fn now() -> Result<i64> {
     Ok(Clock::get()?.unix_timestamp)
@@ -231,6 +233,13 @@ pub mod community_coin {
         require!(symbol_key(&symbol)? == key, CoinError::InvalidSymbol);
         require!(!name.is_empty() && name.len() <= 40 && uri.len() <= MAX_URI, CoinError::InvalidName);
         let t = now()?;
+        // A ticker in a lobby's race is not for anyone else to launch until that lobby had its chance.
+        if !ctx.accounts.hold.data_is_empty() {
+            let info = &ctx.accounts.hold;
+            require_keys_eq!(*info.owner, crate::ID, CoinError::TickerHeld);
+            let hold = Hold::try_deserialize(&mut &info.try_borrow_data()?[..])?;
+            require!(t > hold.until, CoinError::TickerHeld);
+        }
         let parent_mint = match ctx.remaining_accounts.last() {
             Some(info) => Account::<Meme>::try_from(info)?.mint,
             None => Pubkey::default(),
@@ -567,6 +576,9 @@ pub mod community_coin {
         require!(t < l.proposals_close, CoinError::ProposalsClosed);
         require!(l.idea_count < MAX_IDEAS, CoinError::TooManyIdeas);
         require!(ctx.accounts.mint.data_is_empty(), CoinError::MemeExists);
+        // Hold the ticker for this lobby (a lapsed hold of an earlier lobby is taken over).
+        let hold = &ctx.accounts.hold;
+        require!(hold.lobby == Pubkey::default() || hold.until < t, CoinError::TickerHeld);
         if l.bond > 0 {
             system_program::transfer(
                 CpiContext::new(ctx.accounts.system_program.to_account_info(), system_program::Transfer { from: ctx.accounts.proposer.to_account_info(), to: ctx.accounts.lobby.to_account_info() }),
@@ -585,6 +597,10 @@ pub mod community_coin {
         i.uri = uri;
         i.bump = ctx.bumps.idea;
         l.idea_count += 1;
+        let h = &mut ctx.accounts.hold;
+        h.lobby = lobby_key;
+        h.until = l.launch_at + HOLD_GRACE;
+        h.bump = ctx.bumps.hold;
         emit!(IdeaProposed { lobby: lobby_key, index: i.index, proposer: i.proposer, name, symbol });
         Ok(())
     }
@@ -922,6 +938,9 @@ pub struct Launch<'info> {
     pub commitment: Box<Account<'info, Commitment>>,
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
+    /// CHECK: the ticker's lobby hold, if any (`Hold`); while it lasts the ticker cannot be launched here.
+    #[account(seeds = [b"hold", key.as_slice()], bump)]
+    pub hold: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
@@ -1163,6 +1182,8 @@ pub struct ProposeIdea<'info> {
     /// CHECK: the launchpad mint this ticker would get; it must not exist yet.
     #[account(seeds = [b"mint", key.as_slice()], bump)]
     pub mint: UncheckedAccount<'info>,
+    #[account(init_if_needed, payer = proposer, space = 8 + Hold::INIT_SPACE, seeds = [b"hold", key.as_slice()], bump)]
+    pub hold: Box<Account<'info, Hold>>,
     pub system_program: Program<'info, System>,
 }
 

@@ -67,9 +67,14 @@ export function act(chain, op, args, now) {
  * founder's commitment and every bond. Returns the events, and what they mean for us.
  */
 export function crank(chain, now) {
-  const ops = planCrank(stateOfRules(chain), now);
-  // At the lock the program finalizes, and the launch comes only once the hour is up: one step at a time.
-  return ops.flatMap(({ op, args }) => chain.apply(op, args, now).events);
+  // Whatever is due by `now`, in as many rounds as it takes (the lock first, then what the lock makes due).
+  const events = [];
+  for (let round = 0; round < 4; round++) {
+    const ops = planCrank(stateOfRules(chain), now);
+    if (!ops.length) break;
+    for (const { op, args } of ops) events.push(...chain.apply(op, args, now).events);
+  }
+  return events;
 }
 
 /** A founder's tokens: their share of the opening batch, which buys the whole pot at one price (rounded down as the program's claim does). */
@@ -93,15 +98,17 @@ export function liveLaunch(m, total) {
 }
 
 /** The launch as the screens read it, from the chain after the crank. */
-export function launchSummary(chain, events) {
+export function launchSummary(chain) {
   const l = chain.lobby;
   if (!l.launched) return null;
   const win = chain.ideas[l.winner];
   const me = chain.pledges.get(ME);
   const mine = me ? me.amount : 0n;
   const founder = !!me && me.idea === l.winner && mine > 0n;
-  const refund = events.find((e) => e.event === "PledgeRefunded" && e.user === ME);
-  const bond = events.find((e) => e.event === "BondReturned" && e.proposer === ME);
+  // Refunds and bonds went back at the lock; the chain remembers them.
+  const refund = me && me.settled && !founder ? { amount: me.amount } : null;
+  const bonds = chain.ideas.filter((d) => d.proposer === ME && d.bond_returned).length;
+  const bond = bonds ? { amount: BigInt(bonds) * l.bond } : null;
   // The opening batch buys the whole pot at once; a founder's tokens are their share of it, rounded down as the
   // program's claim does.
   return {

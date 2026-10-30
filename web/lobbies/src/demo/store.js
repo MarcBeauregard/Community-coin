@@ -88,17 +88,19 @@ export function createStore({ scene, freeze } = {}) {
   };
   const chatLine = (line) => [...state.chat, line].slice(-60);
 
-  // The lock and the launch come from the chain's crank; this turns its events into what the screens show.
+  // The lock and the launch come from the chain's crank; this turns its events into what the screens show. At the
+  // lock our losing pledge and our bond come back; at 01:00 the winner launches.
   function settle(s) {
     const events = crank(s.chain, s.elapsed);
     if (!events.length) return {};
-    const patch = { ideas: ideasFrom(s.chain, s.meta), pledge: myPledge(s.chain), locked: lockedOf(s.chain) };
-    const launched = launchSummary(s.chain, events);
-    if (!launched) return patch;
-    const win = patch.ideas.find((d) => d.id === launched.id);
     const mine = events.filter((e) => e.user === ME || e.proposer === ME);
-    Object.assign(patch, { launched, balance: s.balance + launched.refund + launched.bondBack, sheet: null, signing: false,
-      receipts: [...mine.map((e) => receiptOf(e, s)).filter(Boolean), ...s.receipts] });
+    const back = mine.reduce((n, e) => n + (e.event === "PledgeRefunded" || e.event === "BondReturned" ? toSol(e.amount) : 0), 0);
+    const patch = { ideas: ideasFrom(s.chain, s.meta), pledge: myPledge(s.chain), locked: lockedOf(s.chain), balance: s.balance + back,
+      receipts: [...mine.map((e) => receiptOf(e, s)).filter(Boolean), ...s.receipts] };
+    const launched = launchSummary(s.chain);
+    if (!launched || s.launched) return patch;
+    const win = patch.ideas.find((d) => d.id === launched.id);
+    Object.assign(patch, { launched, sheet: null, signing: false });
     if (s.route.screen === "lobby") patch.route = { screen: "launch" };
     if (launched.founder) {
       patch.clans = [{ id: "new", name: win.name, ticker: win.ticker, hue: win.hue, logo: win.logo, members: launched.backers,
@@ -457,6 +459,7 @@ export function createStore({ scene, freeze } = {}) {
     "sheet-receipt": () => { pledgeNow("WIF", 1); set({ route: { screen: "lobby" }, sheet: "receipt" }); },
     "sheet-propose": () => set({ route: { screen: "lobby" }, sheet: "propose" }),
     "sheet-host": () => set({ sheet: "host" }),
+    "sheet-terms": () => set({ sheet: "terms" }),
     "sheet-wallet": () => { pledgeNow("WIF", 1); set({ sheet: "wallet" }); },
     "launch-founder": () => { pledgeNow("WIF", 1); set({ route: { screen: "lobby" }, elapsed: HOUR }); set(settle(state)); },
     "launch-refund": () => { pledgeNow("BRETT", 2); set({ route: { screen: "lobby" }, elapsed: HOUR }); set(settle(state)); },

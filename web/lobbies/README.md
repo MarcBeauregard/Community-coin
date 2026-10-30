@@ -61,3 +61,6 @@ Voice (`server/voice.mjs`): the server runs the lobby stage (host, raised hands,
 clan Campfire, and hands out SFU access tokens (LiveKit's format) that say who may publish; a change is pushed to
 the SFU's admin API at once. Start the server with `--sfu wss://…` and `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET`.
 `npm run test:voice` checks it against a fake SFU, then runs the stage from two browsers.
+
+Hardening: `npm run test:load` (5,000 people in one lobby), `npm run test:a11y` (WCAG 2.2 AA on every scene),
+`SECURITY.md` (the program and server review), `LEGAL.md` (the risks and terms copy, for counsel).

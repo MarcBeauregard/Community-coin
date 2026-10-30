@@ -200,6 +200,10 @@ export function Discover({ s, a, phone }) {
       ${!phone && html`<${HowItWorks} />`}
       <${ThisHour} s=${s} a=${a} phone=${phone} />
       <${YourClans} s=${s} a=${a} phone=${phone} />
+      <footer class="t2" style="position:relative;font-size:12px;line-height:1.5;padding:8px 4px 32px;display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center">
+        <span>Memecoins are speculative and can lose all their value. Not investment advice.</span>
+        <button type="button" class="link" onClick=${() => a.openSheet("terms")}>Risks and terms</button>
+      </footer>
     </main>
   </div>`;
 }

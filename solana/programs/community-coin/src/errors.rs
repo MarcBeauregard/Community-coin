@@ -86,4 +86,6 @@ pub enum CoinError {
     BadIdeas,
     #[msg("The winner's ticker is still free")]
     TickerFree,
+    #[msg("This ticker is held by a lobby's race")]
+    TickerHeld,
 }

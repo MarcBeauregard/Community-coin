@@ -24,7 +24,9 @@
     "test:realtime": "node web/lobbies/realtime-check.mjs",
     "test:crank": "node web/lobbies/crank-check.mjs",
     "test:clans": "node web/lobbies/clan-check.mjs",
-    "test:voice": "node web/lobbies/voice-check.mjs"
+    "test:voice": "node web/lobbies/voice-check.mjs",
+    "test:a11y": "node web/lobbies/a11y-check.mjs",
+    "test:load": "node web/lobbies/load-check.mjs"
   },
   "devDependencies": {
     "@ethereumjs/block": "^10.1.3",

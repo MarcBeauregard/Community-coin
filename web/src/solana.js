@@ -86,6 +86,10 @@ export class Addresses {
   mint(key) {
     return this._pda(`mint:${key}`, [utf8("mint"), utf8(key)]);
   }
+  /** A ticker's lobby hold: while a lobby races it, the ticker cannot be launched here (it lapses a day after). */
+  hold(key) {
+    return this._pda(`hold:${key}`, [utf8("hold"), utf8(key)]);
+  }
   meme(mint) {
     return this._pda(`meme:${mint}`, [utf8("meme"), new PublicKey(mint).toBytes()]);
   }
@@ -325,7 +329,7 @@ export function instructionsFor(addresses, engine, signer, op, a) {
       const parent = a.parent && a.parent !== SOL ? a.parent : null;
       const ancestors = parent ? [...engine.ancestors(parent).map((m) => m.mint), parent] : [];
       return [ix(
-        [user, config(true), authority, vault, meta(mint, false, true), memeOf(mint), meta(A.commitment(mint, signer), false, true), tokenProgram, system, ...ancestors.map((m) => memeOf(m))],
+        [user, config(true), authority, vault, meta(mint, false, true), memeOf(mint), meta(A.commitment(mint, signer), false, true), tokenProgram, system, meta(A.hold(key), false, false), ...ancestors.map((m) => memeOf(m))],
         new Writer(IX.launch).vec(utf8(key)).string(a.name).string(a.symbol).string(a.uri ?? "").u64(a.solIn ?? 0n).done(),
       )];
     }

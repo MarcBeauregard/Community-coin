@@ -85,11 +85,24 @@ export function Sheet({ title, labelledBy, onClose, busy, children }) {
   const ref = useRef(null);
   useEffect(() => {
     const el = ref.current;
+    const opener = document.activeElement;
     // Forms start in their first field; other sheets take focus themselves, so no button is armed by accident.
     const field = el && el.querySelector("input, textarea");
     (field || el).focus();
+    // Closed, the sheet gives focus back to what opened it.
+    return () => { if (opener && opener.isConnected) opener.focus(); };
   }, []);
-  const onKey = (e) => { if (e.key === "Escape" && !busy) onClose(); };
+  const onKey = (e) => {
+    if (e.key === "Escape" && !busy) return onClose();
+    // A modal sheet keeps Tab inside it.
+    if (e.key !== "Tab") return;
+    const items = [...ref.current.querySelectorAll("button:not(:disabled), input:not(:disabled), textarea, select, a[href], [tabindex]:not([tabindex='-1'])")];
+    if (!items.length) return;
+    const [first, last] = [items[0], items.at(-1)];
+    const at = document.activeElement;
+    if (e.shiftKey && (at === first || at === ref.current)) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && at === last) { e.preventDefault(); first.focus(); }
+  };
   return html`<div class="sheet-bg" onClick=${() => !busy && onClose()}>
     <div ref=${ref} class="sheet glass" role="dialog" aria-modal="true" tabIndex="-1" aria-labelledby=${labelledBy} onClick=${(e) => e.stopPropagation()} onKeyDown=${onKey}>
       ${title && html`<div class="sheet-head"><h2 id=${labelledBy} class="display">${title}</h2>

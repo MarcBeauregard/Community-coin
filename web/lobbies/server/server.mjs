@@ -2,7 +2,7 @@
 // Sign-In With Solana. The server's clock is the only clock: clients render from the `now` it sends.
 //
 //   node web/lobbies/server/server.mjs --port 8790 [--guests] [--dev-sessions] [--data <dir>] [--sfu <wss url>]
-//          [--lobby 412 --opens-at <ms>]
+//          [--origins https://app.example] [--trust-proxy] [--max-per-ip 50] [--http-per-min 120] [--lobby 412 --opens-at <ms>]
 //          [--rpc <url> --program <id>]    (race from the chain through the indexer; else the simulated demo lobby)
 //
 //   GET  /auth/nonce                  → { nonce, issuedAt, message(address) is signInMessage(...) }
@@ -33,7 +33,7 @@ import { join } from "node:path";
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type, authorization" };
 const json = (res, status, body) => {
-  res.writeHead(status, { "content-type": "application/json", ...CORS });
+  res.writeHead(status, { "content-type": "application/json", "x-content-type-options": "nosniff", "cache-control": "no-store", ...CORS });
   res.end(JSON.stringify(body));
 };
 const readBody = (req) => new Promise((resolve) => {
@@ -53,7 +53,20 @@ const readBytes = (req, max) => new Promise((resolve) => {
 });
 const bearer = (req, url) => (req.headers.authorization ?? "").replace(/^Bearer /, "") || url.searchParams.get("token");
 
-export function createServer({ port = 0, guests = false, devSessions = false, dataDir = null, voice = null, lobbies, auth = createAuth(), now = () => Date.now(), batchMs = 250, maxPerRoom = 20000 }) {
+export function createServer({ port = 0, guests = false, devSessions = false, dataDir = null, voice = null, lobbies, auth = createAuth(), now = () => Date.now(), batchMs = 250, maxPerRoom = 20000,
+  maxPerIp = 50, httpPerMin = 120, origins = null, trustProxy = false }) {
+  // Abuse limits: sockets per address, HTTP requests per address and minute, and (in production) the app's origins.
+  // Behind a proxy, `trustProxy` reads the client's address from X-Forwarded-For.
+  const ipOf = (req) => (trustProxy && String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim()) || req.socket.remoteAddress;
+  const sockets = new Map(); // ip -> open sockets
+  const hits = new Map(); // ip -> { n, since }
+  const tooMany = (ip) => {
+    const t = Date.now();
+    const h = hits.get(ip);
+    if (!h || t - h.since > 60_000) { hits.set(ip, { n: 1, since: t }); if (hits.size > 100_000) hits.clear(); return false; }
+    return ++h.n > httpPerMin;
+  };
+  const originOk = (req) => !origins || origins.includes(req.headers.origin);
   // Voice: `voice` is the SFU ({ url for clients, adminUrl, apiKey, apiSecret }). A change of who may speak is pushed
   // to it at once; the next token carries the same right.
   const admin = voice ? sfuAdmin({ url: voice.adminUrl ?? voice.url.replace(/^ws/, "http"), apiKey: voice.apiKey, apiSecret: voice.apiSecret, fetchImpl: voice.fetch, now }) : null;
@@ -82,8 +95,11 @@ export function createServer({ port = 0, guests = false, devSessions = false, da
   }
   const server = http.createServer(async (req, res) => {
     if (req.method === "OPTIONS") return json(res, 204, {});
+    if (tooMany(ipOf(req))) return json(res, 429, { error: "Too many requests" });
     const url = new URL(req.url, "http://x");
-    if (req.method === "GET" && url.pathname === "/auth/nonce") return json(res, 200, { ...auth.nonce(), domain: auth.domain });
+    if (req.method === "GET" && url.pathname === "/auth/nonce") {
+      try { return json(res, 200, { ...auth.nonce(), domain: auth.domain }); } catch (e) { return json(res, 429, { error: e.message }); }
+    }
     if (req.method === "POST" && url.pathname === "/auth/verify") {
       try { return json(res, 200, { token: auth.verify(await readBody(req)) }); } catch (e) { return json(res, 401, { error: e.message }); }
     }
@@ -145,6 +161,11 @@ export function createServer({ port = 0, guests = false, devSessions = false, da
 
   const wss = new WebSocketServer({ server, maxPayload: 2048 });
   wss.on("connection", (ws, req) => {
+    const ip = ipOf(req);
+    if (!originOk(req)) return ws.close(4403, "Unknown origin");
+    if ((sockets.get(ip) ?? 0) >= maxPerIp) return ws.close(4429, "Too many connections from this address");
+    sockets.set(ip, (sockets.get(ip) ?? 0) + 1);
+    ws.on("close", () => { const n = sockets.get(ip) - 1; if (n > 0) sockets.set(ip, n); else sockets.delete(ip); });
     const url = new URL(req.url, "http://x");
     const session = auth.session(url.searchParams.get("token"));
     if (url.pathname !== "/ws" || !session) return ws.close(4401, "Sign in first");
@@ -193,6 +214,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const opensAt = Number(arg("opens-at") ?? Date.now() - 1452 * 1000);
   const source = arg("rpc") ? chainSource({ rpc: arg("rpc"), programId: arg("program"), lobby: id }) : simulatedSource();
   const s = await createServer({ port: Number(arg("port") ?? 8790), guests: process.argv.includes("--guests"), devSessions: process.argv.includes("--dev-sessions"),
+    maxPerIp: Number(arg("max-per-ip") ?? 50), httpPerMin: Number(arg("http-per-min") ?? 120), origins: arg("origins")?.split(","), trustProxy: process.argv.includes("--trust-proxy"),
     dataDir: arg("data"), lobbies: [{ id, opensAt, source }],
     // --sfu wss://… with LIVEKIT_API_KEY and LIVEKIT_API_SECRET in the environment
     voice: arg("sfu") ? { url: arg("sfu"), apiKey: process.env.LIVEKIT_API_KEY, apiSecret: process.env.LIVEKIT_API_SECRET } : null });

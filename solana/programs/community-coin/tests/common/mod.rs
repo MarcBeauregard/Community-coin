@@ -352,6 +352,7 @@ impl Hub {
             commitment: commit_pda(&mint, &creator),
             token_program: spl_token_2022::ID,
             system_program: system_program::ID,
+            hold: pda(&[b"hold", &key]),
         }
         .to_account_metas(None);
         accounts.extend(Self::metas(&lineage));
@@ -675,7 +676,7 @@ impl Hub {
         let lobby = lobby_pda(id);
         let key = ticker_key(symbol);
         let ix = Self::ix(
-            community_coin::accounts::ProposeIdea { proposer, lobby, idea: idea_pda(&lobby, symbol), mint: pda(&[b"mint", &key]), system_program: system_program::ID }.to_account_metas(None),
+            community_coin::accounts::ProposeIdea { proposer, lobby, idea: idea_pda(&lobby, symbol), mint: pda(&[b"mint", &key]), hold: pda(&[b"hold", &key]), system_program: system_program::ID }.to_account_metas(None),
             community_coin::instruction::ProposeIdea { key, name: format!("{symbol} coin"), symbol: symbol.to_string(), uri: String::new() }.data(),
         );
         self.send_as(i, vec![ix]).await

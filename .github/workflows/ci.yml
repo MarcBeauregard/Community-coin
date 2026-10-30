@@ -17,4 +17,8 @@ jobs:
       - run: npm test
       - run: npm run build:web
       - run: npm run build:lobbies
-      - run: npm run test:curve
+      # The lobbies' server, crank, clans, voice and load, without a browser (the Chromium parts run locally).
+      - run: npm run test:realtime && npm run test:crank && npm run test:clans && npm run test:voice
+        env:
+          NO_BROWSER: "1"
+      - run: npm run test:load -- 1000

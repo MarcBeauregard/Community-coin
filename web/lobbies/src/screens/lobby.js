@@ -123,7 +123,7 @@ function Dock({ s, a, ideas, phone }) {
     const k = s.locked;
     const text = !k ? `Pledges locked · launch in ${t.launchIn}`
       : k.winner && !k.voided ? `${ticker(k.winner)} won · launch in ${t.launchIn}`
-      : `No launch · refunds at 01:00`;
+      : `No winner · every pledge refunded`;
     action = html`<${Chip} tone="amber" class="dock-chip" role="status">${text}</${Chip}>`;
   }
   return html`<section class="dock glass" aria-label="Your pledge">

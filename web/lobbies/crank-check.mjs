@@ -32,9 +32,10 @@ const ops = (list) => list.map((o) => o.op).join(",");
   check(planCrank({ lobby, ideas, pledges }, 3299).length === 0, "nothing before the lock");
   check(ops(planCrank({ lobby, ideas, pledges }, 3300)) === "finalize", "at the lock: finalize, nothing else");
   const fin = { ...lobby, finalized: true, winner: 0 };
-  check(planCrank({ lobby: fin, ideas, pledges }, 3599).length === 0, "between the lock and the launch: nothing");
-  check(ops(planCrank({ lobby: fin, ideas, pledges }, 3600)) === "launch_winner,claim_founder,refund,return_bond,return_bond",
-    "at launch: the coin, then each pledge settled its way, then the bonds (an emptied pledge is skipped)");
+  check(ops(planCrank({ lobby: fin, ideas, pledges }, 3301)) === "refund,return_bond,return_bond", "right after the lock: losing pledges and bonds go back (an emptied pledge is skipped)");
+  const afterLock = { lobby: fin, ideas: ideas.map((d) => ({ ...d, bondReturned: true })), pledges: [pledges[0], { ...pledges[1], settled: true }, pledges[2]] };
+  check(planCrank(afterLock, 3599).length === 0, "then nothing until 01:00: winning pledges wait for their coin");
+  check(ops(planCrank(afterLock, 3600)) === "launch_winner,claim_founder", "at 01:00: the coin, then each founder's commitment");
   check(ops(planCrank({ lobby: fin, ideas, pledges, winnerTaken: true }, 3600)) === "void_winner", "a winner whose ticker was taken meanwhile is voided first");
   const none = { ...lobby, finalized: true, winner: NO_WINNER };
   check(ops(planCrank({ lobby: none, ideas, pledges }, 3600)) === "refund,refund,return_bond,return_bond", "no winner: everyone refunded, bonds back");
@@ -42,6 +43,7 @@ const ops = (list) => list.map((o) => o.op).join(",");
   const settled = pledges.map((p) => ({ ...p, settled: true }));
   check(planCrank({ lobby: done, ideas: ideas.map((d) => ({ ...d, bondReturned: true })), pledges: settled }, 9999).length === 0, "a settled lobby needs nothing");
   check(ops(planCrank({ lobby: done, ideas, pledges: [settled[0], pledges[1]] }, 3700)) === "refund,return_bond,return_bond", "a crank cut short resumes where it stopped");
+  check(ops(planCrank({ lobby: fin, ideas, pledges, winnerTaken: true }, 3400)) === "refund,return_bond,return_bond", "a taken ticker is only voided at 01:00; the losers are refunded before");
 }
 
 // ------------------------------------------------------------------ an hour on the server, on a fake clock
@@ -71,15 +73,18 @@ check(locked.winner === winner.index && winner.pledged === chain.ideas.reduce((a
 check(locked.pot === String(winner.pledged) && locked.total === String(chain.lobby.total), "the lock says the pot and the total, in lamports");
 const pledgeFails = chain.apply("pledge", { user: "late", symbol: winner.symbol, amount: 1n }, 3301);
 check(!pledgeFails.ok && pledgeFails.error === "PledgesLocked", "after the lock, pledges are refused by the program");
+check(await until(() => inbox.bob.some((m) => m.t === "settled" && m.kind === "refund")), "Bob, on another idea, is refunded right at the lock");
 await wait(200);
-check(!inbox.bob.some((m) => m.t === "launch"), "no launch before 01:00");
+check(!inbox.bob.some((m) => m.t === "launch") && !inbox.alice.some((m) => m.t === "settled"), "no launch, and no founder, before 01:00");
 
 t = opensAt + 3600 * 1000;
 check(await until(() => inbox.alice.some((m) => m.t === "settled")), "at 01:00 the crank launches and settles");
 const launch = inbox.bob.find((m) => m.t === "launch");
 check(launch && launch.symbol === winner.symbol && launch.founders === winner.backers && launch.pot === String(winner.pledged), "the launch announces the coin, its pot and its founders");
 const a = inbox.alice.find((m) => m.t === "settled");
-check(a.kind === "founder" && a.amount === "2000000000" && a.rank === winner.backers && a.mint === launch.mint, "Alice, on the winner, is a founder; her rank is her place among its backers (she came last)");
+const aliceSeq = chain.pledges.get("alice").seq;
+const place = [...chain.pledges.values()].filter((p) => p.idea === winner.index && p.amount > 0n && p.seq <= aliceSeq).length;
+check(a.kind === "founder" && a.amount === "2000000000" && a.rank === place && a.mint === launch.mint, `Alice, on the winner, is a founder; her rank (#${a.rank}) is her place among its backers`);
 const b = inbox.bob.find((m) => m.t === "settled");
 check(b && b.kind === "refund" && b.amount === "1500000000", "Bob, on another idea, is refunded to the lamport");
 check(!inbox.carol.some((m) => m.t === "settled"), "Carol, who withdrew, has nothing to settle");
@@ -109,7 +114,8 @@ links.forEach((l) => l.close());
 
 // ------------------------------------------------------------------ the app, live, from the lock to the launch
 const dist = join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "lobbies");
-if (existsSync(join(dist, "index.html"))) {
+// NO_BROWSER=1 skips the browser part (CI without Chromium).
+if (existsSync(join(dist, "index.html")) && !process.env.NO_BROWSER) {
   const require = createRequire(import.meta.url);
   const { chromium } = require("playwright");
   const TYPES = { ".html": "text/html", ".js": "text/javascript", ".png": "image/png", ".jpg": "image/jpeg" };
@@ -141,7 +147,7 @@ if (existsSync(join(dist, "index.html"))) {
   files.close();
   await server2.close();
 } else {
-  console.log("  --  app not built: browser part skipped (npm run build:lobbies)");
+  console.log("  --  browser part skipped (app not built, or NO_BROWSER set)");
 }
 
 await server.close();

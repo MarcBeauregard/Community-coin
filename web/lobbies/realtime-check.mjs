@@ -118,7 +118,8 @@ const base = `http://localhost:${server.port}`;
 
 // ------------------------------------------------------------------ the app, live, in Chromium
 const dist = join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "lobbies");
-if (existsSync(join(dist, "index.html"))) {
+// NO_BROWSER=1 skips the browser part (CI without Chromium).
+if (existsSync(join(dist, "index.html")) && !process.env.NO_BROWSER) {
   const require = createRequire(import.meta.url);
   const { chromium } = require("playwright");
   const TYPES = { ".html": "text/html", ".js": "text/javascript", ".png": "image/png", ".jpg": "image/jpeg" };
@@ -149,7 +150,27 @@ if (existsSync(join(dist, "index.html"))) {
   await browser.close();
   files.close();
 } else {
-  console.log("  --  app not built: browser part skipped (npm run build:lobbies)");
+  console.log("  --  browser part skipped (app not built, or NO_BROWSER set)");
+}
+
+// ------------------------------------------------------------------ abuse limits
+{
+  const tight = await createServer({ guests: true, maxPerIp: 2, httpPerMin: 4, origins: ["https://app.example"], lobbies: [{ id: 1, opensAt: Date.now(), source: simulatedSource() }] });
+  const b = `http://localhost:${tight.port}`;
+  const statuses = [];
+  for (let i = 0; i < 5; i++) statuses.push((await fetch(`${b}/lobbies/1`)).status);
+  check(statuses.slice(0, 4).every((x) => x === 200) && statuses[4] === 429, "HTTP requests per address are limited (429)");
+  const { default: WS } = await import("ws");
+  const open = (origin) => new Promise((resolve) => {
+    const ws = new WS(`ws://localhost:${tight.port}/ws?lobby=1&token=${encodeURIComponent(tight.auth.issue("x"))}`, { headers: origin ? { origin } : {} });
+    ws.on("message", () => resolve({ ws, ok: true }));
+    ws.on("close", (code) => resolve({ ws, code }));
+  });
+  check((await open("https://evil.example")).code === 4403, "a socket from another origin is refused");
+  const a1 = await open("https://app.example"), a2 = await open("https://app.example"), a3 = await open("https://app.example");
+  check(a1.ok && a2.ok && a3.code === 4429, "sockets per address are limited (4429)");
+  a1.ws.close(); a2.ws.close();
+  await tight.close();
 }
 
 await server.close();

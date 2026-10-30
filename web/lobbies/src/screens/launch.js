@@ -23,7 +23,7 @@ export function Launch({ s, a, phone }) {
     { t: "01:00", c: "var(--lime)", text: `${ticker(win.ticker)} minted · the clan opens` },
   ];
   return html`<div class="launch scroll screen" style=${{ background: bg }}>
-    <div class="launch-inner">
+    <main class="launch-inner">
       <div class="row" style="justify-content:space-between">
         ${phone
           ? html`<${IconButton} label="Back to lobbies" size="sm" onClick=${() => a.go({ screen: "discover" })}><${I.Back} size=${15} /></${IconButton}>`
@@ -75,6 +75,6 @@ export function Launch({ s, a, phone }) {
         </div>
       </div>
       <ol class="recap">${recap.map((e) => html`<li key=${e.t} style=${{ borderColor: e.c }}><span class="num t2" style="font-size:12px;font-weight:600">${e.t}</span><span style="font-size:14px">${e.text}</span></li>`)}</ol>
-    </div>
+    </main>
   </div>`;
 }

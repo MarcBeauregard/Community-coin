@@ -26,7 +26,7 @@ export const ERRORS = [
   "ReserveInvariant", "InvalidConfig", "BadLineage", "Unauthorized", "MathOverflow",
   "InvalidLobby", "LobbyNotOpen", "ProposalsClosed", "PledgesLocked", "StillPledging", "AlreadyFinalized", "NotFinalized", "TooManyIdeas",
   "OnAnotherIdea", "PledgeCap", "NotLaunchTime", "NoWinner", "AlreadyLaunched", "NotLaunched", "PledgeSettled", "NotTheWinner",
-  "WinnerNoRefund", "BadIdeas", "TickerFree",
+  "WinnerNoRefund", "BadIdeas", "TickerFree", "TickerHeld",
 ];
 // An address that is already in use when `init` creates it (the system program's error 0), and an account that
 // does not exist yet (Anchor's AccountNotInitialized).
@@ -49,7 +49,7 @@ export const ERROR_TEXT = {
   LobbyNotOpen: "The lobby is not open yet.", ProposalsClosed: "Proposals are closed.", PledgesLocked: "Pledges are locked.",
   OnAnotherIdea: "Your pledge is on another idea: move it instead.", PledgeCap: "That is above this lobby's pledge limit.",
   MemeExists: "This ticker already exists on the launchpad.", AccountInUse: "This ticker is already in the race.", ZeroAmount: "Enter an amount above zero.",
-  TooManyIdeas: "This lobby is full.", PledgeSettled: "Already refunded or committed.", WinnerNoRefund: "A pledge on the winner becomes your founder allocation.",
+  TooManyIdeas: "This lobby is full.", PledgeSettled: "Already refunded or committed.", TickerHeld: "Another lobby is racing this ticker right now.", WinnerNoRefund: "A pledge on the winner becomes your founder allocation.",
 };
 
 // ------------------------------------------------------------------ addresses
@@ -82,6 +82,7 @@ export class Addresses {
   idea(lobby, symbol) { return this.pda(utf8("idea"), lobby, keyBytes(symbol)); }
   pledge(lobby, user) { return this.pda(utf8("pledge"), lobby, user); }
   mint(symbol) { return this.pda(utf8("mint"), keyBytes(symbol)); }
+  hold(symbol) { return this.pda(utf8("hold"), keyBytes(symbol)); }
   meme(mint) { return this.pda(utf8("meme"), mint); }
   commit(mint, user) { return this.pda(utf8("commit"), mint, user); }
 }
@@ -124,7 +125,7 @@ export function lobbyInstruction(addr, op, a) {
       return { keys: [signer(a.host), w(lobby), r(SYSTEM)],
         data: d.u64(a.id).i64(a.opensAt).i64(a.proposeSecs).i64(a.lockSecs).i64(a.length).u64(a.maxPledge).u64(a.bond).done() };
     case "propose_idea":
-      return { keys: [signer(a.proposer), w(lobby), w(addr.idea(lobby, a.symbol)), r(addr.mint(a.symbol)), r(SYSTEM)],
+      return { keys: [signer(a.proposer), w(lobby), w(addr.idea(lobby, a.symbol)), r(addr.mint(a.symbol)), w(addr.hold(a.symbol)), r(SYSTEM)],
         data: d.bytes(keyBytes(a.symbol)).string(a.name).string(a.symbol).string(a.uri ?? "").done() };
     case "pledge":
       return { keys: [signer(a.user), w(lobby), w(addr.idea(lobby, a.symbol)), w(addr.pledge(lobby, a.user)), r(SYSTEM)], data: d.u64(a.amount).done() };
