@@ -19,14 +19,14 @@ export const go = (hash) => {
 export const HOUR = 3600;
 export const TOLERANCE = 99n; // minimum output at 99% of the quote
 export const SPIKE_FLAG = 0.05; // a price 5% above its reference gets a warm chip
-export const n = (wei) => f.toNumber(wei);
+export const n = (value) => f.toNumber(value);
 export const countdown = (s) => {
   const v = Math.max(0, Math.round(s));
   return v >= 3600 ? f.duration(v) : `${Math.floor(v / 60)}:${String(v % 60).padStart(2, "0")}`;
 };
-/** An amount with its unit, compact: 1.2 ETH, 5.52M PNUT. */
-export const amount = (a) => (!a ? "—" : a.unit === "ETH" ? `${compact(n(a.wei))} ETH` : `${f.tokens(a.wei)} ${a.unit}`);
-export const ethOrTokens = (wei, unit) => (unit === "ETH" ? `${compact(n(wei), 4)} ETH` : f.tokens(wei, unit));
+/** An amount with its unit, compact: 1.2 SOL, 5.52M PNUT. */
+export const amount = (a) => (!a ? "—" : a.unit === "SOL" ? `${compact(n(a.value))} SOL` : `${f.tokens(a.value)} ${a.unit}`);
+export const solOrTokens = (value, unit) => (unit === "SOL" ? `${compact(n(value), 4)} SOL` : f.tokens(value, unit));
 
 /** Each family keeps one metal, given by the order its root was launched. */
 export function hueOf(world, m) {
@@ -44,13 +44,13 @@ export function MemeAvatar({ m, size }) {
   return html`<${Coin} symbol=${m.symbol} hue=${hueOf(world, m)} depth=${m.depth} size=${size} />`;
 }
 
-/** ETH gets a silver coin struck with its own sign. */
-export const EthCoin = ({ size }) => html`<${Coin} symbol="ETH" glyph="Ξ" hue=${5} size=${size} />`;
+/** SOL gets a silver coin struck with its own sign. */
+export const SolCoin = ({ size }) => html`<${Coin} symbol="SOL" glyph="◎" hue=${5} size=${size} />`;
 
-/** The coin of whatever unit an amount is in: ETH, or one of the memes on screen. */
+/** The coin of whatever unit an amount is in: SOL, or one of the memes on screen. */
 export function UnitCoin({ unit, size = "sm" }) {
   const { world } = useApp();
-  if (unit === "ETH") return html`<${EthCoin} size=${size} />`;
+  if (unit === "SOL") return html`<${SolCoin} size=${size} />`;
   const m = [...world.memes.values()].find((x) => x.symbol === unit);
   return m ? html`<${MemeAvatar} m=${m} size=${size} />` : null;
 }
@@ -60,11 +60,11 @@ export function MemeName({ m, link = true, name = true }) {
   return link ? html`<a class="meme-id" href=${memeHref(m.address)}>${inner}</a>` : html`<span class="meme-id">${inner}</span>`;
 }
 
-/** The ETH a family holds: settled reserve of its root, or the batch while the root's opening runs. */
+/** The SOL a family holds: settled reserve of its root, or the batch while the root's opening runs. */
 export const lockedOf = (m) => (m.settled ? m.reserve : m.batchQuote);
 export const pathFor = (session, m) => (session.history.get(m.address) ?? []).map((p) => ({ t: p.t, v: p.p }));
 export const familyOf = (world, m) => [...world.memes.values()].filter((x) => x.root === m.root);
-export const nameOf = (session, address) => session.chain.accounts.find((a) => a.address === address)?.name ?? f.shortAddress(address);
+export const nameOf = (session, address) => session.hub.accounts.find((a) => a.address === address)?.name ?? f.shortAddress(address);
 
 /** Price per million tokens an hour ago, from the recorded history; null when there is no such point. */
 export function hourAgo(session, world, m, key = "p") {

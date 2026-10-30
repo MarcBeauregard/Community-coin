@@ -3,16 +3,15 @@
 //   1. known totals: the demo history is replayed separately in Node, and the KPIs and lists must match it;
 //   2. words audit: no sentences outside the places made for them (explanations, empty states, the welcome band, How
 //      it works, the tour, tooltips), and no French anywhere, tooltips included;
-//   3. the main flows, at desktop and phone width, light and dark; the trade breakdown, the receipt and the chain
-//      must agree to the wei; every glossary button has a definition;
+//   3. the main flows, at desktop and phone width, light and dark; the trade breakdown, the receipt and the hub
+//      must agree to the lamport; every glossary button has a definition;
 //   4. the guided tour, completed with real transactions;
 //   5. no horizontal scroll on any page at 320, 375, 768, 1024 and 1440 px.
 // Usage: node web/e2e.cjs [screenshot-dir]
 
 const { chromium } = require("playwright");
-const { buildSync } = require("esbuild");
 const http = require("node:http");
-const { readFileSync, writeFileSync, rmSync } = require("node:fs");
+const { readFileSync } = require("node:fs");
 const { join } = require("node:path");
 
 const dist = join(__dirname, "dist");
@@ -36,42 +35,18 @@ const FRENCH = /[àâçéèêëîïôûùœ]|\b(le|la|les|des|du|une|et|ou|pour|
 
 /** Replays the demo history without the interface and returns what the market page should show. */
 async function expectedTotals() {
-  const entry = join(__dirname, ".expected.mjs");
-  buildSync({
-    stdin: {
-      contents: `
-        import { LocalChain } from "./chain.js";
-        import { Hub } from "./hub.js";
-        import { seed, DEMO_ACCOUNTS } from "./seed.js";
-        export async function run() {
-          const chain = await LocalChain.create(DEMO_ACCOUNTS);
-          const hub = await Hub.deploy(chain, chain.accounts[0].address, [300, 3600, 5000, 259200, 20, chain.accounts.find((a) => a.name === "Treasury").address]);
-          const accountOf = (n) => chain.accounts.find((a) => a.name === n).address;
-          await seed({ hub, accountOf, run: (a, fn, args, v) => hub.write(accountOf(a), fn, args, v), warp: async (s) => chain.warp(s) });
-          const out = { roots: {}, count: Number(await hub.read("memeCount")) };
-          for (let i = 0; i < out.count; i++) {
-            const t = await hub.read("allMemes", [i]);
-            const m = await hub.read("memes", [t]);
-            if (m.parent === "0x0000000000000000000000000000000000000000")
-              out.roots[await hub.token(t, "symbol")] = Number(m.settled ? m.vQuote - m.floor : m.batchQuote) / 1e18;
-          }
-          return out;
-        }`,
-      resolveDir: join(__dirname, "src"),
-      loader: "js",
-    },
-    bundle: true,
-    platform: "node",
-    format: "esm",
-    packages: "external",
-    outfile: entry,
-    logLevel: "warning",
-  });
-  try {
-    return await (await import(entry)).run();
-  } finally {
-    rmSync(entry, { force: true });
+  const { Scenario } = await import("./src/scenario.js");
+  const { SOL } = await import("./src/protocol.js");
+  const seed = JSON.parse(readFileSync(join(__dirname, "src/seed.json"), "utf8"));
+  const replay = new Scenario(seed);
+  for (const step of seed.steps) replay.step(step);
+  const st = replay.engine.state;
+  const out = { roots: {}, count: st.order.length };
+  for (const mint of st.order) {
+    const m = st.memes.get(mint);
+    if (m.parent === SOL) out.roots[m.symbol] = Number(m.settled ? m.vQuote - m.floor : m.batchQuote) / 1e9;
   }
+  return out;
 }
 
 const server = http.createServer((req, res) => {
@@ -141,10 +116,14 @@ const server = http.createServer((req, res) => {
   /** Glossary keys of every info button on the current screen. */
   const terms = new Set();
   const collectTerms = async () => (await page.evaluate(() => [...document.querySelectorAll("[data-term]")].map((e) => e.dataset.term))).forEach((k) => terms.add(k));
-  /** Reads the hub from the page's own session (exposed by ?e2e). Arguments and results are strings. */
-  const read = (fn, args = []) => page.evaluate(async ([fn, args]) => String(await globalThis.__cc.session.hub.read(fn, args)), [fn, args]);
-  const addressOf = (name) => page.evaluate((n) => globalThis.__cc.session.chain.accounts.find((a) => a.name === n).address, name);
-  const tokenOf = async (ticker) => read("tokenOfKey", [await read("symbolKey", [ticker])]);
+  /** Reads a meme's books from the page's own hub (exposed by ?e2e), in display units like the receipt (lamports × 1e9). */
+  const books = (ticker) =>
+    page.evaluate((t) => {
+      const hub = globalThis.__cc.session.hub;
+      const m = hub.engine.state.memes.get(hub.addresses.mint(t));
+      const show = (x) => String(x * 10n ** 9n);
+      return { creatorFees: show(m.creatorFees), protocolFees: show(m.protocolFees), reserve: show(m.vQuote - m.floor) };
+    }, ticker);
 
   const t0 = Date.now();
   await page.goto(url);
@@ -154,16 +133,16 @@ const server = http.createServer((req, res) => {
     const at = (n) => performance.getEntriesByName(n)[0]?.startTime;
     return { seeded: at("cc:seeded") - at("cc:boot"), ready: at("cc:ready") - at("cc:boot"), script: at("cc:boot") };
   });
-  check(boot.ready < 4000, `demo chain built and seeded in ${boot.seeded.toFixed(0)} ms, first screen ${boot.ready.toFixed(0)} ms after the script started (script start ${boot.script.toFixed(0)} ms)`);
+  check(boot.ready < 4000, `demo hub built and seeded in ${boot.seeded.toFixed(0)} ms, first screen ${boot.ready.toFixed(0)} ms after the script started (script start ${boot.script.toFixed(0)} ms)`);
   check((await page.evaluate(() => document.documentElement.lang)) === "en", "the page is declared English");
 
   // 1. Known totals against the independent replay.
   const rootRows = page.locator("[aria-label='Families'] .ranked-row:not(.head):not(.variant)");
   const shown = {};
   for (const row of await rootRows.all()) shown[(await row.locator(".meme-sym").innerText()).trim()] = num(await row.locator(".col-res").innerText());
-  for (const [sym, eth] of Object.entries(expected.roots)) check(Math.abs(shown[sym] - eth) < 0.006, `${sym} reserve shows ${shown[sym]} ETH, expected ${eth.toFixed(4)}`);
+  for (const [sym, sol] of Object.entries(expected.roots)) check(Math.abs(shown[sym] - sol) < 0.06, `${sym} reserve shows ${shown[sym]} SOL, expected ${sol.toFixed(3)}`);
   const lockedExpected = Object.values(expected.roots).reduce((a, b) => a + b, 0);
-  check(Math.abs(num(await kpi("locked")) - lockedExpected) < 0.006, `ETH locked tile matches the families (${lockedExpected.toFixed(3)} ETH)`);
+  check(Math.abs(num(await kpi("locked")) - lockedExpected) < 0.6, `SOL locked tile matches the families (${lockedExpected.toFixed(2)} SOL)`);
   check(num(await kpi("memes")) === expected.count, `meme count tile matches (${expected.count})`);
   check((await page.locator("[aria-label='Families'] .ranked-row:not(.head)").count()) === expected.count, "every meme has one row");
   const shares = await page.locator("[aria-label='Families'] .col-share:not(:empty)").allInnerTexts();
@@ -183,10 +162,10 @@ const server = http.createServer((req, res) => {
   // 3. Flows. Join the live opening from the to-do list.
   await page.locator(".todo li", { hasText: "BABYPNUT" }).getByRole("link", { name: "Commit" }).click();
   await page.locator("#opening-title").waitFor();
-  await page.fill("#commit-amount", "0.5");
+  await page.fill("#commit-amount", "15");
   await page.locator("#opening form").getByRole("button", { name: "Commit" }).click();
   await toast("Committed");
-  check((await page.locator("#opening .facts div:has(> dt:text-is('You'))").innerText()).includes("PNUT"), "ETH was routed into PNUT and committed");
+  check((await page.locator("#opening .facts div:has(> dt:text-is('You'))").innerText()).includes("PNUT"), "SOL was routed into PNUT and committed");
   check((await page.locator("[data-testid=estimate]").count()) === 1, "the opening estimates your share before you commit");
   await collectTerms();
   sentences = await wordsAudit();
@@ -200,32 +179,31 @@ const server = http.createServer((req, res) => {
   await toast("Claimed");
   check(num(await page.locator("[data-testid=position]").innerText()) > 0, "the vested allocation was claimed");
 
-  // Buy a variant with ETH through its lineage, then sell everything back into the parent.
+  // Buy a variant with SOL through its lineage, then sell everything back into the parent.
   await page.goto(url + "#market");
   await page.locator(".ranked-row", { hasText: "PNUTWIFHAT" }).first().click();
   await page.locator("[aria-label='Side']").waitFor();
-  check((await page.locator(".route").first().innerText()).replace(/\s+/g, " ").includes("ETH PNUT PNUTWIFHAT"), "the route goes through the original");
-  await page.fill("#trade-amount", "1");
+  check((await page.locator(".route").first().innerText()).replace(/\s+/g, " ").includes("SOL PNUT PNUTWIFHAT"), "the route goes through the original");
+  await page.fill("#trade-amount", "30");
   await quoted();
   const breakdown = page.locator("[data-testid=breakdown]");
   await breakdown.waitFor();
   const hopsOf = (box) => box.locator(".flow-hop").evaluateAll((els) =>
     els.map((e) => ({ fee: e.dataset.fee, creatorFee: e.dataset.creatorFee, protocolFee: e.dataset.protocolFee, reserve: e.dataset.reserve, out: e.dataset.out })));
   const before = { hops: await hopsOf(breakdown), out: await breakdown.getAttribute("data-out") };
-  check(before.hops.length === 2, "the breakdown shows both curves the ETH goes through");
-  const pnut = await tokenOf("PNUT"), dev = await addressOf("Dev Peanut"), treasury = await addressOf("Treasury");
-  const ZERO = "0x0000000000000000000000000000000000000000";
-  const fees0 = BigInt(await read("feesOf", [dev, ZERO])), cut0 = BigInt(await read("feesOf", [treasury, ZERO])), reserve0 = BigInt(await read("realReserve", [pnut]));
+  check(before.hops.length === 2, "the breakdown shows both curves the SOL goes through");
+  const b0 = await books("PNUT");
   await collectTerms();
   await page.click("button:has-text('Buy PNUTWIFHAT')");
   await toast("Bought");
   const receipt = page.locator("[data-testid=receipt]");
   await receipt.waitFor();
   const after = { hops: await hopsOf(receipt), out: await receipt.getAttribute("data-out") };
-  check(JSON.stringify(after) === JSON.stringify(before), "the receipt equals the breakdown shown before, to the wei");
-  const fees1 = BigInt(await read("feesOf", [dev, ZERO])), cut1 = BigInt(await read("feesOf", [treasury, ZERO])), reserve1 = BigInt(await read("realReserve", [pnut]));
-  check(String(fees1 - fees0) === after.hops[0].creatorFee && String(cut1 - cut0) === after.hops[0].protocolFee && String(reserve1 - reserve0) === after.hops[0].reserve,
-    "and the chain agrees: PNUT's creator fee, the protocol's cut and PNUT's reserve moved by exactly the receipt's amounts");
+  check(JSON.stringify(after) === JSON.stringify(before), "the receipt equals the breakdown shown before, to the lamport");
+  const b1 = await books("PNUT");
+  const moved = (k) => String(BigInt(b1[k]) - BigInt(b0[k]));
+  check(moved("creatorFees") === after.hops[0].creatorFee && moved("protocolFees") === after.hops[0].protocolFee && moved("reserve") === after.hops[0].reserve,
+    "and the hub agrees: PNUT's creator fee, the protocol's cut and PNUT's reserve moved by exactly the receipt's amounts");
   check(BigInt(after.hops[0].creatorFee) * 2n === BigInt(after.hops[0].protocolFee) * 8n && BigInt(after.hops[0].fee) === BigInt(after.hops[0].creatorFee) + BigInt(after.hops[0].protocolFee),
     "the 1% fee splits 0.8% to the creator and 0.2% to the protocol");
   await page.locator("[aria-label='Side'] button", { hasText: "Sell" }).click();
@@ -251,7 +229,7 @@ const server = http.createServer((req, res) => {
   await page.fill("#launch-name", "Flying Squirrel");
   await page.fill("#launch-symbol", "FLYSQUIRREL");
   await page.selectOption("#launch-parent", { label: "Variant of PNUT" });
-  await page.fill("#launch-amount", "0.2");
+  await page.fill("#launch-amount", "6");
   await shot("launch-desktop");
   await page.click("button:has-text('Launch FLYSQUIRREL')");
   await toast("Meme launched");
@@ -264,7 +242,7 @@ const server = http.createServer((req, res) => {
   await page.locator("h1", { hasText: "PEANUT" }).waitFor();
   check((await page.locator("[data-union='0'] .before-after").count()) === 1, "the vote shows what would change if it passed");
   await collectTerms();
-  await page.fill("#trade-amount", "3");
+  await page.fill("#trade-amount", "90");
   await quoted();
   await page.click("button:has-text('Buy PEANUT')");
   await toast("Bought");

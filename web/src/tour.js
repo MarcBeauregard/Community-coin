@@ -18,8 +18,8 @@ export function planTour(world) {
   if (opening) {
     const at = memeHref(opening.address);
     steps.push(
-      { id: "commit", route: at, target: "#opening .btn-lg", done: isAct("commit", "commitEth"), title: "Join the live opening",
-        body: `${opening.symbol} is in its opening. Commit 0.1 ETH with the gold button: everyone in this batch pays the same price when the timer ends.` },
+      { id: "commit", route: at, target: "#opening .btn-lg", done: isAct("commit", "commitSol"), title: "Join the live opening",
+        body: `${opening.symbol} is in its opening. Commit 1 SOL with the gold button: everyone in this batch pays the same price when the timer ends.` },
       { id: "warp", route: at, target: ".clock > .pill", done: (ev) => ev.type === "warp", title: "Skip ahead an hour",
         body: "In the demo, time is yours. Open the clock at the top and pick 1 hour: the opening closes and its tokens unlock." },
       { id: "claim", route: at, target: "#position .btn", done: isAct("claim"), title: "Claim your tokens",
@@ -30,9 +30,9 @@ export function planTour(world) {
     const root = world.memes.get(variant.root);
     const at = memeHref(variant.address);
     steps.push(
-      { id: "buy", route: at, target: "#trade .btn-lg", done: isAct("buyEth", "buy"), title: "Buy the copy",
-        body: `${variant.symbol} is a copy of ${root.symbol}. Buy it with ETH and read the breakdown under the amount: your ETH lands in ${root.symbol}'s reserve first.` },
-      { id: "sell", route: at, target: "#trade [aria-label='Side']", done: isAct("sellToEth", "sell"), title: "Sell into the spike",
+      { id: "buy", route: at, target: "#trade .btn-lg", done: isAct("buySol", "buy"), title: "Buy the copy",
+        body: `${variant.symbol} is a copy of ${root.symbol}. Buy it with SOL and read the breakdown under the amount: your SOL lands in ${root.symbol}'s reserve first.` },
+      { id: "sell", route: at, target: "#trade [aria-label='Side']", done: isAct("sellToSol", "sell"), title: "Sell into the spike",
         body: `Your buy pushed ${variant.symbol} above its 1h reference. Switch to Sell, press Max and sell: part of the gain above the reference stays with the holders.` },
     );
   }

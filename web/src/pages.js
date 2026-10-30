@@ -1,7 +1,7 @@
 // The screens. Each answers one question at first glance, after the dashboard-design skill:
 //
 //   Market       What is this, what is live, and where is the money going?
-//                welcome band on a first visit · spotlight (the live opening, or the top family) beside ETH locked,
+//                welcome band on a first visit · spotlight (the live opening, or the top family) beside SOL locked,
 //                volume, memes, live openings · families with a price trend per row · to-do · movers · activity
 //   Meme         Is it rising, and what happens if I trade now?
 //                price per million, gap to the 1h reference, market cap, reserve · chart with periods and events, or
@@ -16,16 +16,16 @@
 // finished vote (Unlock), a price far above its 1h reference (warm chip: selling now pays the holders).
 // Wordless screens: explanations live in tooltips, glossary buttons and the few .explain lines beside a decision.
 
-import { ZeroAddress } from "ethers";
 import { useState, useEffect } from "preact/hooks";
 import * as f from "./format.js";
 import * as I from "./icons.js";
 import { html, Avatar, Ring, Sparkline, Flash, celebrate, Coin, Delta, Kpi, Card, ShareBar, Segmented, StepChart, compact } from "./ui.js";
 import { families, pointAt } from "./world.js";
 import {
-  useApp, go, memeHref, HOUR, n, countdown, amount, hueOf, MemeAvatar, EthCoin, MemeName, lockedOf, Phase, hourAgo, pathFor, familyOf,
-  nameOf, Term, SPIKE_FLAG,
+  useApp, go, memeHref, HOUR, n, countdown, amount, hueOf, MemeAvatar, MemeName, lockedOf, Phase, hourAgo, pathFor, familyOf,
+  nameOf, Term, SPIKE_FLAG, solOrTokens,
 } from "./common.js";
+import { SOL, symbolKey } from "./protocol.js";
 import { TradePanel, OpeningPanel, OpeningStory, PositionCard } from "./trade.js";
 import { FamilyTree, UnionBlock, ProposeUnion } from "./family.js";
 import { Welcome, welcomeDismissed } from "./learn.js";
@@ -80,17 +80,18 @@ function todoItems({ world }) {
     const meme = world.memes.get(u.meme), target = world.memes.get(u.target);
     const passed = world.now > u.deadline, majority = u.locked * 2n > u.circulating;
     if (!u.executed && !u.stale && passed && majority)
-      items.push({ key: `exec-${u.id}`, m: meme, to: target, label: "Union", chip: "Majority", run: ["Union executed", "executeUnion", [u.id, 0n]], action: "Execute", sort: 1e6,
+      items.push({ key: `exec-${u.id}`, m: meme, to: target, label: "Union", chip: "Majority", run: ["Union executed", "executeUnion", { id: u.id }], action: "Execute", sort: 1e6,
         party: { symbol: target.symbol, hue: hueOf(world, target) } });
     if (u.mine > 0n && (u.executed || u.stale || passed))
-      items.push({ key: `lock-${u.id}`, m: meme, label: "Vote over", chip: f.tokens(u.mine), run: ["Tokens unlocked", "unlockUnion", [u.id]], action: "Unlock", sort: 3e6 });
+      items.push({ key: `lock-${u.id}`, m: meme, label: "Vote over", chip: f.tokens(u.mine), run: ["Tokens unlocked", "unlockUnion", { id: u.id }], action: "Unlock", sort: 3e6 });
     if (!u.executed && !u.stale && !passed && meme.balance > 0n)
       items.push({ key: `vote-${u.id}`, m: meme, to: target, label: "Vote", chip: f.percent(Number(u.locked) / Math.max(1, Number(u.circulating)), 0), href: memeHref(u.meme), action: "Vote", sort: 4e6 + u.deadline });
   }
   for (const m of world.memes.values())
-    if (m.claimable > 0n) items.push({ key: `claim-${m.address}`, m, label: "Claimable", chip: f.tokens(m.claimable), run: ["Claimed", "claim", [m.address]], action: "Claim", sort: 2e6 });
+    if (m.claimable > 0n) items.push({ key: `claim-${m.address}`, m, label: "Claimable", chip: f.tokens(m.claimable), run: ["Claimed", "claim", { mint: m.address }], action: "Claim", sort: 2e6 });
   for (const x of world.fees)
-    items.push({ key: `fees-${x.asset}`, m: x.asset === ZeroAddress ? null : world.memes.get(x.asset), label: "Fees", chip: x.symbol === "ETH" ? `${compact(n(x.amount))} ETH` : f.tokens(x.amount, x.symbol), run: ["Fees withdrawn", "claimFees", [x.asset]], action: "Withdraw", sort: 2.5e6 });
+    items.push({ key: `fees-${x.mint}-${x.protocol}`, m: world.memes.get(x.mint), label: x.protocol ? "Protocol fees" : "Fees", chip: solOrTokens(x.amount, x.unit),
+      run: ["Fees withdrawn", "claimFees", { mint: x.mint, protocol: x.protocol }], action: "Withdraw", sort: 2.5e6 });
   return items.sort((a, b) => a.sort - b.sort);
 }
 
@@ -101,7 +102,7 @@ function TodoList() {
   return html`<ul class="todo">
     ${items.slice(0, 7).map((it) => html`<li key=${it.key}>
       <span class="todo-what">
-        ${it.m ? html`<${MemeName} m=${it.m} name=${false} />` : html`<span class="meme-id"><${EthCoin} /><span class="meme-sym">ETH</span></span>`}
+        <${MemeName} m=${it.m} name=${false} />
         ${it.to && html`<${I.Arrow} size=${14} /><${MemeName} m=${it.to} name=${false} />`}
       </span>
       <span class="todo-label muted">${it.label}</span>
@@ -118,7 +119,7 @@ function Movers() {
   const { session, world } = useApp();
   const moves = [...world.memes.values()]
     .filter((m) => !m.opening)
-    .map((m) => ({ m, cur: n(m.priceEth) * 1e6, prev: hourAgo(session, world, m) }))
+    .map((m) => ({ m, cur: n(m.priceSol) * 1e6, prev: hourAgo(session, world, m) }))
     .filter((x) => x.prev)
     .sort((a, b) => Math.abs(b.cur / b.prev - 1) - Math.abs(a.cur / a.prev - 1))
     .slice(0, 5);
@@ -126,7 +127,7 @@ function Movers() {
   return html`<div class="ranked compact movers">
     ${moves.map(({ m, cur, prev }) => html`<a class="ranked-row" key=${m.address} href=${memeHref(m.address)}>
       <span class="ranked-name"><${MemeAvatar} m=${m} /><span class="meme-sym">${m.symbol}</span></span>
-      <${Delta} cur=${cur} prev=${prev} vs="" tip=${`${compact(prev)} → ${compact(cur)} ETH · 1M`} />
+      <${Delta} cur=${cur} prev=${prev} vs="" tip=${`${compact(prev)} → ${compact(cur)} SOL · 1M`} />
     </a>`)}
   </div>`;
 }
@@ -150,10 +151,10 @@ function FamilyList({ rows, total, showShare = true }) {
           <${MemeAvatar} m=${m} /><span class="meme-sym">${m.symbol}</span><span class="meme-name">${m.name}</span>
           <${Phase} m=${m} />
         </span>
-        <span role="cell" class="num tnum" data-tip=${`${f.perMillion(m.priceEth)}\nPrice of one million ${m.symbol}`}><${Flash} value=${n(m.priceEth)}>${compact(n(m.priceEth) * 1e6)}</${Flash}></span>
-        <span role="cell" class="num">${m.opening ? html`<span class="muted">—</span>` : html`<${Delta} cur=${n(m.priceEth) * 1e6} prev=${prev} vs="" tip=${prev !== null ? `1h ago: ${compact(prev)} ETH` : undefined} />`}</span>
+        <span role="cell" class="num tnum" data-tip=${`${f.perMillion(m.priceSol)}\nPrice of one million ${m.symbol}`}><${Flash} value=${n(m.priceSol)}>${compact(n(m.priceSol) * 1e6)}</${Flash}></span>
+        <span role="cell" class="num">${m.opening ? html`<span class="muted">—</span>` : html`<${Delta} cur=${n(m.priceSol) * 1e6} prev=${prev} vs="" tip=${prev !== null ? `1h ago: ${compact(prev)} SOL` : undefined} />`}</span>
         <span role="cell" class="col-trend">${m.opening ? null : html`<${Sparkline} points=${pathFor(session, m)} />`}</span>
-        <span role="cell" class="num tnum col-res" data-tip=${m.parent ? `Reserve in ${m.quoteSymbol}` : "Reserve in ETH"}>${m.parent ? f.tokens(lockedOf(m), m.quoteSymbol) : `${compact(n(lockedOf(m)))} ETH`}</span>
+        <span role="cell" class="num tnum col-res" data-tip=${m.parent ? `Reserve in ${m.quoteSymbol}` : "Reserve in SOL"}>${m.parent ? f.tokens(lockedOf(m), m.quoteSymbol) : `${compact(n(lockedOf(m)))} SOL`}</span>
         ${showShare && html`<span role="cell" class="num tnum muted col-share">${share === null ? "" : share < 0.1 ? "<0.1%" : `${f.percent(share / 100, share < 1 ? 1 : 0)}`}</span>`}
       </a>`;
     })}
@@ -164,7 +165,7 @@ function FamilyList({ rows, total, showShare = true }) {
 
 /**
  * The hero of the market page: the live opening if there is one (the moment everyone pays the same price), else
- * the family holding the most ETH. Its coin sits inside the opening's countdown ring.
+ * the family holding the most SOL. Its coin sits inside the opening's countdown ring.
  */
 function Spotlight({ rows }) {
   const { world, session } = useApp();
@@ -176,7 +177,7 @@ function Spotlight({ rows }) {
   const left = m.openUntil - world.now;
   const prev = hourAgo(session, world, m);
   const pts = pathFor(session, m);
-  const quote = (wei) => (m.parent ? f.tokens(wei, m.quoteSymbol) : `${compact(n(wei))} ETH`);
+  const quote = (value) => (m.parent ? f.tokens(value, m.quoteSymbol) : `${compact(n(value))} SOL`);
   const variants = familyOf(world, m).length - 1;
   return html`<section class="card spotlight" aria-labelledby="spotlight-title" data-spotlight=${live ? "opening" : "top"}>
     <div class="spot-stage">
@@ -187,17 +188,17 @@ function Spotlight({ rows }) {
     <div class="spot-body">
       ${live
         ? html`<span class="chip chip-hot spot-eyebrow" data-tip=${"Live opening\nEvery commit buys at the same price when the timer ends"}><i class="dot dot-hot"></i>Live opening</span>`
-        : html`<span class="chip chip-accent spot-eyebrow" data-tip=${"Top family\nThe root holding the most ETH"}>Top family</span>`}
+        : html`<span class="chip chip-accent spot-eyebrow" data-tip=${"Top family\nThe root holding the most SOL"}>Top family</span>`}
       <h2 id="spotlight-title" class="spot-sym"><a href=${memeHref(m.address)}>${m.symbol}</a></h2>
       <p class="spot-name">${m.name}${parent ? html` <span class="muted">· variant of</span> <a href=${memeHref(parent.address)}>${parent.symbol}</a>` : ""}</p>
       <dl class="spot-stats">
         ${live
           ? html`<div><dt>Closes in</dt><dd class="tnum hot-text">${countdown(left)}</dd></div>
               <div><dt>Committed</dt><dd class="tnum">${quote(m.batchQuote)}</dd></div>
-              <div><dt><${Term} k="price1m">Price · 1M</${Term}></dt><dd class="tnum">${compact(n(m.priceEth) * 1e6)} ETH</dd></div>`
-          : html`<div><dt><${Term} k="price1m">Price · 1M</${Term}></dt><dd class="tnum"><${Flash} value=${n(m.priceEth)}>${compact(n(m.priceEth) * 1e6)} ETH</${Flash}></dd>
-                <${Delta} cur=${n(m.priceEth) * 1e6} prev=${prev} vs="1h" /></div>
-              <div><dt><${Term} k="reserve">Reserve</${Term}></dt><dd class="tnum">${compact(n(lockedOf(m)))} ETH</dd></div>
+              <div><dt><${Term} k="price1m">Price · 1M</${Term}></dt><dd class="tnum">${compact(n(m.priceSol) * 1e6)} SOL</dd></div>`
+          : html`<div><dt><${Term} k="price1m">Price · 1M</${Term}></dt><dd class="tnum"><${Flash} value=${n(m.priceSol)}>${compact(n(m.priceSol) * 1e6)} SOL</${Flash}></dd>
+                <${Delta} cur=${n(m.priceSol) * 1e6} prev=${prev} vs="1h" /></div>
+              <div><dt><${Term} k="reserve">Reserve</${Term}></dt><dd class="tnum">${compact(n(lockedOf(m)))} SOL</dd></div>
               <div><dt><${Term} k="family">Family</${Term}></dt><dd class="tnum">${f.count(variants, "variant")}</dd></div>`}
       </dl>
       <div class="spot-actions">
@@ -215,14 +216,14 @@ export function Market({ onTour }) {
   const roots = rows.filter((m) => !m.parent);
   const locked = roots.reduce((s, m) => s + lockedOf(m), 0n);
   const lockedAgo = pointAt(session.pulse, world.now - HOUR)?.locked ?? null;
-  const vol = (from, to) => session.activity.reduce((s, r) => (r.eth && r.t > from && r.t <= to ? s + r.eth : s), 0n);
+  const vol = (from, to) => session.activity.reduce((s, r) => (r.sol && r.t > from && r.t <= to ? s + r.sol : s), 0n);
   const volume = vol(world.now - HOUR, world.now);
   const volumePrev = session.activity.some((r) => r.t <= world.now - HOUR) ? vol(world.now - 2 * HOUR, world.now - HOUR) : null;
   const launchedBefore = session.activity.some((r) => r.t <= world.now - HOUR)
     ? world.memes.size - session.activity.filter((r) => r.kind === "launch" && r.t > world.now - HOUR).length
     : null;
   const openings = rows.filter((m) => m.opening).length;
-  const local = session.chain.kind === "local";
+  const local = session.hub.kind === "local";
 
   return html`<div class="page">
     ${welcome && html`<${Welcome} onTour=${onTour} onClose=${() => setWelcome(false)} />`}
@@ -231,11 +232,11 @@ export function Market({ onTour }) {
     <div class=${`hero ${rows.length ? "" : "no-spot"}`}>
       <${Spotlight} rows=${rows} />
       <div class="kpis kpis-grid">
-        <${Kpi} id="locked" label=${html`<${Term} k="reserve">ETH locked</${Term}>`} icon=${html`<${I.Lock} />`} value=${html`<${Flash} value=${n(locked)}>${compact(n(locked))}</${Flash}>`} unit="ETH"
-          tip=${`${f.eth(locked)}\nReserves of the root memes, live openings included`}
+        <${Kpi} id="locked" label=${html`<${Term} k="reserve">SOL locked</${Term}>`} icon=${html`<${I.Lock} />`} value=${html`<${Flash} value=${n(locked)}>${compact(n(locked))}</${Flash}>`} unit="SOL"
+          tip=${`${f.sol(locked)}\nReserves of the root memes, live openings included`}
           delta=${html`<${Delta} cur=${n(locked)} prev=${lockedAgo === null ? null : n(lockedAgo)} vs="vs 1h" />`} />
-        <${Kpi} id="volume" label="Volume · 1h" icon=${html`<${I.Pulse} />`} value=${compact(n(volume))} unit="ETH"
-          tip=${`${f.eth(volume)}\nETH traded on the root curves${local ? "" : " since this page opened"}`}
+        <${Kpi} id="volume" label="Volume · 1h" icon=${html`<${I.Pulse} />`} value=${compact(n(volume))} unit="SOL"
+          tip=${`${f.sol(volume)}\nSOL traded on the root curves${local ? "" : " since this page opened"}`}
           delta=${html`<${Delta} cur=${n(volume)} prev=${volumePrev === null ? null : n(volumePrev)} vs="vs prev. hour" neutral=${true} />`} />
         <${Kpi} id="memes" label=${html`<${Term} k="meme">Memes</${Term}>`} icon=${html`<${I.Market} />`} value=${String(world.memes.size)}
           tip=${`${roots.length} ${roots.length === 1 ? "family" : "families"}\n${f.count(world.memes.size - roots.length, "variant")}`}
@@ -271,7 +272,7 @@ function chartMarkers(session, m) {
     if (r.kind === "launch") out.push({ t: r.t, tone: "accent", label: `Launch\nby ${who}` });
     else if (r.kind === "settle") out.push({ t: r.t, tone: "accent", label: `Opening closed\nThe batch bought ${amount(r.out)}` });
     else if (r.kind === "union") out.push({ t: r.t, tone: "money", label: `Union\n${amount(r.in)} joined the family` });
-    else if ((r.kind === "buy" || r.kind === "sell") && r.eth && n(r.eth) >= 0.5)
+    else if ((r.kind === "buy" || r.kind === "sell") && r.sol && n(r.sol) >= 15)
       out.push({ t: r.t, tone: r.kind === "buy" ? "up" : "down", label: `Big ${r.kind === "buy" ? "buy" : "sale"}\n${who} · ${amount(r.in)} → ${amount(r.out)}` });
   }
   return out;
@@ -282,11 +283,11 @@ function PriceCard({ m }) {
   const [range, setRange] = useState(0);
   const pts = session.history.get(m.address) ?? [];
   const from = range ? world.now - range : undefined;
-  return html`<${Card} id="chart" title=${html`<${Term} k="price1m">Price · 1M</${Term}>`} value=${`${compact(n(m.priceEth) * 1e6)} ETH`} class="span-8"
+  return html`<${Card} id="chart" title=${html`<${Term} k="price1m">Price · 1M</${Term}>`} value=${`${compact(n(m.priceSol) * 1e6)} SOL`} class="span-8"
     actions=${pts.length > 1 && html`<${Segmented} label="Period" value=${range} onChange=${setRange} options=${RANGES} size="sm" />`}>
     ${pts.length > 1
       ? html`<${StepChart} points=${pts.map((p) => ({ t: p.t, v: p.p }))} compare=${pts.map((p) => ({ t: p.t, v: p.r }))} from=${from}
-          markers=${chartMarkers(session, m)} label="Price" compareLabel="1h reference" unit="ETH" timeOf=${f.hourMinute} />`
+          markers=${chartMarkers(session, m)} label="Price" compareLabel="1h reference" unit="SOL" timeOf=${f.hourMinute} />`
       : html`<div class="empty-state"><p>The chart starts with the first trade after the opening.</p></div>`}
   </${Card}>`;
 }
@@ -324,29 +325,29 @@ export function MemePage({ address }) {
 
   return html`<div class="page">
     <nav class="crumbs" aria-label="Lineage">
-      <span>ETH</span>
+      <span>SOL</span>
       ${m.lineage.map((a) => html`<${I.Chevron} size=${14} class="crumb-sep" /><a key=${a} href=${memeHref(a)} aria-current=${a === m.address ? "page" : null}>${world.memes.get(a).symbol}</a>`)}
     </nav>
     <header class="page-head meme-head">
       <${MemeAvatar} m=${m} size="lg" />
       <div>
         <h1>${m.symbol} <span class="meme-name">${m.name}</span></h1>
-        <p class="muted fine">by ${creator} · ${parent ? html`<${Term} k="variant">variant</${Term}> of <a href=${memeHref(parent.address)}>${parent.symbol}</a>` : html`<${Term} k="root">root</${Term}>, priced in ETH`}</p>
+        <p class="muted fine">by ${creator} · ${parent ? html`<${Term} k="variant">variant</${Term}> of <a href=${memeHref(parent.address)}>${parent.symbol}</a>` : html`<${Term} k="root">root</${Term}>, priced in SOL`}</p>
       </div>
       <${Phase} m=${m} />
     </header>
     <div class="kpis">
-      <${Kpi} id="price" label=${html`<${Term} k="price1m">Price · 1M</${Term}>`} icon=${html`<${I.Pulse} />`} value=${html`<${Flash} value=${n(m.priceEth)}>${compact(n(m.priceEth) * 1e6)}</${Flash}>`} unit="ETH"
-        tip=${`${f.perMillion(m.priceEth)}\n${m.parent ? `${f.perMillion(m.price, m.quoteSymbol)} in ${m.quoteSymbol}` : "Price of one million tokens"}`}
-        delta=${m.opening ? null : html`<${Delta} cur=${n(m.priceEth) * 1e6} prev=${hourAgo(session, world, m)} vs="vs 1h" />`}
+      <${Kpi} id="price" label=${html`<${Term} k="price1m">Price · 1M</${Term}>`} icon=${html`<${I.Pulse} />`} value=${html`<${Flash} value=${n(m.priceSol)}>${compact(n(m.priceSol) * 1e6)}</${Flash}>`} unit="SOL"
+        tip=${`${f.perMillion(m.priceSol)}\n${m.parent ? `${f.perMillion(m.price, m.quoteSymbol)} in ${m.quoteSymbol}` : "Price of one million tokens"}`}
+        delta=${m.opening ? null : html`<${Delta} cur=${n(m.priceSol) * 1e6} prev=${hourAgo(session, world, m)} vs="vs 1h" />`}
         sub=${m.opening ? "indicative, set at the close" : null} />
       <${Kpi} id="premium" label=${html`<${Term} k="ref">vs 1h reference</${Term}>`} icon=${html`<${I.Spark} />`} tone=${m.premium > SPIKE_FLAG ? "hot" : null}
         value=${m.opening ? "—" : f.signedPercent(m.premium)} sub=${m.opening ? "starts after the opening" : m.premium > SPIKE_FLAG ? "selling now pays holders" : "no spike"}
-        tip=${`Reference: ${compact(n(m.refEth) * 1e6)} ETH · 1M\nA slow price that follows the real one over an hour. Above it, part of a sale stays with holders`} />
-      <${Kpi} id="cap" label=${html`<${Term} k="marketCap">Market cap</${Term}>`} icon=${html`<${I.Coins} />`} value=${compact(n(m.capEth))} unit="ETH"
-        tip=${`${f.eth(m.capEth)}\n${m.opening ? "What the batch has committed so far" : `${f.tokens(m.circulating)} circulating`}`} sub=${m.opening ? "committed so far" : `${f.tokens(m.circulating)} circulating`} />
+        tip=${`Reference: ${compact(n(m.refSol) * 1e6)} SOL · 1M\nA slow price that follows the real one over an hour. Above it, part of a sale stays with holders`} />
+      <${Kpi} id="cap" label=${html`<${Term} k="marketCap">Market cap</${Term}>`} icon=${html`<${I.Coins} />`} value=${compact(n(m.capSol))} unit="SOL"
+        tip=${`${f.sol(m.capSol)}\n${m.opening ? "What the batch has committed so far" : `${f.tokens(m.circulating)} circulating`}`} sub=${m.opening ? "committed so far" : `${f.tokens(m.circulating)} circulating`} />
       <${Kpi} id="reserve" label=${html`<${Term} k="reserve">Reserve</${Term}>`} icon=${html`<${I.Lock} />`}
-        value=${m.parent ? f.tokens(lockedOf(m)) : compact(n(lockedOf(m)))} unit=${m.parent ? m.quoteSymbol : "ETH"}
+        value=${m.parent ? f.tokens(lockedOf(m)) : compact(n(lockedOf(m)))} unit=${m.parent ? m.quoteSymbol : "SOL"}
         tip=${`Curve reserve, in ${m.quoteSymbol}\nBuys back every circulating token, at any time`}
         delta=${m.opening ? null : html`<${Delta} cur=${n(lockedOf(m))} prev=${hourAgo(session, world, m, "res")} vs="vs 1h" />`} />
     </div>
@@ -358,12 +359,12 @@ export function MemePage({ address }) {
       </div>
     </div>
     <${Card} id="family" title=${html`<${Term} k="family">Family</${Term}>`}
-      value=${`${f.count(family.length, "meme")} · ${compact(n(familyEth))} ETH behind ${world.memes.get(m.root).symbol}`}
+      value=${`${f.count(family.length, "meme")} · ${compact(n(familyEth))} SOL behind ${world.memes.get(m.root).symbol}`}
       actions=${m.depth < 6 && html`<a class="btn btn-quiet btn-sm" href=${`#launch-${m.address}`}><${I.Launch} size=${16} />Variant of ${m.symbol}</a>`}>
       <div class=${`family-grid ${showUnion ? "with-union" : ""}`}>
         <div class="stack">
           <${FamilyTree} m=${m} />
-          <p class="explain">Every variant is priced in its parent, so the whole family shares one pool of ETH: ${world.memes.get(m.root).symbol}'s reserve.</p>
+          <p class="explain">Every variant is priced in its parent, so the whole family shares one pool of SOL: ${world.memes.get(m.root).symbol}'s reserve.</p>
         </div>
         ${showUnion && html`<div class="family-union" id="unions">
           <h3 class="sub"><${Term} k="union">Union</${Term}></h3>
@@ -390,22 +391,21 @@ export function Launch({ parentHint }) {
   const existing = key && [...world.memes.values()].find((m) => f.canonicalTicker(m.symbol) === key);
   const tooLong = key.length > 16;
   const p = parent && world.memes.get(parent);
-  const wei = value.trim() === "" ? 0n : f.parseAmount(value);
-  const valid = name.trim() && key && !existing && !tooLong && wei !== null;
+  const commit = value.trim() === "" ? 0n : f.parseAmount(value);
+  const valid = name.trim() && key && !existing && !tooLong && commit !== null;
   const status = !symbol ? null : !key ? ["Invalid", "hot"] : tooLong ? ["16 max", "hot"] : existing ? ["Taken", "hot"] : ["Available", "money"];
   const hue = p ? hueOf(world, p) : [...world.memes.values()].filter((m) => !m.parent).length;
   const submit = async (e) => {
     e.preventDefault();
     if (!valid) return;
-    if (await act("Meme launched", "launch", [name.trim(), symbol.trim(), parent || ZeroAddress], wei)) {
+    if (await act("Meme launched", "launch", { name: name.trim(), symbol: symbol.trim(), parent: parent || SOL, solIn: commit })) {
       celebrate({ symbol: key, hue });
-      const token = await session.hub.read("tokenOfKey", [await session.hub.read("symbolKey", [symbol.trim()])]);
-      go(memeHref(token));
+      go(memeHref(session.hub.addresses.mint(symbolKey(symbol.trim()))));
     }
   };
   const eligible = [...world.memes.values()].filter((m) => m.depth < 6);
   const lineage = p ? [...p.lineage.map((a) => world.memes.get(a).symbol), key || "…"] : [key || "…"];
-  const quote = p ? p.symbol : "ETH";
+  const quote = p ? p.symbol : "SOL";
   const creatorCut = f.percent((100 - session.params.protocolFeeBps) / 10000, 1);
   return html`<div class="page narrow-page">
     <header class="page-head"><h1>Launch</h1></header>
@@ -427,13 +427,13 @@ export function Launch({ parentHint }) {
         <div class="field">
           <label for="launch-parent"><${Term} k="family">Family</${Term}></label>
           <select id="launch-parent" value=${parent} onChange=${(e) => setParent(e.currentTarget.value)}>
-            <option value="">Root · ETH</option>
+            <option value="">Root · SOL</option>
             ${eligible.map((m) => html`<option key=${m.address} value=${m.address}>Variant of ${m.symbol}</option>`)}
           </select>
         </div>
         <div class="field">
           <label for="launch-amount"><${Term} k="commit">Your commit</${Term}> <span class="muted fine">optional</span></label>
-          <div class="amount"><input id="launch-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0" value=${value} onInput=${(e) => setValue(e.currentTarget.value)} /><span class="unit">ETH</span></div>
+          <div class="amount"><input id="launch-amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0" value=${value} onInput=${(e) => setValue(e.currentTarget.value)} /><span class="unit">SOL</span></div>
         </div>
         <button class="btn wide btn-lg" disabled=${!valid || busy}>${existing ? `${existing.symbol} is taken` : `Launch ${key || ""}`}</button>
       </form>
@@ -444,7 +444,7 @@ export function Launch({ parentHint }) {
             : html`<${Coin} symbol=${key || "?"} hue=${hue} depth=${p ? p.depth + 1 : 0} size="xl" />`}</div>
           <div class="preview-id"><p class="preview-sym">${existing ? existing.symbol : key || "—"}</p><p class="muted">${existing ? `Taken by ${existing.name}` : name || "—"}</p></div>
         </div>
-        <div class="route" aria-label="Route">${["ETH", ...lineage].map((s, i) => html`${i > 0 && html`<${I.Arrow} size=${13} />`}<span class="route-step">${s}</span>`)}</div>
+        <div class="route" aria-label="Route">${["SOL", ...lineage].map((s, i) => html`${i > 0 && html`<${I.Arrow} size=${13} />`}<span class="route-step">${s}</span>`)}</div>
         <ol class="timeline" aria-label="After launch">
           <li data-tip=${"Opening\nBatch auction: the whole batch buys at once, at one price for everyone"}><span><${Term} k="opening">Opening</${Term}></span><b>${f.duration(session.params.openWindow)}</b></li>
           <li data-tip=${"Vesting\nOpening tokens unlock gradually"}><span><${Term} k="vesting">Vesting</${Term}></span><b>${f.duration(session.params.vestWindow)}</b></li>
@@ -456,7 +456,7 @@ export function Launch({ parentHint }) {
         </dl>
         <p class="explain">${p
           ? `Every buy of your variant buys ${p.symbol} first, and you earn ${creatorCut} of each trade on your curve, paid in ${p.symbol}.`
-          : `Your meme opens with a batch auction at one price for everyone, you included, and you earn ${creatorCut} of every trade on its curve, paid in ETH.`}</p>
+          : `Your meme opens with a batch auction at one price for everyone, you included, and you earn ${creatorCut} of every trade on its curve, paid in SOL.`}</p>
       </${Card}>
     </div>
   </div>`;
@@ -469,7 +469,7 @@ export function Unions() {
   const open = world.unions.filter((u) => !u.executed && !u.stale);
   return html`<div class="page narrow-page">
     <header class="page-head"><h1>Unions</h1></header>
-    <p class="explain page-explain">A union lets a rival root join another family instead of fighting it: its holders vote by locking their tokens, and if more than half of the circulating supply is locked when the vote closes, its ETH buys the target and it becomes a variant of it. <a href="#how-union">How unions work</a></p>
+    <p class="explain page-explain">A union lets a rival root join another family instead of fighting it: its holders vote by locking their tokens, and if more than half of the circulating supply is locked when the vote closes, its SOL buys the target and it becomes a variant of it. <a href="#how-union">How unions work</a></p>
     <div class="kpis three">
       <${Kpi} id="u-open" label="Voting" icon=${html`<${I.Merge} />`} value=${String(open.filter((u) => world.now <= u.deadline).length)} />
       <${Kpi} id="u-ready" label="Ready" icon=${html`<${I.Check} />`} value=${String(open.filter((u) => world.now > u.deadline && u.locked * 2n > u.circulating).length)} />
@@ -488,22 +488,22 @@ export function Unions() {
 export function Portfolio({ onTour }) {
   const { world, session } = useApp();
   const held = [...world.memes.values()].filter((m) => m.balance > 0n || m.claimable > 0n);
-  const values = held.map((m) => f.mulWad(m.priceEth, m.balance));
+  const values = held.map((m) => f.mulWad(m.priceSol, m.balance));
   const total = values.reduce((s, v) => s + v, 0n);
   const claimables = held.filter((m) => m.claimable > 0n);
-  const claimValue = claimables.reduce((s, m) => s + f.mulWad(m.priceEth, m.claimable), 0n);
-  const feeValue = world.fees.reduce((s, x) => s + (x.symbol === "ETH" ? x.amount : f.mulWad(world.memes.get(x.asset).priceEth, x.amount)), 0n);
+  const claimValue = claimables.reduce((s, m) => s + f.mulWad(m.priceSol, m.claimable), 0n);
+  const feeValue = world.fees.reduce((s, x) => s + (x.asset ? f.mulWad(world.memes.get(x.asset).priceSol, x.amount) : x.amount), 0n);
   const opening = [...world.memes.values()].find((m) => m.opening);
-  const local = session.chain.kind === "local";
+  const local = session.hub.kind === "local";
   return html`<div class="page">
     <header class="page-head"><h1>Portfolio</h1></header>
     <div class="kpis">
-      <${Kpi} id="p-memes" label="Holdings" icon=${html`<${I.Coins} />`} value=${compact(n(total))} unit="ETH" tip=${`${f.eth(total)}\nYour memes at the current price`}
+      <${Kpi} id="p-memes" label="Holdings" icon=${html`<${I.Coins} />`} value=${compact(n(total))} unit="SOL" tip=${`${f.sol(total)}\nYour memes at the current price`}
         sub=${f.count(held.filter((m) => m.balance > 0n).length, "meme")} />
-      <${Kpi} id="p-eth" label="ETH balance" icon=${html`<${I.Wallet} />`} value=${compact(n(world.ethBalance), 4)} unit="ETH" tip=${f.eth(world.ethBalance)} sub=${local ? "play money" : null} />
-      <${Kpi} id="p-claim" label=${html`<${Term} k="claim">Claimable</${Term}>`} icon=${html`<${I.Lock} />`} value=${compact(n(claimValue))} unit="ETH"
+      <${Kpi} id="p-eth" label="SOL balance" icon=${html`<${I.Wallet} />`} value=${compact(n(world.solBalance), 4)} unit="SOL" tip=${f.sol(world.solBalance)} sub=${local ? "play money" : null} />
+      <${Kpi} id="p-claim" label=${html`<${Term} k="claim">Claimable</${Term}>`} icon=${html`<${I.Lock} />`} value=${compact(n(claimValue))} unit="SOL"
         tip=${"Unlocked opening tokens\nValued at the current price"} sub=${f.count(claimables.length, "meme")} />
-      <${Kpi} id="p-fees" label=${html`<${Term} k="creatorFee">Fees earned</${Term}>`} icon=${html`<${I.Coins} />`} value=${compact(n(feeValue))} unit="ETH"
+      <${Kpi} id="p-fees" label=${html`<${Term} k="creatorFee">Fees earned</${Term}>`} icon=${html`<${I.Coins} />`} value=${compact(n(feeValue))} unit="SOL"
         tip=${"Fees waiting for you: on the memes you launched, or the protocol's cut for its treasury\nValued at the current price"} sub=${f.count(world.fees.length, "asset")} />
     </div>
     <div class="grid-12">
@@ -515,7 +515,7 @@ export function Portfolio({ onTour }) {
                 <${ShareBar} pct=${total > 0n ? (Number(values[i]) / Number(total)) * 100 : 0} tone="money" />
                 <span class="ranked-name"><${MemeAvatar} m=${m} /><span class="meme-sym">${m.symbol}</span><span class="meme-name">${m.name}</span></span>
                 <span class="num tnum">${f.tokens(m.balance)}</span>
-                <span class="num tnum">${compact(n(values[i]))} ETH</span>
+                <span class="num tnum">${compact(n(values[i]))} SOL</span>
                 <span class="num tnum muted">${total > 0n ? f.percent(Number(values[i]) / Number(total), 0) : "—"}</span>
               </a>`)}
             </div>`

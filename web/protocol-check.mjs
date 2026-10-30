@@ -22,11 +22,11 @@ const outDir = join(root, "solana/target/cross-check");
 class Replay extends Scenario {
   snapshot() {
     const st = this.engine.state;
-    const symbolOf = new Map([...this.mints].map(([s, m]) => [m, s]));
+    const symbolOf = new Map(st.order.map((m) => [m, st.memes.get(m).symbol]));
     const str = (x) => String(x);
     const memes = {}, supply = {}, balances = {}, commitments = {}, locks = {};
-    for (const [symbol, mint] of this.mints) {
-      const x = st.memes.get(mint);
+    for (const mint of st.order) {
+      const x = st.memes.get(mint), symbol = x.symbol;
       memes[symbol] = {
         parent: symbolOf.get(x.parent) ?? "", creator: this.nameOf.get(x.creator), settled: x.settled, height: x.height,
         openUntil: str(x.openUntil), refTime: str(x.refTime), reference: str(x.reference),
@@ -159,7 +159,7 @@ function writeWalk(seed = 20261030, length = 260) {
   const share = (x, lo = 0.1, hi = 1) => (x * BigInt(Math.max(1, Math.round((lo + R.next() * (hi - lo)) * 1000)))) / 1000n;
   const tickers = ["PNUT", "MOODENG", "GOAT", "FWOG", "CHILLGUY", "BONK", "WIF", "POPCAT", "MEW", "SLERF", "MYRO", "BOME", "PONKE", "GIGA", "MICHI"];
   let nextTicker = 0;
-  const launched = () => [...r.mints.keys()];
+  const launched = () => e.state.order.map((m) => e.state.memes.get(m).symbol);
   const meme = (sym) => e.state.memes.get(r.mint(sym));
   const depth = (sym) => e.ancestors(r.mint(sym)).length;
   const open = (sym) => !meme(sym).settled && r.now < meme(sym).openUntil;
@@ -208,7 +208,7 @@ function writeWalk(seed = 20261030, length = 260) {
     const x = R.pick(syms);
     const mx = r.mint(x);
     const held = e.balance(mx, actor);
-    const parentSym = [...r.mints].find(([, m]) => m === meme(x).parent)?.[0];
+    const parentSym = e.state.memes.get(meme(x).parent)?.symbol;
     const parentHeld = parentSym ? e.balance(r.mint(parentSym), actor) : 0n;
     const lam = e.lamportsOf(actor);
     const roll = R.next();
@@ -284,7 +284,7 @@ function writeWalk(seed = 20261030, length = 260) {
         const m = R.pick(syms), target = R.pick(syms);
         if (m !== target && push({ actor, op: "proposeUnion", meme: m, target }) === "ok") union = e.state.unions.length - 1;
       } else {
-        const voters = holders([...r.mints].find(([, mm]) => mm === u.meme)[0]).filter((n) => n !== "Treasury");
+        const voters = holders(e.state.memes.get(u.meme).symbol).filter((n) => n !== "Treasury");
         if (voters.length) {
           const n = R.pick(voters);
           push({ actor: n, op: "lockUnion", union, amount: String(share(e.balance(u.meme, n), 0.05, 0.8)) });

@@ -1,5 +1,5 @@
 {
-  "source": "scripts/simulate.js",
+  "source": "web/simulate.mjs",
   "seeds": 10,
   "params": {
     "openSeconds": 300,
@@ -8,7 +8,7 @@
     "lineage": true,
     "protocolFeeBps": 20
   },
-  "retailInEth": 59.2,
+  "retailInSol": 1776,
   "buyers": {
     "original": 24,
     "perCopycat": 10,
@@ -26,51 +26,51 @@
         {
           "key": "sniper",
           "label": "Sniper bot",
-          "pvp": 53,
-          "cc": 47.15
+          "pvp": 1589.96,
+          "cc": 1398.22
         },
         {
           "key": "originalDev",
           "label": "Original creator",
-          "pvp": 0.35,
-          "cc": 0.92
+          "pvp": 10.62,
+          "cc": 26.45
         },
         {
           "key": "copycatDevs",
           "label": "Copycat creators",
-          "pvp": 1,
-          "cc": -1.43
+          "pvp": 29.86,
+          "cc": -44.39
         },
         {
           "key": "originalBuyers",
           "label": "Original buyers",
-          "pvp": -17.25,
-          "cc": -7.93
+          "pvp": -517.48,
+          "cc": -209.71
         },
         {
           "key": "copycatBuyers",
           "label": "Copycat buyers",
-          "pvp": -37.38,
-          "cc": -38.98
+          "pvp": -1121.47,
+          "cc": -1178.71
         },
         {
           "key": "protocol",
           "label": "Protocol",
-          "pvp": 0.28,
-          "cc": 0.27
+          "pvp": 8.51,
+          "cc": 8.13
         }
       ],
       "retail": {
-        "pvp": -54.63,
-        "cc": -46.91
+        "pvp": -1638.95,
+        "cc": -1388.42
       },
       "sniperProfitable": {
         "pvp": 10,
         "cc": 10
       },
       "peakOriginalReserve": {
-        "pvp": 19.95,
-        "cc": 23.8
+        "pvp": 598.54,
+        "cc": 601.83
       }
     },
     {
@@ -80,51 +80,51 @@
         {
           "key": "sniper",
           "label": "Sniper bot",
-          "pvp": 53,
-          "cc": 47.05
+          "pvp": 1589.96,
+          "cc": 1394.24
         },
         {
           "key": "originalDev",
           "label": "Original creator",
-          "pvp": 0.35,
-          "cc": 0.92
+          "pvp": 10.62,
+          "cc": 26.51
         },
         {
           "key": "copycatDevs",
           "label": "Copycat creators",
-          "pvp": 1,
-          "cc": -1.44
+          "pvp": 29.86,
+          "cc": -43.55
         },
         {
           "key": "originalBuyers",
           "label": "Original buyers",
-          "pvp": -17.25,
-          "cc": -7.78
+          "pvp": -517.48,
+          "cc": -207.72
         },
         {
           "key": "copycatBuyers",
           "label": "Copycat buyers",
-          "pvp": -37.38,
-          "cc": -39.01
+          "pvp": -1121.47,
+          "cc": -1177.62
         },
         {
           "key": "protocol",
           "label": "Protocol",
-          "pvp": 0.28,
-          "cc": 0.27
+          "pvp": 8.51,
+          "cc": 8.13
         }
       ],
       "retail": {
-        "pvp": -54.63,
-        "cc": -46.79
+        "pvp": -1638.95,
+        "cc": -1385.34
       },
       "sniperProfitable": {
         "pvp": 10,
         "cc": 10
       },
       "peakOriginalReserve": {
-        "pvp": 19.95,
-        "cc": 23.17
+        "pvp": 598.54,
+        "cc": 601.83
       }
     }
   ]

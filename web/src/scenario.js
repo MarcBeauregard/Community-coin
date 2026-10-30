@@ -22,22 +22,28 @@ export const span = (scenario) => scenario.steps.reduce((s, x) => s + (x.warp ??
 export class Scenario {
   /**
    * `idOf(name)` is the address an account signs with, `mintOf(key)` the mint of a ticker key; `start` the time
-   * of the first step. Every account starts with `lamportsEach` SOL.
+   * of the first step. Every account starts with `lamportsEach` SOL. With `engine`, the steps resolve against that
+   * engine instead of a new one (the demo resolves its history against its own hub).
    */
-  constructor(scenario, { idOf = (name) => name, mintOf, start = T0 } = {}) {
+  constructor(scenario, { idOf = (name) => name, mintOf, start = T0, engine } = {}) {
     this.scenario = scenario;
     this.names = scenario.accounts;
     this.ids = new Map(this.names.map((n) => [n, idOf(n)]));
     this.nameOf = new Map([...this.ids].map(([n, id]) => [id, n]));
-    const params = { ...scenario.params, feeRecipient: this.ids.get(scenario.params.feeRecipient) };
-    this.engine = new Engine(params, mintOf ? { mintOf } : {});
-    for (const id of this.ids.values()) this.engine.state.lamports.set(id, lamports(scenario.lamportsEach));
+    this.engine = engine;
+    if (!engine) {
+      const params = { ...scenario.params, feeRecipient: this.ids.get(scenario.params.feeRecipient) };
+      this.engine = new Engine(params, mintOf ? { mintOf } : {});
+      for (const id of this.ids.values()) this.engine.state.lamports.set(id, lamports(scenario.lamportsEach));
+    }
     this.now = start;
-    this.mints = new Map(); // ticker as launched -> mint
   }
 
+  /** The mint of the meme launched with this ticker. */
   mint(symbol) {
-    return this.mints.get(symbol) ?? (symbol ? `unknown:${symbol}` : SOL);
+    if (!symbol) return SOL;
+    for (const m of this.engine.state.memes.values()) if (m.symbol === symbol) return m.mint;
+    return `unknown:${symbol}`;
   }
 
   _amount(id, spec, mint) {
@@ -79,9 +85,7 @@ export class Scenario {
   /** Runs a resolved step: its events, or the code of the error it failed with (nothing changed then). */
   apply({ op, signer, args }) {
     try {
-      const events = this.engine.exec(op, signer, args, this.now);
-      if (op === "launch") this.mints.set(args.symbol, events[0].args.mint);
-      return { events };
+      return { events: this.engine.exec(op, signer, args, this.now) };
     } catch (e) {
       if (!e.code) throw e;
       return { error: e.code };

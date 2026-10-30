@@ -1,8 +1,7 @@
 // Builds the launchpad web app into web/dist:
-//   app.js      the whole app (UI, EVM, contracts) in one script
+//   app.js      the whole app (UI, the program's rules for the demo, the Solana client for wallet mode) in one script
 //   page.html   the page as published on claude.ai (the host adds doctype, head and body)
 //   index.html  the same page as a standalone document, for any static host
-// Run `npx hardhat compile` first so the contract artifacts are fresh.
 
 import { build } from "esbuild";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -10,19 +9,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const web = dirname(fileURLToPath(import.meta.url));
-const root = join(web, "..");
-const artifact = (name) => JSON.parse(readFileSync(join(root, `artifacts/contracts/${name}.sol/${name}.json`), "utf8"));
-const contracts = Object.fromEntries(
-  ["CommunityCoin", "MemeToken"].map((name) => {
-    const { abi, bytecode } = artifact(name);
-    return [name, { abi, bytecode }];
-  }),
-);
-writeFileSync(join(web, "src/contracts.json"), JSON.stringify(contracts));
-
 const dist = process.env.OUTDIR ?? join(web, "dist");
 
-// DEPLOYMENTS_JSON='{"31337":{"name":"…","hub":"0x…"}}' builds the app against other hubs (used by the wallet test).
+// DEPLOYMENTS_JSON='{"local":{"name":"…","rpc":"http://…","programId":"…"}}' builds the app against another cluster
+// (used by the wallet test).
 const deploymentsOverride = process.env.DEPLOYMENTS_JSON && {
   name: "deployments-override",
   setup(b) {

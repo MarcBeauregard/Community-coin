@@ -50,7 +50,11 @@ function rng(seed) {
 
 const eth = (n) => ethers.parseEther(n.toFixed(6));
 const toEth = (wei) => Number(ethers.formatEther(wei));
-const wait = (seconds) => network.provider.send("evm_increaseTime", [seconds]);
+// Mines a block right away: until a block is mined, calls (claimable) do not see the time move.
+const wait = async (seconds) => {
+  await network.provider.send("evm_increaseTime", [seconds]);
+  await network.provider.send("evm_mine");
+};
 
 // Everything random is drawn up front so both worlds see exactly the same scenario.
 function draw(seed) {

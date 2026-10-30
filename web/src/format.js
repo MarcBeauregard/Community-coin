@@ -1,26 +1,29 @@
-// Display helpers. Amounts are bigint wei (18 decimals) everywhere until they reach the screen.
-
-import { formatEther, parseEther } from "ethers";
+// Display helpers. Amounts are bigint display units (18 decimals, see world.js) everywhere until they reach the
+// screen, whether they count SOL or tokens.
 
 export const LOCALE = "en-US";
 const WAD = 10n ** 18n;
 const nf = (digits) => new Intl.NumberFormat(LOCALE, { maximumFractionDigits: digits, minimumFractionDigits: 0 });
 
-export const toNumber = (wei) => Number(formatEther(wei));
+/** Exact decimal string of an amount, for filling an input: 1500000000000000000n is "1.5". */
+export function exact(value) {
+  const v = value < 0n ? -value : value;
+  const frac = (v % WAD).toString().padStart(18, "0").replace(/0+$/, "");
+  return `${value < 0n ? "-" : ""}${v / WAD}${frac ? `.${frac}` : ""}`;
+}
 
-/** Exact decimal string of an amount, for filling an input. */
-export const exact = (wei) => formatEther(wei).replace(/\.0$/, "");
+export const toNumber = (value) => Number(exact(value));
 
-/** ETH amount with as many decimals as small amounts need. */
-export function eth(wei, digits) {
-  const n = toNumber(wei);
+/** SOL amount with as many decimals as small amounts need. */
+export function sol(value, digits) {
+  const n = toNumber(value);
   const d = digits ?? (n === 0 ? 0 : n >= 100 ? 2 : n >= 1 ? 3 : n >= 0.01 ? 4 : 6);
-  return `${nf(d).format(n)} ETH`;
+  return `${nf(d).format(n)} SOL`;
 }
 
 /** Token amounts in thousands, millions or billions: 12.9M. */
-export function tokens(wei, symbol) {
-  const n = toNumber(wei);
+export function tokens(value, symbol) {
+  const n = toNumber(value);
   const unit = n >= 1e9 ? [1e9, "B"] : n >= 1e6 ? [1e6, "M"] : n >= 1e3 ? [1e3, "K"] : [1, ""];
   const v = n / unit[0];
   const out = `${nf(v >= 100 ? 0 : v >= 10 ? 1 : 2).format(v)}${unit[1]}`;
@@ -28,7 +31,7 @@ export function tokens(wei, symbol) {
 }
 
 /** Price of one million tokens, the unit memes are easiest to read in. */
-export function perMillion(priceWad, unit = "ETH") {
+export function perMillion(priceWad, unit = "SOL") {
   const n = toNumber(priceWad) * 1e6;
   const d = n >= 100 ? 2 : n >= 1 ? 3 : n >= 0.01 ? 4 : 6;
   return `${nf(d).format(n)} ${unit}`;
@@ -103,21 +106,19 @@ export function fullDate(seconds) {
   return new Date(seconds * 1000).toLocaleString(LOCALE, { dateStyle: "medium", timeStyle: "medium", hourCycle: "h23" });
 }
 
-/** Parses a typed decimal amount ("1.5", or "1,5" from a comma keyboard) into wei; null when invalid or not positive. */
+/** Parses a typed decimal amount ("1.5", or "1,5" from a comma keyboard) into display units; null when invalid or not positive. */
 export function parseAmount(text) {
   const clean = String(text ?? "").trim().replace(",", ".");
   if (!/^\d*\.?\d+$|^\d+\.$/.test(clean)) return null;
-  try {
-    const wei = parseEther(clean.endsWith(".") ? clean + "0" : clean);
-    return wei > 0n ? wei : null;
-  } catch {
-    return null;
-  }
+  const [whole, frac = ""] = clean.split(".");
+  if (frac.length > 18) return null;
+  const value = BigInt(whole || "0") * WAD + BigInt(frac.padEnd(18, "0"));
+  return value > 0n ? value : null;
 }
 
 export const mulWad = (a, b) => (a * b) / WAD;
 
-/** Mirrors CommunityCoin.symbolKey so the launch form can show the canonical ticker as you type. */
+/** Mirrors the program's symbol_key so the launch form can show the canonical ticker as you type. */
 export function canonicalTicker(symbol) {
   const fold = { 0: "O", 1: "I", 3: "E", 4: "A", 5: "S", 7: "T" };
   let out = "";

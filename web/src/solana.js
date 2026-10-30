@@ -242,7 +242,7 @@ export const mintSupply = (data) => new Reader(Uint8Array.from(data), 36).u64();
 
 // ------------------------------------------------------------------ events
 
-const EVENT_FIELDS = {
+export const EVENT_FIELDS = {
   Launched: [["mint", "pubkey"], ["parent", "asset"], ["creator", "pubkey"], ["name", "string"], ["symbol", "string"]],
   Committed: [["mint", "pubkey"], ["user", "pubkey"], ["quote", "u64"]],
   Settled: [["mint", "pubkey"], ["quote", "u64"], ["tokens", "u64"]],

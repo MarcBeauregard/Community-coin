@@ -1,14 +1,14 @@
 // The understanding layer: the welcome band a first visit opens on, and the How it works page. Everything here is
-// allowed to speak in sentences; the trading screens stay wordless. Numbers come from the live chain (the follow-the-
-// money calculator, the examples) or from scripts/simulate.js (web/src/simulation.json), never typed in by hand.
+// allowed to speak in sentences; the trading screens stay wordless. Numbers come from the live hub (the follow-the-
+// money calculator, the examples) or from web/simulate.mjs (web/src/simulation.json), never typed in by hand.
 
 import { useState, useEffect } from "preact/hooks";
 import * as f from "./format.js";
 import * as I from "./icons.js";
 import { html, Coin, Avatar, Segmented, compact } from "./ui.js";
-import { readCurves, simulateTrade } from "./curve.js";
+import { previewTrade } from "./preview.js";
 import { GLOSSARY, term } from "./glossary.js";
-import { useApp, MemeAvatar, memeHref, amount, nameOf, n, ethOrTokens } from "./common.js";
+import { useApp, MemeAvatar, memeHref, amount, nameOf, n, solOrTokens } from "./common.js";
 import { Flow } from "./trade.js";
 import simulation from "./simulation.json";
 
@@ -28,10 +28,10 @@ function dismissWelcome() {
 
 // ------------------------------------------------------------------ diagrams
 
-/** ETH → original → copy, with value travelling down the line: a buy of the copy is a buy of the original first. */
+/** SOL → original → copy, with value travelling down the line: a buy of the copy is a buy of the original first. */
 export function LineageDiagram({ copy = "WIF", original = "PNUT" }) {
   return html`<div class="dia dia-lineage" aria-hidden="true">
-    <span class="dia-node"><${Coin} symbol="ETH" glyph="Ξ" hue=${5} size="lg" /><small>ETH</small></span>
+    <span class="dia-node"><${Coin} symbol="SOL" glyph="◎" hue=${5} size="lg" /><small>SOL</small></span>
     <span class="dia-wire"><i></i></span>
     <span class="dia-node"><${Coin} symbol=${original} hue=${0} size="lg" /><small>Original</small></span>
     <span class="dia-wire"><i></i></span>
@@ -81,7 +81,7 @@ const PILLARS = [
 
 export function Welcome({ onTour, onClose }) {
   const { session } = useApp();
-  const local = session.chain.kind === "local";
+  const local = session.hub.kind === "local";
   const close = () => {
     dismissWelcome();
     onClose();
@@ -114,7 +114,7 @@ export function DemoNote({ onTour }) {
   return html`<div class="demo-note" role="note">
     <div class="demo-note-inner">
       <span class="dot dot-demo"></span>
-      <span><b>Demo.</b> Play ETH, real contracts, all running in this page. Use the clock to skip ahead.</span>
+      <span><b>Demo.</b> Play SOL, the program's exact rules, all running in this page. Use the clock to skip ahead.</span>
       <button type="button" class="link-btn" onClick=${onTour}>Take the tour</button>
     </div>
   </div>`;
@@ -122,27 +122,20 @@ export function DemoNote({ onTour }) {
 
 // ------------------------------------------------------------------ follow the money
 
-/** Pick a meme and an amount: the exact path of the ETH, computed on the live curves. */
+/** Pick a meme and an amount: the exact path of the SOL, computed on the live curves. */
 function FollowTheMoney() {
-  const { world, session } = useApp();
+  const { world, session, account } = useApp();
   const choices = [...world.memes.values()].filter((m) => !m.opening).sort((a, b) => b.depth - a.depth);
   const [token, setToken] = useState(choices[0]?.address ?? "");
-  const [value, setValue] = useState("1");
+  const [value, setValue] = useState("10");
   const [sim, setSim] = useState(null);
   const m = world.memes.get(token);
-  const wei = f.parseAmount(value);
+  const amount = f.parseAmount(value);
   useEffect(() => {
-    let live = true;
-    setSim(null);
-    if (!m || !wei) return;
-    readCurves(session.hub, m.lineage)
-      .then((c) => live && setSim(simulateTrade(c, { side: "buy", viaParent: false, lineage: m.lineage, amount: wei, spikeBps: BigInt(session.params.spikeShareBps),
-        now: session.chain.now(), protocolBps: BigInt(session.params.protocolFeeBps) })))
-      .catch(() => live && setSim(null));
-    return () => {
-      live = false;
-    };
-  }, [token, value, world.loadedAt]);
+    if (!m || !amount) return setSim(null);
+    const s = previewTrade(session.hub, account, m, { side: "buy", viaParent: false, amount });
+    setSim(s.error ? null : s);
+  }, [token, value, world.loadedAt, account]);
   if (!m) return null;
   const root = world.memes.get(m.root);
   return html`<div class="follow">
@@ -153,13 +146,13 @@ function FollowTheMoney() {
         </select>
       </label>
       <label class="field"><span>with</span>
-        <span class="amount"><input id="follow-amount" type="text" inputmode="decimal" autocomplete="off" value=${value} onInput=${(e) => setValue(e.currentTarget.value)} /><span class="unit">ETH</span></span>
+        <span class="amount"><input id="follow-amount" type="text" inputmode="decimal" autocomplete="off" value=${value} onInput=${(e) => setValue(e.currentTarget.value)} /><span class="unit">SOL</span></span>
       </label>
     </div>
     ${sim && html`<${Flow} hops=${sim.hops} last="You would get" />`}
     ${sim && html`<p class="explain">${sim.hops.length > 1
-      ? `Of your ${compact(n(wei))} ETH, ${ethOrTokens(sim.hops[0].toReserve, "ETH")} lands in ${root.symbol}'s reserve before any ${m.symbol} is bought. The copy cannot grow without the original growing first.`
-      : `${m.symbol} is a root: your ETH goes straight into its reserve. Launch a variant of it and every buy of the variant will come here first.`}</p>`}
+      ? `Of your ${compact(n(amount))} SOL, ${solOrTokens(sim.hops[0].toReserve, "SOL")} lands in ${root.symbol}'s reserve before any ${m.symbol} is bought. The copy cannot grow without the original growing first.`
+      : `${m.symbol} is a root: your SOL goes straight into its reserve. Launch a variant of it and every buy of the variant will come here first.`}</p>`}
     <a class="link-btn" href=${memeHref(m.address)}>Open ${m.symbol}</a>
   </div>`;
 }
@@ -173,7 +166,7 @@ function Results() {
   const rows = [...report.groups, { key: "retail", label: "All retail buyers", ...report.retail }];
   const max = Math.max(...rows.flatMap((r) => [Math.abs(r.pvp), Math.abs(r.cc)]));
   const bar = (v, tone) => html`<span class="rbar-track"><span class=${`rbar ${v < 0 ? "neg" : "pos"} ${tone}`} style=${`width:${((Math.abs(v) / max) * 50).toFixed(2)}%`}></span></span>`;
-  const money = (v) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(2)} ETH`;
+  const money = (v) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(2)} SOL`;
   const orig = report.groups.find((g) => g.key === "originalBuyers");
   const devs = report.groups.find((g) => g.key === "copycatDevs");
   const sniper = report.groups.find((g) => g.key === "sniper");
@@ -181,7 +174,7 @@ function Results() {
     <${Segmented} label="Scenario" value=${which} onChange=${setWhich} options=${[["random", "Bot exits at random"], ["first", "Bot sees the top"]]} size="sm" />
     <div class="scroll-x">
       <table class="results-table">
-        <caption class="sr">Mean result per group in ETH over ${simulation.seeds} scenarios, today versus Community Coin</caption>
+        <caption class="sr">Mean result per group in SOL over ${simulation.seeds} scenarios, today versus Community Coin</caption>
         <thead><tr><th scope="col">Who</th><th scope="col">Today</th><th scope="col">Community Coin</th></tr></thead>
         <tbody>
           ${rows.map((r) => html`<tr key=${r.key} class=${r.key === "retail" ? "total" : ""}>
@@ -193,12 +186,12 @@ function Results() {
       </table>
     </div>
     <ul class="result-facts">
-      <li><b class="tnum">${simulation.pools.pvp} → ${simulation.pools.cc}</b><span>ETH pools for one meme and its ${simulation.buyers.copycats} copies</span></li>
+      <li><b class="tnum">${simulation.pools.pvp} → ${simulation.pools.cc}</b><span>SOL pools for one meme and its ${simulation.buyers.copycats} copies</span></li>
       <li><b class="tnum">${f.percent(1 - orig.cc / orig.pvp, 0)}</b><span>less lost by the original's buyers</span></li>
       <li><b class="tnum">${money(devs.pvp)} → ${money(devs.cc)}</b><span>for the people launching copies: vamping stops paying</span></li>
       <li><b class="tnum">${money(sniper.cc)}</b><span>still made by the sniper bot: a meme market stays zero-sum</span></li>
     </ul>
-    <p class="explain">Mean of ${simulation.seeds} runs of the same viral scenario on the real contracts: one original with ${simulation.buyers.original} buyers, then ${simulation.buyers.copycats} copies with ${simulation.buyers.perCopycat} buyers each, about ${Math.round(simulation.retailInEth)} ETH of retail money. Everyone ends in ETH, so the rows add up to zero: the question is only who pays whom. Source: <code>${simulation.source}</code>.</p>
+    <p class="explain">Mean of ${simulation.seeds} runs of the same viral scenario on the program's rules: one original with ${simulation.buyers.original} buyers, then ${simulation.buyers.copycats} copies with ${simulation.buyers.perCopycat} buyers each, about ${Math.round(simulation.retailInSol)} SOL of retail money. Everyone ends in SOL, so the rows add up to zero: the question is only who pays whom. Source: <code>${simulation.source}</code>.</p>
   </div>`;
 }
 
@@ -206,7 +199,7 @@ function Results() {
 
 function SpikeExample() {
   const { world, session } = useApp();
-  const row = session.activity.filter((r) => r.spike).sort((a, b) => (b.spike.wei > a.spike.wei ? 1 : -1))[0];
+  const row = session.activity.filter((r) => r.spike).sort((a, b) => (b.spike.value > a.spike.value ? 1 : -1))[0];
   if (!row) return null;
   const m = world.memes.get(row.token);
   return html`<p class="example"><${Avatar} symbol=${nameOf(session, row.actor)} size="sm" />
@@ -219,7 +212,7 @@ function OpeningExample() {
   const m = [...world.memes.values()].find((x) => x.opening);
   if (!m) return null;
   return html`<p class="example"><${MemeAvatar} m=${m} />
-    ${m.symbol} is in its opening right now, with ${m.parent ? f.tokens(m.batchQuote, m.quoteSymbol) : `${compact(n(m.batchQuote))} ETH`} committed.
+    ${m.symbol} is in its opening right now, with ${m.parent ? f.tokens(m.batchQuote, m.quoteSymbol) : `${compact(n(m.batchQuote))} SOL`} committed.
     <a class="link-btn" href=${memeHref(m.address)}>Join it</a></p>`;
 }
 
@@ -252,7 +245,7 @@ export function HowItWorks({ section }) {
     <section class="card how-section" id="how-problem" aria-labelledby="how-problem-title">
       <h2 id="how-problem-title">The problem</h2>
       <div class="how-two">
-        <div><h3>The vamp</h3><p>A meme takes off and dozens of copies launch within the hour. Each copy is its own pool of ETH, so every buyer of a copy is money the original never sees, and the copies fight each other to zero.</p></div>
+        <div><h3>The vamp</h3><p>A meme takes off and dozens of copies launch within the hour. Each copy is its own pool of SOL, so every buyer of a copy is money the original never sees, and the copies fight each other to zero.</p></div>
         <div><h3>The PvP</h3><p>Bots and insiders buy in the very first block, then sell into the wave of buyers who arrive minutes later. The late wave pays for the early exit.</p></div>
       </div>
     </section>
@@ -262,11 +255,11 @@ export function HowItWorks({ section }) {
         <div class="how-text">
           <p class="eyebrow">Lineage</p>
           <h2 id="how-lineage-title">Copies feed the original</h2>
-          <p>A ticker can launch once. PNUT, $pnut, P.N.U.T and PNU7 are one ticker, so a duplicate is refused. A copy can still launch, as a <b>variant</b>: it is priced in the original's token instead of ETH. Buying the copy with ETH buys the original first, and money leaving a copy lands back in the original. One family, one pool of ETH.</p>
+          <p>A ticker can launch once. PNUT, $pnut, P.N.U.T and PNU7 are one ticker, so a duplicate is refused. A copy can still launch, as a <b>variant</b>: it is priced in the original's token instead of SOL. Buying the copy with SOL buys the original first, and money leaving a copy lands back in the original. One family, one pool of SOL.</p>
         </div>
         <${LineageDiagram} />
       </div>
-      <h3 class="sub">Follow your ETH</h3>
+      <h3 class="sub">Follow your SOL</h3>
       <${FollowTheMoney} />
     </section>
 
@@ -299,7 +292,7 @@ export function HowItWorks({ section }) {
         <div class="how-text">
           <p class="eyebrow">Union</p>
           <h2 id="how-union-title">Rivals can merge</h2>
-          <p>Two roots can fight over the same idea, like PNUT and PEANUT. Holders of one can vote to join the other's family: they lock their tokens for ${f.spoken(p.unionWindow)}, and if more than half of the circulating supply is locked when the vote closes, its whole ETH reserve buys the target without fees and it becomes a variant of it. Nobody's balance changes, and anyone against can sell during the vote.</p>
+          <p>Two roots can fight over the same idea, like PNUT and PEANUT. Holders of one can vote to join the other's family: they lock their tokens for ${f.spoken(p.unionWindow)}, and if more than half of the circulating supply is locked when the vote closes, its whole SOL reserve buys the target without fees and it becomes a variant of it. Nobody's balance changes, and anyone against can sell during the vote.</p>
         </div>
         <${UnionDiagram} />
       </div>
@@ -324,7 +317,7 @@ export function HowItWorks({ section }) {
 
     <section class="card how-section" id="how-limits" aria-labelledby="how-limits-title">
       <h2 id="how-limits-title">What it does not do</h2>
-      <p>A meme market is still zero-sum: every ETH someone takes out, someone else put in. These rules remove the edges reserved for bots and copycats; they do not make everyone a winner. The contracts are not audited, and this site runs them on demo money only.</p>
+      <p>A meme market is still zero-sum: every SOL someone takes out, someone else put in. These rules remove the edges reserved for bots and copycats; they do not make everyone a winner. The program is not audited, and this site runs it on demo money only.</p>
     </section>
   </div>`;
 }
