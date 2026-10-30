@@ -34,3 +34,21 @@ Sheets: propose (invalid, valid, ticker taken), pledge (idle, signing), host, wa
 - Pixel parity across 4 widths: covered by a screenshot run at 390, 768, 1280 and 1440 for every scene.
 - Clock-driven UI is flaky to test: `?freeze` stops the clock, `?scene=` seeds deterministic states.
 - Third-party logos: kept as demo fixtures only, credited in `assets/CREDITS.md`.
+
+# Step 2: the lobby on chain, the indexer, real receipts
+
+## Done
+- Program: lobby accounts (Lobby, Idea, Pledge), eleven instructions, eleven events, nineteen errors. The pot of the
+  winner is the opening batch of the existing protocol, so a lobby launch is a fair launch with vesting.
+- Books: after every step of a random walk, the ideas add up to the lobby's total and the lobby holds exactly what
+  it owes (pledges not yet refunded or committed, bonds not yet returned). At the end it holds nothing, and what
+  the founders committed equals the opening batch.
+- JavaScript: rules replica, wire format, client, indexer, all checked against the program by `chain-check.mjs`.
+- App: the demo's money goes through the rules; a pledge ends on a receipt read from the program's events; the
+  wallet lists every receipt; the launch shows the founder's exact token allocation and first-pledge rank.
+
+## Left for later steps
+- Deploying to devnet (no toolchain or network here): `solana/DEPLOY.md`.
+- Wallet mode in the screens (the client is ready; the screens still run on the demo store).
+- Postgres behind the indexer, and the crank as a service.
+- The lobby tests in CI (they need the Rust toolchain and Playwright on the runner).

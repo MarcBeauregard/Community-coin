@@ -21,7 +21,7 @@ mkdirSync(shots, { recursive: true });
 
 const WIDTHS = [[390, 844], [768, 1024], [1280, 800], [1440, 900]];
 const SCENES = ["discover", "listening", "lobby", "lobby-stage", "lobby-chat", "lobby-backed", "lobby-locked", "sheet-pledge", "sheet-propose",
-  "sheet-host", "sheet-wallet", "launch-founder", "launch-refund", "clan", "clan-voice"];
+  "sheet-host", "sheet-wallet", "sheet-receipt", "launch-founder", "launch-refund", "clan", "clan-voice"];
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".png": "image/png", ".jpg": "image/jpeg" };
 
 let failures = 0;
@@ -100,12 +100,16 @@ for (const [w, h] of [[1440, 900], [390, 844]]) {
   check(await page.getByText("Full refund at 00:55").isVisible(), `@${w} the pledge sheet says what happens if it loses`);
   await click("Confirm pledge");
   await page.waitForTimeout(1500);
+  check(await page.getByRole("heading", { name: "Pledged 1 SOL to $WIF" }).isVisible(), `@${w} the receipt reads the pledge from the program's events`);
+  check(await page.locator(".rows", { hasText: "Your pledge" }).getByText("1.0 SOL").first().isVisible(), `@${w} the receipt shows the pledge total`);
+  await click("Done");
   check(await page.getByText("Backing with 1.0 SOL").isVisible(), `@${w} the pledge is confirmed`);
   await click("Withdraw");
   check(await page.getByRole("button", { name: phone ? "Pledge" : "Pledge 1.0 SOL", exact: true }).isVisible(), `@${w} withdrawing frees the pledge`);
   await click(phone ? "Pledge" : "Pledge 1.0 SOL");
   await click("Confirm pledge");
   await page.waitForTimeout(1500);
+  await click("Done");
 
   if (phone) await click("Stage");
   await click("Demo · skip to lock");
@@ -139,6 +143,7 @@ for (const [w, h] of [[1440, 900], [390, 844]]) {
   await page.getByRole("button", { name: "Pledge 1.0 SOL" }).click();
   await page.getByRole("button", { name: "Confirm pledge" }).click();
   await page.waitForTimeout(1500);
+  await page.getByRole("button", { name: "Done" }).click();
   await page.getByRole("button", { name: "Demo · skip to lock" }).click();
   await page.waitForTimeout(8000);
   check(await page.getByText("Your 1.0 SOL is back in your wallet").isVisible(), "a losing pledge is refunded at launch");

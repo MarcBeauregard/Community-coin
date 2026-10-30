@@ -17,7 +17,9 @@
     "test:solana": "cd solana && cargo test",
     "test:wire": "node web/wire-check.mjs",
     "build:lobbies": "node web/lobbies/build.mjs",
-    "test:lobbies": "node web/lobbies/visual.mjs"
+    "test:lobbies": "node web/lobbies/visual.mjs",
+    "test:lobby-chain": "cd solana && cargo test --test lobby --test lobby_walk && cd .. && node web/lobbies/chain-check.mjs",
+    "index:lobbies": "node web/lobbies/indexer.mjs"
   },
   "devDependencies": {
     "@ethereumjs/block": "^10.1.3",

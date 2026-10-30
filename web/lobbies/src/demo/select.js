@@ -1,6 +1,6 @@
 // Derived view data: everything the screens show that is computed from the store's state rather than stored.
 
-import { PHASES, PROPOSALS_CLOSE, LOCK_AT, FOUNDER_SUPPLY, phaseAt, pledgedOn } from "./store.js";
+import { PHASES, PROPOSALS_CLOSE, LOCK_AT, phaseAt, pledgedOn } from "./store.js";
 import { FEATURED, LOBBIES, CHANNELS, FOUNDERS, ME } from "./data.js";
 import { HOUR, clock, sol } from "../format.js";
 
@@ -24,7 +24,7 @@ export function race(s) {
     share: Math.max(3, (d.total / max) * 100),
     mine: !!(s.pledge && s.pledge.id === d.id),
     yours: d.by === ME,
-    backersShown: d.backers + (s.pledge && s.pledge.id === d.id ? 1 : 0),
+    backersShown: d.backers,
   }));
 }
 
@@ -92,15 +92,16 @@ export function currentClan(s) {
 
 export function founders(s, clan) {
   const fresh = clan.fresh && s.launched && s.launched.founder;
-  return [...FOUNDERS, [ME, fresh ? s.launched.myAmount : 1, fresh ? s.launched.backers : 212]].map(([who, amount, rank], i) => ({
+  return [...FOUNDERS, [ME, fresh ? s.launched.myAmount : 1, fresh ? s.launched.rank : 212]].map(([who, amount, rank], i) => ({
     who, amount, rank, online: i < 4 || who === ME,
   }));
 }
 
 export function myFounderRank(s, clan) {
-  return clan.fresh && s.launched ? s.launched.backers : 212;
+  return clan.fresh && s.launched ? s.launched.rank : 212;
 }
 
+// A founder's tokens: their share of the opening batch, as the program's claim computes it (demo/lobby.js).
 export function allocation(l) {
-  return l && l.founder ? Math.round((l.myAmount / l.sol) * FOUNDER_SUPPLY) : 0;
+  return l && l.founder ? Math.floor(l.allocation) : 0;
 }

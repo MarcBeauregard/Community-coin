@@ -51,7 +51,7 @@ export function Launch({ s, a, phone }) {
           </dl>
           ${l.founder
             ? html`<div class="panel" style="padding:20px;display:flex;flex-direction:column;gap:12px;border-color:rgba(203,243,92,.3);text-align:left">
-                <span style="font-size:17px;font-weight:600">Welcome, Founder #${int(l.backers)}</span>
+                <span style="font-size:17px;font-weight:600">Welcome, Founder #${int(l.rank)}</span>
                 <div class="rows" style="background:none;padding:0">
                   <div><span>Your allocation</span><span class="num">${int(allocation(l))} ${win.ticker}</span></div>
                   <div><span>Price</span><span>Same for every founder</span></div>

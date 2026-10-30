@@ -6,7 +6,7 @@ use anchor_lang::prelude::Pubkey;
 use anchor_lang::{AccountDeserialize, InstructionData, ToAccountMetas};
 use anchor_spl::token_2022::spl_token_2022;
 use anchor_spl::token_2022::spl_token_2022::extension::StateWithExtensions;
-use community_coin::state::{Commitment, Config, Lock, Meme, Union};
+use community_coin::state::{Commitment, Config, Idea, Lobby, Lock, Meme, Pledge, Union};
 use solana_program_test::{processor, BanksClientError, ProgramTest, ProgramTestContext};
 use solana_sdk::{
     account::Account,
@@ -633,4 +633,179 @@ pub fn error_code(e: &BanksClientError) -> Option<u32> {
 
 pub fn code(e: community_coin::errors::CoinError) -> u32 {
     6000 + e as u32
+}
+
+// ------------------------------------------------------------------ lobbies
+
+pub fn lobby_pda(id: u64) -> Pubkey {
+    pda(&[b"lobby", &id.to_le_bytes()])
+}
+pub fn ticker_key(symbol: &str) -> Vec<u8> {
+    community_coin::math::symbol_key(symbol).unwrap_or_else(|_| symbol.as_bytes().to_vec())
+}
+pub fn idea_pda(lobby: &Pubkey, symbol: &str) -> Pubkey {
+    pda(&[b"idea", lobby.as_ref(), &ticker_key(symbol)])
+}
+pub fn pledge_pda(lobby: &Pubkey, user: &Pubkey) -> Pubkey {
+    pda(&[b"pledge", lobby.as_ref(), user.as_ref()])
+}
+
+/// Windows of a test lobby, in seconds after it opens: the hour of the product.
+pub const PROPOSE: i64 = 1800;
+pub const LOCK: i64 = 3300;
+pub const LENGTH: i64 = 3600;
+pub const BOND: u64 = SOL / 20;
+
+impl Hub {
+    fn ix(accounts: Vec<AccountMeta>, data: Vec<u8>) -> Instruction {
+        Instruction { program_id: community_coin::ID, accounts, data }
+    }
+
+    pub async fn create_lobby(&mut self, i: usize, id: u64, opens_at: i64, max_pledge: u64, bond: u64) -> Result<(), BanksClientError> {
+        let host = self.user(i).pubkey();
+        let ix = Self::ix(
+            community_coin::accounts::CreateLobby { host, lobby: lobby_pda(id), system_program: system_program::ID }.to_account_metas(None),
+            community_coin::instruction::CreateLobby { id, opens_at, propose_secs: PROPOSE, lock_secs: LOCK, length: LENGTH, max_pledge, bond }.data(),
+        );
+        self.send_as(i, vec![ix]).await
+    }
+
+    pub async fn propose(&mut self, i: usize, id: u64, symbol: &str) -> Result<(), BanksClientError> {
+        let proposer = self.user(i).pubkey();
+        let lobby = lobby_pda(id);
+        let key = ticker_key(symbol);
+        let ix = Self::ix(
+            community_coin::accounts::ProposeIdea { proposer, lobby, idea: idea_pda(&lobby, symbol), mint: pda(&[b"mint", &key]), system_program: system_program::ID }.to_account_metas(None),
+            community_coin::instruction::ProposeIdea { key, name: format!("{symbol} coin"), symbol: symbol.to_string(), uri: String::new() }.data(),
+        );
+        self.send_as(i, vec![ix]).await
+    }
+
+    pub async fn pledge(&mut self, i: usize, id: u64, symbol: &str, amount: u64) -> Result<(), BanksClientError> {
+        let user = self.user(i).pubkey();
+        let lobby = lobby_pda(id);
+        let ix = Self::ix(
+            community_coin::accounts::PledgeOn { user, lobby, idea: idea_pda(&lobby, symbol), pledge: pledge_pda(&lobby, &user), system_program: system_program::ID }.to_account_metas(None),
+            community_coin::instruction::Pledge { amount }.data(),
+        );
+        self.send_as(i, vec![ix]).await
+    }
+
+    pub async fn withdraw(&mut self, i: usize, id: u64, symbol: &str, amount: u64) -> Result<(), BanksClientError> {
+        let user = self.user(i).pubkey();
+        let lobby = lobby_pda(id);
+        let ix = Self::ix(
+            community_coin::accounts::Withdraw { user, lobby, idea: idea_pda(&lobby, symbol), pledge: pledge_pda(&lobby, &user) }.to_account_metas(None),
+            community_coin::instruction::Withdraw { amount }.data(),
+        );
+        self.send_as(i, vec![ix]).await
+    }
+
+    pub async fn move_pledge(&mut self, i: usize, id: u64, from: &str, to: &str) -> Result<(), BanksClientError> {
+        let user = self.user(i).pubkey();
+        let lobby = lobby_pda(id);
+        let ix = Self::ix(
+            community_coin::accounts::MovePledge { user, lobby, from: idea_pda(&lobby, from), to: idea_pda(&lobby, to), pledge: pledge_pda(&lobby, &user) }.to_account_metas(None),
+            community_coin::instruction::MovePledge {}.data(),
+        );
+        self.send_as(i, vec![ix]).await
+    }
+
+    /// Anyone (user `i`) finalizes; `symbols` are the ideas passed, normally all of them.
+    pub async fn finalize(&mut self, i: usize, id: u64, symbols: &[&str]) -> Result<(), BanksClientError> {
+        let lobby = lobby_pda(id);
+        let mut accounts = community_coin::accounts::Finalize { lobby }.to_account_metas(None);
+        accounts.extend(symbols.iter().map(|s| AccountMeta::new_readonly(idea_pda(&lobby, s), false)));
+        let ix = Self::ix(accounts, community_coin::instruction::Finalize {}.data());
+        self.send_as(i, vec![ix]).await
+    }
+
+    pub async fn launch_winner(&mut self, i: usize, id: u64, symbol: &str) -> Result<Pubkey, BanksClientError> {
+        let payer = self.user(i).pubkey();
+        let lobby = lobby_pda(id);
+        let mint = pda(&[b"mint", &ticker_key(symbol)]);
+        let ix = Self::ix(
+            community_coin::accounts::LaunchWinner {
+                payer,
+                config: config_pda(),
+                authority: authority_pda(),
+                vault: vault_pda(),
+                lobby,
+                idea: idea_pda(&lobby, symbol),
+                mint,
+                meme: meme_pda(&mint),
+                token_program: spl_token_2022::ID,
+                system_program: system_program::ID,
+            }
+            .to_account_metas(None),
+            community_coin::instruction::LaunchWinner {}.data(),
+        );
+        self.send_as(i, vec![ix]).await.map(|_| mint)
+    }
+
+    pub async fn void_winner(&mut self, i: usize, id: u64, symbol: &str) -> Result<(), BanksClientError> {
+        let lobby = lobby_pda(id);
+        let ix = Self::ix(
+            community_coin::accounts::VoidWinner { lobby, idea: idea_pda(&lobby, symbol), mint: pda(&[b"mint", &ticker_key(symbol)]) }.to_account_metas(None),
+            community_coin::instruction::VoidWinner {}.data(),
+        );
+        self.send_as(i, vec![ix]).await
+    }
+
+    /// User `i` sends the refund of user `of`'s pledge.
+    pub async fn refund(&mut self, i: usize, id: u64, of: usize) -> Result<(), BanksClientError> {
+        let user = self.user(of).pubkey();
+        let lobby = lobby_pda(id);
+        let ix = Self::ix(
+            community_coin::accounts::Refund { lobby, pledge: pledge_pda(&lobby, &user), user }.to_account_metas(None),
+            community_coin::instruction::Refund {}.data(),
+        );
+        self.send_as(i, vec![ix]).await
+    }
+
+    /// User `i` turns user `of`'s winning pledge into their commitment.
+    pub async fn claim_founder(&mut self, i: usize, id: u64, of: usize) -> Result<(), BanksClientError> {
+        let payer = self.user(i).pubkey();
+        let user = self.user(of).pubkey();
+        let lobby = lobby_pda(id);
+        let mint = self.lobby(id).await.mint;
+        let ix = Self::ix(
+            community_coin::accounts::ClaimFounder { payer, lobby, pledge: pledge_pda(&lobby, &user), commitment: commit_pda(&mint, &user), system_program: system_program::ID }.to_account_metas(None),
+            community_coin::instruction::ClaimFounder {}.data(),
+        );
+        self.send_as(i, vec![ix]).await
+    }
+
+    pub async fn return_bond(&mut self, i: usize, id: u64, symbol: &str) -> Result<(), BanksClientError> {
+        let lobby = lobby_pda(id);
+        let proposer = self.idea(id, symbol).await.proposer;
+        let ix = Self::ix(
+            community_coin::accounts::ReturnBond { lobby, idea: idea_pda(&lobby, symbol), proposer }.to_account_metas(None),
+            community_coin::instruction::ReturnBond {}.data(),
+        );
+        self.send_as(i, vec![ix]).await
+    }
+
+    pub async fn lobby(&mut self, id: u64) -> Lobby {
+        let a = self.account(lobby_pda(id)).await.expect("lobby account");
+        Lobby::try_deserialize(&mut a.data.as_slice()).unwrap()
+    }
+
+    pub async fn idea(&mut self, id: u64, symbol: &str) -> Idea {
+        let a = self.account(idea_pda(&lobby_pda(id), symbol)).await.expect("idea account");
+        Idea::try_deserialize(&mut a.data.as_slice()).unwrap()
+    }
+
+    pub async fn pledge_of(&mut self, id: u64, i: usize) -> Option<Pledge> {
+        let user = self.user(i).pubkey();
+        let a = self.account(pledge_pda(&lobby_pda(id), &user)).await?;
+        Some(Pledge::try_deserialize(&mut a.data.as_slice()).unwrap())
+    }
+
+    /// Lamports above the lobby account's rent: what it holds for pledgers and proposers.
+    pub async fn lobby_balance(&mut self, id: u64) -> u64 {
+        let a = self.account(lobby_pda(id)).await.unwrap();
+        let rent = self.ctx.banks_client.get_rent().await.unwrap().minimum_balance(a.data.len());
+        a.lamports - rent
+    }
 }

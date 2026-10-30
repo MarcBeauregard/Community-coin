@@ -98,7 +98,25 @@ function WalletSheet({ s, a }) {
     <div style="display:flex;flex-direction:column;gap:10px">
       <span class="t2" style="font-size:13px;font-weight:600">Founder of</span>
       <div class="row" style="gap:8px">${s.clans.map((k) => html`<${Button} key=${k.id} size="sm" style="padding:0 12px 0 4px;height:36px" onClick=${() => a.openClan(k.id)}><${Coin} coin=${coin(k)} size=${28} />${ticker(k.ticker)}</${Button}>`)}</div>
-    </div>`;
+    </div>
+    ${s.receipts.length > 0 && html`<div style="display:flex;flex-direction:column;gap:10px">
+      <span class="t2" style="font-size:13px;font-weight:600">Activity</span>
+      <ol class="rows">${s.receipts.slice(0, 5).map((r, i) => html`<li key=${i} style="display:flex;justify-content:space-between;gap:12px;padding:12px 0;font-size:14px;border-top:${i ? "1px solid rgba(255,255,255,.07)" : "0"}">
+        <button type="button" style="text-align:left;flex:1" onClick=${() => a.showReceipt(r)}>${r.title}</button><span class="t2"><${I.Chevron} size=${14} /></span></li>`)}</ol>
+    </div>`}`;
+}
+
+// What the last operation did, read from the program's events: a pledge, a withdrawal, a move, a refund.
+function ReceiptSheet({ s, a }) {
+  const r = s.receipt;
+  if (!r) return null;
+  return html`<div style="display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;padding-top:8px">
+      <span class="pop" style="width:64px;height:64px;border-radius:50%;background:var(--lime);color:#0a0c04;display:flex;align-items:center;justify-content:center"><${I.Check} size=${30} stroke=${3} /></span>
+      <h2 id="receipt-title" class="display" style="font-size:24px">${r.title}</h2>
+    </div>
+    <div class="rows">${r.lines.map(([k, v]) => html`<div key=${k}><span>${k}</span><span class="num">${sol(v)}</span></div>`)}</div>
+    <span class="t2" style="font-size:12px;line-height:1.5;text-align:center">Read from the lobby program’s events. Pledges can be withdrawn or moved until 00:55; losing pledges are refunded at the lock.</span>
+    <${Button} variant="white" size="lg" onClick=${a.closeSheet}>Done</${Button}>`;
 }
 
 const SHEETS = {
@@ -106,6 +124,7 @@ const SHEETS = {
   propose: { title: "Propose an idea", Body: ProposeSheet },
   host: { title: "Host a lobby", Body: HostSheet },
   wallet: { title: "Wallet", Body: WalletSheet },
+  receipt: { title: null, Body: ReceiptSheet },
 };
 
 export function Sheets({ s, a }) {

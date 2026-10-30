@@ -1,11 +1,13 @@
 // The demo store: plays one lobby hour in the browser. It holds the state, the actions the screens call and a one
-// second clock. It is the seam later steps replace: the same actions will call the lobby program and the realtime
-// channel instead of changing local state.
+// second clock. Money goes through the program's rules (lobby.js on chain/rules.js): pledges, withdrawals, moves,
+// the lock, the launch and the refunds give the program's results, and receipts are read from its events. Wallet
+// mode will send the same operations to the program instead.
 //
 // Scenes (`?scene=`) seed deterministic states for screenshots and tests; `?freeze` stops the clock.
 
-import { IDEAS, CLANS, CROWD, CHATTER, ME, seedClanMessages, seedLobbyChat, message } from "./data.js";
+import { CLANS, CROWD, CHATTER, ME, seedClanMessages, seedLobbyChat, message } from "./data.js";
 import { HOUR, sol } from "../format.js";
+import { createDemoLobby, ideasFrom, ideaMeta, myPledge, act, crank, launchSummary, toLamports, toSol, errorText, receiptFor } from "./lobby.js";
 
 export const PHASES = [
   { id: "gather", label: "Gather", start: 0, end: 300, color: "var(--text)" },
@@ -17,7 +19,6 @@ export const PROPOSALS_CLOSE = 1800;
 export const LOCK_AT = 3300;
 export const START_ELAPSED = 1452; // the demo opens 24:12 into the hour
 export const PROPOSE_BOND = 0.05;
-export const FOUNDER_SUPPLY = 800_000_000; // tokens sold to founders in the opening auction
 
 export function phaseAt(elapsed) {
   if (elapsed >= HOUR) return "done";
@@ -25,16 +26,21 @@ export function phaseAt(elapsed) {
 }
 
 function initialState() {
+  const chain = createDemoLobby();
+  const meta = ideaMeta();
   return {
+    chain, // the lobby on the program's rules (mutable; state changes are announced by replacing `ideas`)
+    meta,
+    receipts: [], // newest first
+    receipt: null, // the one the receipt sheet shows
     route: { screen: "discover" },
     elapsed: START_ELAPSED,
     beat: 0,
-    ideas: IDEAS.map((i) => ({ ...i })),
+    ideas: ideasFrom(chain, meta),
     selected: "wif",
     amount: 1,
     pledge: null, // { id, amount }
     balance: 14.2,
-    bond: 0,
     launched: null,
     voice: { listening: false, hand: false, onStage: false, mic: true },
     chat: seedLobbyChat(),
@@ -59,9 +65,9 @@ function initialState() {
   };
 }
 
-// Effective SOL on an idea: the crowd's pledges plus ours.
+// SOL on an idea, ours included: the chain's number.
 export function pledgedOn(state, idea) {
-  return idea.sol + (state.pledge && state.pledge.id === idea.id ? state.pledge.amount : 0);
+  return idea.sol;
 }
 
 export function createStore({ scene, freeze } = {}) {
@@ -80,27 +86,25 @@ export function createStore({ scene, freeze } = {}) {
   };
   const chatLine = (line) => [...state.chat, line].slice(-60);
 
-  function finalize(s) {
-    const ranked = s.ideas.map((d) => ({ d, v: pledgedOn(s, d) })).sort((a, b) => b.v - a.v);
-    const win = ranked[0];
-    const total = ranked.reduce((a, b) => a + b.v, 0);
-    const founder = !!(s.pledge && s.pledge.id === win.d.id);
-    const refund = s.pledge && !founder ? s.pledge.amount : 0;
-    const out = {
-      launched: {
-        id: win.d.id, sol: win.v, total, founder, refund,
-        backers: win.d.backers + (founder ? 1 : 0),
-        myAmount: s.pledge ? s.pledge.amount : 0, myId: s.pledge ? s.pledge.id : null,
-      },
-      balance: s.balance + refund + s.bond, bond: 0, sheet: null, signing: false,
-    };
-    if (s.route.screen === "lobby") out.route = { screen: "launch" };
-    if (founder) {
-      out.clans = [{ id: "new", name: win.d.name, ticker: win.d.ticker, hue: win.d.hue, logo: win.d.logo, members: win.d.backers + 1,
-        born: "Born tonight", change: null, voice: 5, unread: 0, fresh: true, story: win.d.pitch }, ...s.clans];
+  // The lock and the launch come from the chain's crank; this turns its events into what the screens show.
+  function settle(s) {
+    const events = crank(s.chain, s.elapsed);
+    if (!events.length) return {};
+    const patch = { ideas: ideasFrom(s.chain, s.meta), pledge: myPledge(s.chain) };
+    const launched = launchSummary(s.chain, events);
+    if (!launched) return patch;
+    const win = patch.ideas.find((d) => d.id === launched.id);
+    const mine = events.filter((e) => e.user === ME || e.proposer === ME);
+    Object.assign(patch, { launched, balance: s.balance + launched.refund + launched.bondBack, sheet: null, signing: false,
+      receipts: [...mine.map((e) => receiptOf(e, s)).filter(Boolean), ...s.receipts] });
+    if (s.route.screen === "lobby") patch.route = { screen: "launch" };
+    if (launched.founder) {
+      patch.clans = [{ id: "new", name: win.name, ticker: win.ticker, hue: win.hue, logo: win.logo, members: launched.backers,
+        born: "Born tonight", change: null, voice: 5, unread: 0, fresh: true, story: win.pitch }, ...s.clans];
     }
-    return out;
+    return patch;
   }
+  const receiptOf = (e, s) => receiptFor(e, s.chain);
 
   function tick() {
     const s = state;
@@ -109,18 +113,19 @@ export function createStore({ scene, freeze } = {}) {
     const elapsed = s.elapsed + 1;
     const patch = { elapsed, beat };
     if (elapsed < LOCK_AT && beat % 3 === 0) {
-      // The crowd keeps pledging, more often on what already leads.
-      const ideas = s.ideas.map((i) => ({ ...i }));
+      // The crowd keeps pledging, more often on what already leads; each new backer is a new wallet.
+      const ideas = s.ideas;
       let r = Math.random() * ideas.reduce((a, b) => a + b.sol, 0), k = 0;
       for (; k < ideas.length - 1; k++) { r -= ideas[k].sol; if (r <= 0) break; }
       const amount = Math.round((0.2 + Math.random() * 2.2) * 10) / 10;
-      ideas[k].sol += amount;
-      ideas[k].backers += 1;
-      patch.ideas = ideas;
-      if (beat % 6 === 0) patch.chat = chatLine({ sys: true, kind: "pledge", text: `@${CROWD[beat % CROWD.length]} pledged ${amount} SOL to $${ideas[k].ticker}` });
+      const done = s.chain.apply("pledge", { user: `crowd-live-${beat}`, symbol: ideas[k].ticker, amount: toLamports(amount) }, elapsed);
+      if (done.ok) {
+        patch.ideas = ideasFrom(s.chain, s.meta);
+        if (beat % 6 === 0) patch.chat = chatLine({ sys: true, kind: "pledge", text: `@${CROWD[beat % CROWD.length]} pledged ${amount} SOL to $${ideas[k].ticker}` });
+      }
     }
     if (beat % 7 === 0 && elapsed < HOUR) patch.chat = [...(patch.chat || s.chat), { who: CROWD[(beat * 3) % CROWD.length], text: CHATTER[beat % CHATTER.length] }].slice(-60);
-    if (elapsed >= HOUR) Object.assign(patch, finalize({ ...s, ...patch }));
+    if (elapsed >= LOCK_AT) Object.assign(patch, settle({ ...s, ...patch }));
     set(patch);
   }
 
@@ -170,38 +175,50 @@ export function createStore({ scene, freeze } = {}) {
     select(id) { set({ selected: id }); },
     setAmount(amount) { set({ amount }); },
     proposeIdea({ name, ticker, pitch, hue }) {
-      const id = `u${Date.now()}`;
-      set((s) => ({
-        ideas: [...s.ideas, { id, name, ticker, pitch, hue, by: ME, sol: 0, backers: 0 }], selected: id, sheet: null,
-        balance: s.balance - PROPOSE_BOND, bond: s.bond + PROPOSE_BOND,
-        chat: chatLine({ sys: true, kind: "propose", text: `@degen_marc proposed $${ticker} · ${name}` }),
-      }));
+      const r = act(state.chain, "propose_idea", { proposer: ME, symbol: ticker, name }, state.elapsed);
+      if (!r.ok) return toast(errorText(r.error), "white");
+      set((s) => {
+        const meta = { ...s.meta, [ticker]: { id: ticker.toLowerCase(), hue, pitch } };
+        return { meta, ideas: ideasFrom(s.chain, meta), selected: ticker.toLowerCase(), sheet: null, balance: s.balance - toSol(s.chain.lobby.bond),
+          chat: chatLine({ sys: true, kind: "propose", text: `@degen_marc proposed $${ticker} · ${name}` }) };
+      });
       toast(`$${ticker} is in the race. Back it to give it a start.`, "sky");
     },
     confirmPledge() {
       set({ signing: true });
       later(() => {
-        if (!canPledge()) return set({ signing: false, sheet: null });
         const idea = selectedIdea();
-        set((s) => ({ signing: false, sheet: null, pledge: { id: idea.id, amount: s.amount }, balance: s.balance - s.amount,
+        const r = act(state.chain, "pledge", { user: ME, symbol: idea.ticker, amount: toLamports(state.amount) }, state.elapsed);
+        if (!r.ok) {
+          set({ signing: false, sheet: null });
+          return toast(errorText(r.error), "white");
+        }
+        set((s) => ({ signing: false, sheet: "receipt", receipt: r.receipt, receipts: [r.receipt, ...s.receipts], pledge: myPledge(s.chain),
+          ideas: ideasFrom(s.chain, s.meta), balance: s.balance - s.amount,
           chat: chatLine({ sys: true, kind: "pledge", text: `@degen_marc pledged ${s.amount} SOL to $${idea.ticker}` }) }));
-        toast(`Pledged ${sol(state.pledge.amount)} to $${idea.ticker}`);
       }, 1200);
     },
     withdraw() {
-      if (!state.pledge) return;
-      const amount = state.pledge.amount;
-      set((s) => ({ balance: s.balance + amount, pledge: null, sheet: null }));
-      toast(`${sol(amount)} returned to your wallet`, "white");
+      const p = state.pledge;
+      if (!p) return;
+      const r = act(state.chain, "withdraw", { user: ME, symbol: p.symbol, amount: p.lamports }, state.elapsed);
+      if (!r.ok) return toast(errorText(r.error), "white");
+      set((s) => ({ balance: s.balance + p.amount, pledge: myPledge(s.chain), ideas: ideasFrom(s.chain, s.meta), sheet: null, receipt: r.receipt, receipts: [r.receipt, ...s.receipts] }));
+      toast(`${sol(p.amount)} returned to your wallet`, "white");
     },
     movePledge() {
+      const p = state.pledge;
       const idea = selectedIdea();
-      set((s) => ({ pledge: { ...s.pledge, id: idea.id } }));
-      toast(`Moved your ${sol(state.pledge.amount)} to $${idea.ticker}`);
+      const r = act(state.chain, "move_pledge", { user: ME, from: p.symbol, to: idea.ticker }, state.elapsed);
+      if (!r.ok) return toast(errorText(r.error), "white");
+      set((s) => ({ pledge: myPledge(s.chain), ideas: ideasFrom(s.chain, s.meta), receipt: r.receipt, receipts: [r.receipt, ...s.receipts] }));
+      toast(`Moved your ${sol(p.amount)} to $${idea.ticker}`);
     },
-    skipToLock() { set((s) => ({ elapsed: Math.max(s.elapsed, HOUR - 6), sheet: null })); },
+    skipToLock() { set((s) => ({ elapsed: Math.max(s.elapsed, HOUR - 6), sheet: null })); set(settle(state)); },
     replay() {
-      set({ launched: null, elapsed: START_ELAPSED, ideas: IDEAS.map((i) => ({ ...i })), pledge: null, selected: "wif", route: { screen: "lobby" }, voice: { listening: false, hand: false, onStage: false, mic: true } });
+      const chain = createDemoLobby();
+      const meta = ideaMeta();
+      set({ chain, meta, launched: null, elapsed: START_ELAPSED, ideas: ideasFrom(chain, meta), pledge: null, selected: "wif", route: { screen: "lobby" }, voice: { listening: false, hand: false, onStage: false, mic: true } });
       toast("A fresh run of the lobby has started", "sky");
     },
 
@@ -244,6 +261,7 @@ export function createStore({ scene, freeze } = {}) {
       set((s) => ({ clanMessages: { ...s.clanMessages, [s.channel]: s.clanMessages[s.channel].map((m) => (m.id === id ? { ...m, [key]: !m[key] } : m)) } }));
     },
     copyAddress() { toast("Address copied", "white"); },
+    showReceipt(receipt) { set({ sheet: "receipt", receipt }); },
     shareBirthCard() { toast("Birth card link copied"); },
   };
 
@@ -252,18 +270,24 @@ export function createStore({ scene, freeze } = {}) {
     lobby: () => set({ route: { screen: "lobby" } }),
     "lobby-stage": () => set({ route: { screen: "lobby" }, lobbyTab: "stage", voice: { listening: true, hand: false, onStage: true, mic: true } }),
     "lobby-chat": () => set({ route: { screen: "lobby" }, lobbyTab: "chat" }),
-    "lobby-backed": () => set({ route: { screen: "lobby" }, pledge: { id: "wif", amount: 1 }, balance: 13.2 }),
-    "lobby-locked": () => set({ route: { screen: "lobby" }, elapsed: 3420, pledge: { id: "wif", amount: 1 }, balance: 13.2 }),
+    "lobby-backed": () => { pledgeNow("WIF", 1); set({ route: { screen: "lobby" } }); },
+    "lobby-locked": () => { pledgeNow("WIF", 1); set({ route: { screen: "lobby" }, elapsed: 3420 }); set(settle(state)); },
     "sheet-pledge": () => set({ route: { screen: "lobby" }, sheet: "pledge" }),
+    "sheet-receipt": () => { pledgeNow("WIF", 1); set({ route: { screen: "lobby" }, sheet: "receipt" }); },
     "sheet-propose": () => set({ route: { screen: "lobby" }, sheet: "propose" }),
     "sheet-host": () => set({ sheet: "host" }),
-    "sheet-wallet": () => set({ sheet: "wallet", pledge: { id: "wif", amount: 1 }, balance: 13.2 }),
-    "launch-founder": () => { set({ route: { screen: "lobby" }, pledge: { id: "wif", amount: 1 }, balance: 13.2 }); set(finalize(state)); },
-    "launch-refund": () => { set({ route: { screen: "lobby" }, pledge: { id: "brett", amount: 2 }, balance: 12.2 }); set(finalize(state)); },
+    "sheet-wallet": () => { pledgeNow("WIF", 1); set({ sheet: "wallet" }); },
+    "launch-founder": () => { pledgeNow("WIF", 1); set({ route: { screen: "lobby" }, elapsed: HOUR }); set(settle(state)); },
+    "launch-refund": () => { pledgeNow("BRETT", 2); set({ route: { screen: "lobby" }, elapsed: HOUR }); set(settle(state)); },
     clan: () => actions.openClan("bonk"),
     "clan-voice": () => { actions.openClan("bonk"); set({ clanView: "chat", campfire: { joined: true, muted: false, deafened: false, sharing: false } }); },
     listening: () => set({ voice: { listening: true, hand: false, onStage: false, mic: true } }),
   };
+  // A pledge of ours, straight through the rules (scenes only).
+  function pledgeNow(symbol, amount) {
+    const r = act(state.chain, "pledge", { user: ME, symbol, amount: toLamports(amount) }, state.elapsed);
+    set((s) => ({ pledge: myPledge(s.chain), ideas: ideasFrom(s.chain, s.meta), balance: s.balance - amount, selected: symbol.toLowerCase(), amount, receipt: r.receipt, receipts: [r.receipt, ...s.receipts] }));
+  }
   if (scene && scenes[scene]) { scenes[scene](); state = { ...state, toast: null }; }
 
   let interval = null;
