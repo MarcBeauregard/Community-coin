@@ -1,0 +1,32 @@
+[package]
+name = "community-coin"
+version = "0.1.0"
+description = "A memecoin launchpad where every copy feeds the original"
+edition = "2021"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "community_coin"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+anchor-debug = []
+custom-heap = []
+custom-panic = []
+
+[dependencies]
+anchor-lang = { version = "=0.31.1", features = ["init-if-needed"] }
+anchor-spl = { version = "=0.31.1", default-features = false, features = ["token", "token_2022", "token_2022_extensions", "associated_token"] }
+uint = { version = "0.10", default-features = false }
+
+[dev-dependencies]
+solana-program-test = "~2.1"
+solana-sdk = "~2.1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+spl-associated-token-account-client = "2"
