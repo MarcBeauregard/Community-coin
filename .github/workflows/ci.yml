@@ -5,7 +5,32 @@ on:
   pull_request:
 
 jobs:
-  test:
+  # The Solana program, then the JavaScript replica and the wire format checked against what its tests wrote.
+  solana:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            solana/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('solana/Cargo.lock') }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:solana
+        env:
+          RUST_LOG: error
+      - run: npm run test:protocol
+      - run: npm run test:wire
+
+  # The app, its simulator, and the Base contracts kept as the reference.
+  web:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,6 +39,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm test
       - run: npm run build:web
-      - run: npm run test:curve
+      - run: node web/simulate.mjs
+      - run: npm test

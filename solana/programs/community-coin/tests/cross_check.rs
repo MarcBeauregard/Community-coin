@@ -165,7 +165,7 @@ async fn replay(name: &str, file: &Path) {
     };
     let mut trace = vec![];
     let mut sent = vec![];
-    hub.sent.clear(); // the hub's initialization
+    let initialize = wire(std::mem::take(&mut hub.sent));
 
     for step in scenario["steps"].as_array().unwrap() {
         if let Some(w) = step.get("warp") {
@@ -232,6 +232,7 @@ async fn replay(name: &str, file: &Path) {
     let wire = json!({
         "programId": community_coin::ID.to_string(),
         "accounts": accounts,
+        "initialize": initialize,
         "steps": sent,
         "final": raw_accounts(&mut hub, &owners, &mints).await,
     });

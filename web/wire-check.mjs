@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { Scenario } from "./src/scenario.js";
 import {
-  Addresses, IX, ACCOUNT, EVENT, instructionsFor, decodeEvent, decodeConfig, decodeMeme, decodeCommitment, decodeUnion, decodeLock,
+  Addresses, IX, ACCOUNT, EVENT, instructionsFor, initializeInstruction, decodeEvent, decodeConfig, decodeMeme, decodeCommitment, decodeUnion, decodeLock,
   tokenAmount, mintSupply, toHex, TOKEN_2022,
 } from "./src/solana.js";
 
@@ -61,6 +61,13 @@ for (const [name, file] of scenarios()) {
   const scenario = JSON.parse(readFileSync(file, "utf8"));
   const A = new Addresses(wire.programId);
   const r = new Scenario(scenario, { idOf: (n) => wire.accounts[n], mintOf: (key) => A.mint(key) });
+  const keysOfWire = (ix) => ({ program: ix.program, keys: ix.keys, data: ix.data });
+  const asWire = (ix) => ({ program: ix.programId.toBase58(), keys: keysOf(ix), data: toHex(ix.data) });
+  const init = initializeInstruction(A, r.engine.config.feeRecipient, r.engine.config);
+  if (show(asWire(init)) !== show(keysOfWire(wire.initialize[0].instructions[0]))) {
+    fail(`${name}: the initialize instruction differs:\n  ${show(asWire(init))}\n  ${show(wire.initialize[0].instructions[0])}`);
+    continue;
+  }
   let i = 0, built = 0, events = 0, skipped = 0, bad = null;
   for (const s of scenario.steps) {
     if (s.warp !== undefined) {
@@ -160,7 +167,7 @@ for (const [name, file] of scenarios()) {
   const rent = (128n + BigInt(fromHex(vault.data).length)) * 6960n;
   if (!bad && BigInt(vault.lamports) - rent !== st.vault) bad = `vault: ${BigInt(vault.lamports) - rent} on chain, ${st.vault} in the engine`;
   if (bad) fail(`${name}: ${bad}`);
-  else console.log(`✓ ${name}: ${built} transactions built byte for byte${skipped ? ` (${skipped} invalid tickers left out)` : ""}, ${events} events decoded, ${accounts} accounts decoded`);
+  else console.log(`✓ ${name}: ${built + 1} transactions built byte for byte${skipped ? ` (${skipped} invalid tickers left out)` : ""}, ${events} events decoded, ${accounts} accounts decoded`);
 }
 
 if (failures) process.exit(1);
