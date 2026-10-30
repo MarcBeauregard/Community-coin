@@ -48,4 +48,46 @@ pub enum CoinError {
     Unauthorized,
     #[msg("Arithmetic overflow")]
     MathOverflow,
+    #[msg("Invalid lobby: windows must be increasing and at most four hours, with a pledge limit")]
+    InvalidLobby,
+    #[msg("The lobby is not open yet")]
+    LobbyNotOpen,
+    #[msg("Proposals are closed")]
+    ProposalsClosed,
+    #[msg("Pledges are locked")]
+    PledgesLocked,
+    #[msg("Pledges are not locked yet")]
+    StillPledging,
+    #[msg("The lobby is already finalized")]
+    AlreadyFinalized,
+    #[msg("The lobby is not finalized yet")]
+    NotFinalized,
+    #[msg("This lobby is full: 16 ideas at most")]
+    TooManyIdeas,
+    #[msg("Your pledge is on another idea: move it instead")]
+    OnAnotherIdea,
+    #[msg("Above this lobby's pledge limit")]
+    PledgeCap,
+    #[msg("Not launch time yet")]
+    NotLaunchTime,
+    #[msg("This lobby has no winner")]
+    NoWinner,
+    #[msg("The winner is already launched")]
+    AlreadyLaunched,
+    #[msg("The winner is not launched yet")]
+    NotLaunched,
+    #[msg("This pledge is already refunded or committed")]
+    PledgeSettled,
+    #[msg("This pledge is not on the winner")]
+    NotTheWinner,
+    #[msg("A pledge on the winner becomes a founder's commitment, not a refund")]
+    WinnerNoRefund,
+    #[msg("Pass every idea of the lobby, once each")]
+    BadIdeas,
+    #[msg("The winner's ticker is still free")]
+    TickerFree,
+    #[msg("This ticker is held by a lobby's race")]
+    TickerHeld,
+    #[msg("A pledge is at least 0.001 SOL (or withdrawn in full)")]
+    PledgeTooSmall,
 }

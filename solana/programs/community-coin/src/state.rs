@@ -86,3 +86,82 @@ pub struct Union {
 pub struct Lock {
     pub amount: u64,
 }
+
+/// A lobby: a fixed window (an hour by default) in which a crowd proposes coin ideas and pledges SOL on them.
+/// The pledge is the vote. At `lock_at` pledges freeze and the idea with the most SOL wins; at `launch_at` it
+/// launches with its whole pot as its opening batch, so every backer gets the same price. Every other pledge is
+/// refunded. The pledged lamports sit in the lobby account until then.
+#[account]
+#[derive(InitSpace)]
+pub struct Lobby {
+    pub id: u64,
+    pub host: Pubkey,
+    pub opens_at: i64,
+    pub proposals_close: i64,
+    pub lock_at: i64,
+    pub launch_at: i64,
+    /// Most a wallet can have pledged at once, in lamports.
+    pub max_pledge: u64,
+    /// Lamports a proposer deposits against spam, returned after the lock, win or lose.
+    pub bond: u64,
+    pub idea_count: u8,
+    /// Wallets that ever pledged here: the next pledge's `seq`.
+    pub pledgers: u32,
+    /// Lamports pledged and not withdrawn.
+    pub total: u64,
+    pub finalized: bool,
+    /// Index of the winning idea, or NO_WINNER.
+    pub winner: u8,
+    pub launched: bool,
+    /// The winner's mint, once launched.
+    pub mint: Pubkey,
+    pub bump: u8,
+}
+
+/// One idea in a lobby's race. Its address is derived from the lobby and its normalized ticker, so a lobby
+/// cannot hold the same ticker twice.
+#[account]
+#[derive(InitSpace)]
+pub struct Idea {
+    pub lobby: Pubkey,
+    pub index: u8,
+    pub proposer: Pubkey,
+    #[max_len(16)]
+    pub key: Vec<u8>,
+    #[max_len(40)]
+    pub name: String,
+    #[max_len(32)]
+    pub symbol: String,
+    #[max_len(200)]
+    pub uri: String,
+    pub pledged: u64,
+    pub backers: u32,
+    pub bond_returned: bool,
+    pub bump: u8,
+}
+
+/// One wallet's pledge in a lobby: on one idea at a time.
+#[account]
+#[derive(InitSpace)]
+pub struct Pledge {
+    pub lobby: Pubkey,
+    pub user: Pubkey,
+    /// Order in which this wallet first pledged in the lobby (0 first): a founder's rank.
+    pub seq: u32,
+    pub idea: u8,
+    pub amount: u64,
+    /// Refunded, or turned into a founder's commitment to the opening.
+    pub settled: bool,
+    pub bump: u8,
+}
+
+/// A ticker held for a lobby: while an idea with this ticker is in a lobby's race, and for a day after its launch
+/// time, nobody can launch it on the launchpad, so the lobby's winner cannot be front-run (or voided) by a copycat.
+#[account]
+#[derive(InitSpace)]
+pub struct Hold {
+    pub lobby: Pubkey,
+    /// Unix time after which the hold lapses: the lobby's launch time plus `HOLD_GRACE`.
+    pub until: i64,
+    pub bump: u8,
+}

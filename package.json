@@ -15,7 +15,18 @@
     "test:wallet": "node web/e2e-wallet.mjs",
     "test:protocol": "node web/protocol-check.mjs",
     "test:solana": "cd solana && cargo test",
-    "test:wire": "node web/wire-check.mjs"
+    "test:wire": "node web/wire-check.mjs",
+    "build:lobbies": "node web/lobbies/build.mjs",
+    "test:lobbies": "node web/lobbies/visual.mjs",
+    "test:lobby-chain": "cd solana && cargo test --test lobby --test lobby_walk && cd .. && node web/lobbies/chain-check.mjs",
+    "index:lobbies": "node web/lobbies/indexer.mjs",
+    "serve:lobbies": "node web/lobbies/server/server.mjs --guests",
+    "test:realtime": "node web/lobbies/realtime-check.mjs",
+    "test:crank": "node web/lobbies/crank-check.mjs",
+    "test:clans": "node web/lobbies/clan-check.mjs",
+    "test:voice": "node web/lobbies/voice-check.mjs",
+    "test:a11y": "node web/lobbies/a11y-check.mjs",
+    "test:load": "node web/lobbies/load-check.mjs"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "2.1.2",
@@ -29,6 +40,7 @@
     "hardhat": "2.28.6",
     "htm": "^3.1.1",
     "preact": "^10.29.8",
-    "solc": "0.8.28"
+    "solc": "0.8.28",
+    "ws": "^8.18.0"
   }
 }

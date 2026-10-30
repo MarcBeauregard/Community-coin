@@ -28,6 +28,8 @@ jobs:
           RUST_LOG: error
       - run: npm run test:protocol
       - run: npm run test:wire
+      # The lobbies' JavaScript side against the program's lobby walk (written by test:solana).
+      - run: node web/lobbies/chain-check.mjs
 
   # The app, its simulator, and the Base contracts kept as the reference.
   web:
@@ -42,3 +44,9 @@ jobs:
       - run: npm run build:web
       - run: node web/simulate.mjs
       - run: npm test
+      - run: npm run build:lobbies
+      # The lobbies' server, crank, clans, voice and load, without a browser (the Chromium parts run locally).
+      - run: npm run test:realtime && npm run test:crank && npm run test:clans && npm run test:voice
+        env:
+          NO_BROWSER: "1"
+      - run: npm run test:load -- 1000

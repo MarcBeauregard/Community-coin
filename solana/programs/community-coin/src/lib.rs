@@ -44,6 +44,18 @@ pub const DECIMALS: u8 = 6;
 /// A union must bring at least this much SOL into the target family (0.03 SOL).
 pub const MIN_UNION_RESERVE: u128 = 30_000_000;
 pub const MAX_URI: usize = 200;
+/// A lobby holds at most this many ideas (finalize reads them all in one transaction).
+pub const MAX_IDEAS: u8 = 16;
+/// `Lobby::winner` before finalizing, and after it when nothing was pledged.
+pub const NO_WINNER: u8 = u8::MAX;
+/// The longest a lobby can last, from opening to launch.
+pub const MAX_LOBBY_LENGTH: i64 = 4 * 3600;
+/// The smallest pledge: above the rent-exempt minimum of a wallet, so a refund to an emptied wallet always lands.
+pub const MIN_PLEDGE: u64 = 1_000_000;
+/// The smallest proposal bond a lobby may ask: holding a ticker for a day is not free.
+pub const MIN_BOND: u64 = 10_000_000;
+/// How long after a lobby's launch time its ideas' tickers stay held: time for anyone to crank the launch.
+pub const HOLD_GRACE: i64 = 24 * 3600;
 
 fn now() -> Result<i64> {
     Ok(Clock::get()?.unix_timestamp)
@@ -117,6 +129,60 @@ fn to_u64(x: u128) -> Result<u64> {
     u64::try_from(x).map_err(|_| error!(CoinError::MathOverflow))
 }
 
+/// Writes a new meme's curve, then its token metadata into the Token-2022 mint (extra rent paid by `payer`).
+#[allow(clippy::too_many_arguments)]
+fn start_meme<'info>(
+    config: &mut Account<'info, Config>,
+    m: &mut Account<'info, Meme>,
+    mint_info: AccountInfo<'info>,
+    authority: AccountInfo<'info>,
+    payer: AccountInfo<'info>,
+    token_program: AccountInfo<'info>,
+    system: AccountInfo<'info>,
+    parent: Pubkey,
+    creator: Pubkey,
+    name: String,
+    symbol: String,
+    uri: String,
+    bump: u8,
+    t: i64,
+) -> Result<()> {
+    let virtual_quote = if parent == Pubkey::default() { ROOT_VIRTUAL_QUOTE } else { CHILD_VIRTUAL_QUOTE };
+    m.mint = mint_info.key();
+    m.parent = parent;
+    m.creator = creator;
+    m.index = config.meme_count;
+    m.open_until = t + config.open_window;
+    m.v_quote = virtual_quote;
+    m.floor = virtual_quote;
+    m.v_token = VIRTUAL_TOKENS;
+    m.name = name.clone();
+    m.symbol = symbol.clone();
+    m.bump = bump;
+    reset_ref(m, t)?;
+    config.meme_count += 1;
+
+    // Token metadata lives in the mint itself (Token-2022): fund the extra space, then write it.
+    let meta_len = 4 + 80 + name.len() + symbol.len() + uri.len();
+    let needed = Rent::get()?.minimum_balance(mint_info.data_len() + meta_len).saturating_sub(mint_info.lamports());
+    if needed > 0 {
+        system_program::transfer(CpiContext::new(system, system_program::Transfer { from: payer, to: mint_info.clone() }), needed)?;
+    }
+    let seeds: &[&[u8]] = &[b"authority", &[config.authority_bump]];
+    token_metadata_initialize(
+        CpiContext::new_with_signer(
+            token_program.clone(),
+            TokenMetadataInitialize { program_id: token_program, metadata: mint_info.clone(), update_authority: authority.clone(), mint_authority: authority, mint: mint_info },
+            &[seeds],
+        ),
+        name.clone(),
+        symbol.clone(),
+        uri,
+    )?;
+    emit!(Launched { mint: m.mint, parent, creator, name, symbol });
+    Ok(())
+}
+
 fn raise_heights(chain_up: &mut [&mut Box<Account<Meme>>], mut h: u8) {
     for m in chain_up.iter_mut() {
         if m.height >= h {
@@ -171,6 +237,13 @@ pub mod community_coin {
         require!(symbol_key(&symbol)? == key, CoinError::InvalidSymbol);
         require!(!name.is_empty() && name.len() <= 40 && uri.len() <= MAX_URI, CoinError::InvalidName);
         let t = now()?;
+        // A ticker in a lobby's race is not for anyone else to launch until that lobby had its chance.
+        if !ctx.accounts.hold.data_is_empty() {
+            let info = &ctx.accounts.hold;
+            require_keys_eq!(*info.owner, crate::ID, CoinError::TickerHeld);
+            let hold = Hold::try_deserialize(&mut &info.try_borrow_data()?[..])?;
+            require!(t > hold.until, CoinError::TickerHeld);
+        }
         let parent_mint = match ctx.remaining_accounts.last() {
             Some(info) => Account::<Meme>::try_from(info)?.mint,
             None => Pubkey::default(),
@@ -184,49 +257,22 @@ pub mod community_coin {
 
         let config = &mut ctx.accounts.config;
         let m = &mut ctx.accounts.meme;
-        let virtual_quote = if ancestors.is_empty() { ROOT_VIRTUAL_QUOTE } else { CHILD_VIRTUAL_QUOTE };
-        m.mint = ctx.accounts.mint.key();
-        m.parent = parent_mint;
-        m.creator = ctx.accounts.creator.key();
-        m.index = config.meme_count;
-        m.open_until = t + config.open_window;
-        m.v_quote = virtual_quote;
-        m.floor = virtual_quote;
-        m.v_token = VIRTUAL_TOKENS;
-        m.name = name.clone();
-        m.symbol = symbol.clone();
-        m.bump = ctx.bumps.meme;
-        reset_ref(m, t)?;
-        config.meme_count += 1;
-
-        // Token metadata lives in the mint itself (Token-2022): fund the extra space, then write it.
-        let meta_len = 4 + 80 + name.len() + symbol.len() + uri.len();
-        let mint_info = ctx.accounts.mint.to_account_info();
-        let needed = Rent::get()?.minimum_balance(mint_info.data_len() + meta_len).saturating_sub(mint_info.lamports());
-        if needed > 0 {
-            system_program::transfer(
-                CpiContext::new(ctx.accounts.system_program.to_account_info(), system_program::Transfer { from: ctx.accounts.creator.to_account_info(), to: mint_info.clone() }),
-                needed,
-            )?;
-        }
-        let seeds: &[&[u8]] = &[b"authority", &[config.authority_bump]];
-        token_metadata_initialize(
-            CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
-                TokenMetadataInitialize {
-                    program_id: ctx.accounts.token_program.to_account_info(),
-                    metadata: mint_info.clone(),
-                    update_authority: ctx.accounts.authority.to_account_info(),
-                    mint_authority: ctx.accounts.authority.to_account_info(),
-                    mint: mint_info.clone(),
-                },
-                &[seeds],
-            ),
-            name.clone(),
-            symbol.clone(),
+        start_meme(
+            config,
+            m,
+            ctx.accounts.mint.to_account_info(),
+            ctx.accounts.authority.to_account_info(),
+            ctx.accounts.creator.to_account_info(),
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+            parent_mint,
+            ctx.accounts.creator.key(),
+            name,
+            symbol,
             uri,
+            ctx.bumps.meme,
+            t,
         )?;
-        emit!(Launched { mint: m.mint, parent: parent_mint, creator: m.creator, name, symbol });
 
         if sol_in > 0 {
             system_program::transfer(
@@ -488,6 +534,283 @@ pub mod community_coin {
         emit!(UnionExecuted { id: a.union.id, meme: a.meme.mint, target: a.target.mint, sol_in: to_u64(sol_in)?, target_in: to_u64(x)? });
         save(&ancestors)
     }
+
+    // ------------------------------------------------------------------------------------------ lobbies
+
+    /// Opens a lobby. Proposals close `propose_secs` after `opens_at`, pledges lock at `lock_secs`, and the
+    /// winner can launch at `length`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn create_lobby(ctx: Context<CreateLobby>, id: u64, opens_at: i64, propose_secs: i64, lock_secs: i64, length: i64, max_pledge: u64, bond: u64) -> Result<()> {
+        require!(0 < propose_secs && propose_secs <= lock_secs && lock_secs <= length && length <= MAX_LOBBY_LENGTH, CoinError::InvalidLobby);
+        require!(max_pledge >= MIN_PLEDGE && bond >= MIN_BOND, CoinError::InvalidLobby);
+        let key = ctx.accounts.lobby.key();
+        let l = &mut ctx.accounts.lobby;
+        l.id = id;
+        l.host = ctx.accounts.host.key();
+        l.opens_at = opens_at;
+        l.proposals_close = opens_at + propose_secs;
+        l.lock_at = opens_at + lock_secs;
+        l.launch_at = opens_at + length;
+        l.max_pledge = max_pledge;
+        l.bond = bond;
+        l.winner = NO_WINNER;
+        l.bump = ctx.bumps.lobby;
+        emit!(LobbyCreated {
+            lobby: key,
+            id,
+            host: l.host,
+            opens_at,
+            proposals_close: l.proposals_close,
+            lock_at: l.lock_at,
+            launch_at: l.launch_at,
+            max_pledge,
+            bond,
+        });
+        Ok(())
+    }
+
+    /// Puts an idea in the race. Its ticker must be free on the launchpad and in the lobby; the proposer deposits
+    /// the lobby's bond, returned after the lock.
+    pub fn propose_idea(ctx: Context<ProposeIdea>, key: Vec<u8>, name: String, symbol: String, uri: String) -> Result<()> {
+        require!(symbol_key(&symbol)? == key, CoinError::InvalidSymbol);
+        require!(!name.is_empty() && name.len() <= 40 && uri.len() <= MAX_URI, CoinError::InvalidName);
+        let t = now()?;
+        let l = &ctx.accounts.lobby;
+        require!(t >= l.opens_at, CoinError::LobbyNotOpen);
+        require!(t < l.proposals_close, CoinError::ProposalsClosed);
+        require!(l.idea_count < MAX_IDEAS, CoinError::TooManyIdeas);
+        require!(ctx.accounts.mint.data_is_empty(), CoinError::MemeExists);
+        // Hold the ticker for this lobby (a lapsed hold of an earlier lobby is taken over).
+        let hold = &ctx.accounts.hold;
+        require!(hold.lobby == Pubkey::default() || hold.until < t, CoinError::TickerHeld);
+        if l.bond > 0 {
+            system_program::transfer(
+                CpiContext::new(ctx.accounts.system_program.to_account_info(), system_program::Transfer { from: ctx.accounts.proposer.to_account_info(), to: ctx.accounts.lobby.to_account_info() }),
+                l.bond,
+            )?;
+        }
+        let lobby_key = ctx.accounts.lobby.key();
+        let l = &mut ctx.accounts.lobby;
+        let i = &mut ctx.accounts.idea;
+        i.lobby = lobby_key;
+        i.index = l.idea_count;
+        i.proposer = ctx.accounts.proposer.key();
+        i.key = key;
+        i.name = name.clone();
+        i.symbol = symbol.clone();
+        i.uri = uri;
+        i.bump = ctx.bumps.idea;
+        l.idea_count += 1;
+        let h = &mut ctx.accounts.hold;
+        h.lobby = lobby_key;
+        h.until = l.launch_at + HOLD_GRACE;
+        h.bump = ctx.bumps.hold;
+        emit!(IdeaProposed { lobby: lobby_key, index: i.index, proposer: i.proposer, name, symbol });
+        Ok(())
+    }
+
+    /// Pledges lamports on an idea. A wallet backs one idea at a time: to change, move the pledge.
+    pub fn pledge(ctx: Context<PledgeOn>, amount: u64) -> Result<()> {
+        let t = now()?;
+        require!(amount > 0, CoinError::ZeroAmount);
+        let l = &ctx.accounts.lobby;
+        require!(t >= l.opens_at, CoinError::LobbyNotOpen);
+        require!(t < l.lock_at, CoinError::PledgesLocked);
+        let p = &ctx.accounts.pledge;
+        require!(p.amount == 0 || p.idea == ctx.accounts.idea.index, CoinError::OnAnotherIdea);
+        let user_total = p.amount.checked_add(amount).ok_or(CoinError::MathOverflow)?;
+        require!(user_total <= l.max_pledge, CoinError::PledgeCap);
+        require!(user_total >= MIN_PLEDGE, CoinError::PledgeTooSmall);
+        system_program::transfer(
+            CpiContext::new(ctx.accounts.system_program.to_account_info(), system_program::Transfer { from: ctx.accounts.user.to_account_info(), to: ctx.accounts.lobby.to_account_info() }),
+            amount,
+        )?;
+        let lobby_key = ctx.accounts.lobby.key();
+        let user = ctx.accounts.user.key();
+        let (l, i, p) = (&mut ctx.accounts.lobby, &mut ctx.accounts.idea, &mut ctx.accounts.pledge);
+        if p.lobby == Pubkey::default() {
+            p.lobby = lobby_key;
+            p.user = user;
+            p.seq = l.pledgers;
+            p.bump = ctx.bumps.pledge;
+            l.pledgers += 1;
+        }
+        if p.amount == 0 {
+            i.backers += 1;
+        }
+        p.idea = i.index;
+        p.amount = user_total;
+        i.pledged = i.pledged.checked_add(amount).ok_or(CoinError::MathOverflow)?;
+        l.total = l.total.checked_add(amount).ok_or(CoinError::MathOverflow)?;
+        emit!(Pledged { lobby: lobby_key, user, idea: i.index, amount, user_total, idea_total: i.pledged, lobby_total: l.total });
+        Ok(())
+    }
+
+    /// Takes back part or all of a pledge, any time before the lock.
+    pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
+        let t = now()?;
+        require!(t < ctx.accounts.lobby.lock_at, CoinError::PledgesLocked);
+        require!(amount > 0 && amount <= ctx.accounts.pledge.amount, CoinError::ZeroAmount);
+        let left = ctx.accounts.pledge.amount - amount;
+        require!(left == 0 || left >= MIN_PLEDGE, CoinError::PledgeTooSmall);
+        pay_lamports(&ctx.accounts.lobby.to_account_info(), &ctx.accounts.user.to_account_info(), amount)?;
+        let lobby_key = ctx.accounts.lobby.key();
+        let (l, i, p) = (&mut ctx.accounts.lobby, &mut ctx.accounts.idea, &mut ctx.accounts.pledge);
+        p.amount -= amount;
+        i.pledged -= amount;
+        l.total -= amount;
+        if p.amount == 0 {
+            i.backers -= 1;
+        }
+        emit!(Withdrawn { lobby: lobby_key, user: p.user, idea: i.index, amount, user_total: p.amount, idea_total: i.pledged, lobby_total: l.total });
+        Ok(())
+    }
+
+    /// Moves a whole pledge to another idea, any time before the lock.
+    pub fn move_pledge(ctx: Context<MovePledge>) -> Result<()> {
+        let t = now()?;
+        require!(t < ctx.accounts.lobby.lock_at, CoinError::PledgesLocked);
+        let (from, to, p) = (&mut ctx.accounts.from, &mut ctx.accounts.to, &mut ctx.accounts.pledge);
+        require!(p.amount > 0, CoinError::ZeroAmount);
+        require!(from.index != to.index, CoinError::OnAnotherIdea);
+        from.pledged -= p.amount;
+        from.backers -= 1;
+        to.pledged = to.pledged.checked_add(p.amount).ok_or(CoinError::MathOverflow)?;
+        to.backers += 1;
+        p.idea = to.index;
+        emit!(PledgeMoved { lobby: p.lobby, user: p.user, from: from.index, to: to.index, amount: p.amount, from_total: from.pledged, to_total: to.pledged });
+        Ok(())
+    }
+
+    /// Freezes pledges and picks the winner: the idea with the most SOL (the earliest proposed on a tie). Anyone
+    /// can call it once the lock time has passed; every idea of the lobby comes as remaining accounts.
+    pub fn finalize<'info>(ctx: Context<'_, '_, 'info, 'info, Finalize<'info>>) -> Result<()> {
+        let t = now()?;
+        let lobby_key = ctx.accounts.lobby.key();
+        let l = &mut ctx.accounts.lobby;
+        require!(t >= l.lock_at, CoinError::StillPledging);
+        require!(!l.finalized, CoinError::AlreadyFinalized);
+        require!(ctx.remaining_accounts.len() == l.idea_count as usize, CoinError::BadIdeas);
+        let mut seen: u32 = 0;
+        let (mut best, mut pot) = (NO_WINNER, 0u64);
+        for info in ctx.remaining_accounts.iter() {
+            let i = Account::<Idea>::try_from(info)?;
+            require_keys_eq!(i.lobby, lobby_key, CoinError::BadIdeas);
+            require!(i.index < l.idea_count && seen & (1 << i.index) == 0, CoinError::BadIdeas);
+            seen |= 1 << i.index;
+            if i.pledged > pot || (i.pledged == pot && i.pledged > 0 && i.index < best) {
+                best = i.index;
+                pot = i.pledged;
+            }
+        }
+        l.finalized = true;
+        l.winner = best;
+        emit!(LobbyFinalized { lobby: lobby_key, winner: best, pot, total: l.total });
+        Ok(())
+    }
+
+    /// Launches the winner as a root meme priced in SOL. Its whole pot is the opening batch, so every backer pays
+    /// the same price; backers then turn their pledge into their commitment with `claim_founder`.
+    pub fn launch_winner(ctx: Context<LaunchWinner>) -> Result<()> {
+        let t = now()?;
+        let l = &ctx.accounts.lobby;
+        require!(l.finalized, CoinError::NotFinalized);
+        require!(l.winner != NO_WINNER, CoinError::NoWinner);
+        require!(!l.launched, CoinError::AlreadyLaunched);
+        require!(t >= l.launch_at, CoinError::NotLaunchTime);
+        let idea = &ctx.accounts.idea;
+        let (name, symbol, uri, proposer, pot, index, founders) = (idea.name.clone(), idea.symbol.clone(), idea.uri.clone(), idea.proposer, idea.pledged, idea.index, idea.backers);
+        start_meme(
+            &mut ctx.accounts.config,
+            &mut ctx.accounts.meme,
+            ctx.accounts.mint.to_account_info(),
+            ctx.accounts.authority.to_account_info(),
+            ctx.accounts.payer.to_account_info(),
+            ctx.accounts.token_program.to_account_info(),
+            ctx.accounts.system_program.to_account_info(),
+            Pubkey::default(),
+            proposer,
+            name,
+            symbol,
+            uri,
+            ctx.bumps.meme,
+            t,
+        )?;
+        pay_lamports(&ctx.accounts.lobby.to_account_info(), &ctx.accounts.vault.to_account_info(), pot)?;
+        let mint = ctx.accounts.mint.key();
+        ctx.accounts.meme.batch_quote = pot as u128;
+        let lobby_key = ctx.accounts.lobby.key();
+        let l = &mut ctx.accounts.lobby;
+        l.launched = true;
+        l.mint = mint;
+        emit!(LobbyLaunched { lobby: lobby_key, mint, idea: index, pot, founders });
+        Ok(())
+    }
+
+    /// If the winner's ticker was launched elsewhere before the lobby could launch it, the lobby has no winner
+    /// and every pledge is refunded. Anyone can call it.
+    pub fn void_winner(ctx: Context<VoidWinner>) -> Result<()> {
+        let l = &ctx.accounts.lobby;
+        require!(l.finalized, CoinError::NotFinalized);
+        require!(l.winner != NO_WINNER, CoinError::NoWinner);
+        require!(!l.launched, CoinError::AlreadyLaunched);
+        require!(!ctx.accounts.mint.data_is_empty(), CoinError::TickerFree);
+        let lobby_key = ctx.accounts.lobby.key();
+        let l = &mut ctx.accounts.lobby;
+        let idea = l.winner;
+        l.winner = NO_WINNER;
+        emit!(WinnerVoided { lobby: lobby_key, idea });
+        Ok(())
+    }
+
+    /// Refunds a pledge that did not back the winner. Anyone can call it for anyone: the lamports go to the
+    /// pledger.
+    pub fn refund(ctx: Context<Refund>) -> Result<()> {
+        let l = &ctx.accounts.lobby;
+        let p = &ctx.accounts.pledge;
+        require!(l.finalized, CoinError::NotFinalized);
+        require!(!p.settled, CoinError::PledgeSettled);
+        require!(p.amount > 0, CoinError::ZeroAmount);
+        require!(l.winner == NO_WINNER || p.idea != l.winner, CoinError::WinnerNoRefund);
+        let amount = p.amount;
+        pay_lamports(&ctx.accounts.lobby.to_account_info(), &ctx.accounts.user.to_account_info(), amount)?;
+        let p = &mut ctx.accounts.pledge;
+        p.settled = true;
+        emit!(PledgeRefunded { lobby: p.lobby, user: p.user, amount });
+        Ok(())
+    }
+
+    /// Turns a pledge on the winner into the founder's commitment to its opening batch: same price as every other
+    /// backer, then the hub's usual claim and vesting. Anyone can call it for anyone (and pays the account rent).
+    pub fn claim_founder(ctx: Context<ClaimFounder>) -> Result<()> {
+        let l = &ctx.accounts.lobby;
+        let p = &ctx.accounts.pledge;
+        require!(l.launched, CoinError::NotLaunched);
+        require!(!p.settled, CoinError::PledgeSettled);
+        require!(p.amount > 0, CoinError::ZeroAmount);
+        require!(p.idea == l.winner, CoinError::NotTheWinner);
+        let (amount, user, seq, mint) = (p.amount, p.user, p.seq, l.mint);
+        let c = &mut ctx.accounts.commitment;
+        c.committed = c.committed.checked_add(amount).ok_or(CoinError::MathOverflow)?;
+        ctx.accounts.pledge.settled = true;
+        emit!(Committed { mint, user, quote: amount });
+        emit!(FounderJoined { lobby: ctx.accounts.lobby.key(), user, mint, amount, seq });
+        Ok(())
+    }
+
+    /// Returns an idea's bond to its proposer once the lobby is finalized, win or lose. Anyone can call it.
+    pub fn return_bond(ctx: Context<ReturnBond>) -> Result<()> {
+        let l = &ctx.accounts.lobby;
+        require!(l.finalized, CoinError::NotFinalized);
+        require!(!ctx.accounts.idea.bond_returned, CoinError::PledgeSettled);
+        let amount = l.bond;
+        pay_lamports(&ctx.accounts.lobby.to_account_info(), &ctx.accounts.proposer.to_account_info(), amount)?;
+        let lobby_key = ctx.accounts.lobby.key();
+        let i = &mut ctx.accounts.idea;
+        i.bond_returned = true;
+        emit!(BondReturned { lobby: lobby_key, idea: i.index, proposer: i.proposer, amount });
+        Ok(())
+    }
 }
 
 fn settle_meme(m: &mut Meme, t: i64) -> Result<()> {
@@ -622,6 +945,9 @@ pub struct Launch<'info> {
     pub commitment: Box<Account<'info, Commitment>>,
     pub token_program: Interface<'info, TokenInterface>,
     pub system_program: Program<'info, System>,
+    /// CHECK: the ticker's lobby hold, if any (`Hold`); while it lasts the ticker cannot be launched here.
+    #[account(seeds = [b"hold", key.as_slice()], bump)]
+    pub hold: UncheckedAccount<'info>,
 }
 
 #[derive(Accounts)]
@@ -837,4 +1163,154 @@ pub struct ExecuteUnion<'info> {
     /// CHECK: receives the meme's SOL protocol fees; must be the hub's fee recipient.
     #[account(mut, address = config.fee_recipient)]
     pub fee_recipient: UncheckedAccount<'info>,
+}
+
+// ---------------------------------------------------------------------------------------------- lobby accounts
+
+#[derive(Accounts)]
+#[instruction(id: u64)]
+pub struct CreateLobby<'info> {
+    #[account(mut)]
+    pub host: Signer<'info>,
+    #[account(init, payer = host, space = 8 + Lobby::INIT_SPACE, seeds = [b"lobby", id.to_le_bytes().as_ref()], bump)]
+    pub lobby: Box<Account<'info, Lobby>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+#[instruction(key: Vec<u8>)]
+pub struct ProposeIdea<'info> {
+    #[account(mut)]
+    pub proposer: Signer<'info>,
+    #[account(mut, seeds = [b"lobby", lobby.id.to_le_bytes().as_ref()], bump = lobby.bump)]
+    pub lobby: Box<Account<'info, Lobby>>,
+    #[account(init, payer = proposer, space = 8 + Idea::INIT_SPACE, seeds = [b"idea", lobby.key().as_ref(), key.as_slice()], bump)]
+    pub idea: Box<Account<'info, Idea>>,
+    /// CHECK: the launchpad mint this ticker would get; it must not exist yet.
+    #[account(seeds = [b"mint", key.as_slice()], bump)]
+    pub mint: UncheckedAccount<'info>,
+    #[account(init_if_needed, payer = proposer, space = 8 + Hold::INIT_SPACE, seeds = [b"hold", key.as_slice()], bump)]
+    pub hold: Box<Account<'info, Hold>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct PledgeOn<'info> {
+    #[account(mut)]
+    pub user: Signer<'info>,
+    #[account(mut, seeds = [b"lobby", lobby.id.to_le_bytes().as_ref()], bump = lobby.bump)]
+    pub lobby: Box<Account<'info, Lobby>>,
+    #[account(mut, seeds = [b"idea", lobby.key().as_ref(), idea.key.as_slice()], bump = idea.bump)]
+    pub idea: Box<Account<'info, Idea>>,
+    #[account(init_if_needed, payer = user, space = 8 + Pledge::INIT_SPACE, seeds = [b"pledge", lobby.key().as_ref(), user.key().as_ref()], bump)]
+    pub pledge: Box<Account<'info, Pledge>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct Withdraw<'info> {
+    #[account(mut)]
+    pub user: Signer<'info>,
+    #[account(mut, seeds = [b"lobby", lobby.id.to_le_bytes().as_ref()], bump = lobby.bump)]
+    pub lobby: Box<Account<'info, Lobby>>,
+    #[account(mut, seeds = [b"idea", lobby.key().as_ref(), idea.key.as_slice()], bump = idea.bump, constraint = idea.index == pledge.idea @ CoinError::OnAnotherIdea)]
+    pub idea: Box<Account<'info, Idea>>,
+    #[account(mut, seeds = [b"pledge", lobby.key().as_ref(), user.key().as_ref()], bump = pledge.bump)]
+    pub pledge: Box<Account<'info, Pledge>>,
+}
+
+#[derive(Accounts)]
+pub struct MovePledge<'info> {
+    pub user: Signer<'info>,
+    #[account(seeds = [b"lobby", lobby.id.to_le_bytes().as_ref()], bump = lobby.bump)]
+    pub lobby: Box<Account<'info, Lobby>>,
+    #[account(mut, seeds = [b"idea", lobby.key().as_ref(), from.key.as_slice()], bump = from.bump, constraint = from.index == pledge.idea @ CoinError::OnAnotherIdea)]
+    pub from: Box<Account<'info, Idea>>,
+    #[account(mut, seeds = [b"idea", lobby.key().as_ref(), to.key.as_slice()], bump = to.bump)]
+    pub to: Box<Account<'info, Idea>>,
+    #[account(mut, seeds = [b"pledge", lobby.key().as_ref(), user.key().as_ref()], bump = pledge.bump)]
+    pub pledge: Box<Account<'info, Pledge>>,
+}
+
+#[derive(Accounts)]
+pub struct Finalize<'info> {
+    #[account(mut, seeds = [b"lobby", lobby.id.to_le_bytes().as_ref()], bump = lobby.bump)]
+    pub lobby: Box<Account<'info, Lobby>>,
+}
+
+#[derive(Accounts)]
+pub struct LaunchWinner<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(mut, seeds = [b"config"], bump = config.bump)]
+    pub config: Box<Account<'info, Config>>,
+    /// CHECK: mint authority PDA.
+    #[account(seeds = [b"authority"], bump = config.authority_bump)]
+    pub authority: UncheckedAccount<'info>,
+    #[account(mut, seeds = [b"vault"], bump = config.vault_bump)]
+    pub vault: Box<Account<'info, Vault>>,
+    #[account(mut, seeds = [b"lobby", lobby.id.to_le_bytes().as_ref()], bump = lobby.bump)]
+    pub lobby: Box<Account<'info, Lobby>>,
+    #[account(seeds = [b"idea", lobby.key().as_ref(), idea.key.as_slice()], bump = idea.bump, constraint = idea.index == lobby.winner @ CoinError::NotTheWinner)]
+    pub idea: Box<Account<'info, Idea>>,
+    #[account(
+        init,
+        payer = payer,
+        seeds = [b"mint", idea.key.as_slice()],
+        bump,
+        mint::decimals = DECIMALS,
+        mint::authority = authority,
+        mint::token_program = token_program,
+        extensions::metadata_pointer::authority = authority,
+        extensions::metadata_pointer::metadata_address = mint,
+    )]
+    pub mint: Box<InterfaceAccount<'info, Mint>>,
+    #[account(init, payer = payer, space = 8 + Meme::INIT_SPACE, seeds = [b"meme", mint.key().as_ref()], bump)]
+    pub meme: Box<Account<'info, Meme>>,
+    pub token_program: Interface<'info, TokenInterface>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct VoidWinner<'info> {
+    #[account(mut, seeds = [b"lobby", lobby.id.to_le_bytes().as_ref()], bump = lobby.bump)]
+    pub lobby: Box<Account<'info, Lobby>>,
+    #[account(seeds = [b"idea", lobby.key().as_ref(), idea.key.as_slice()], bump = idea.bump, constraint = idea.index == lobby.winner @ CoinError::NotTheWinner)]
+    pub idea: Box<Account<'info, Idea>>,
+    /// CHECK: the launchpad mint of the winner's ticker; voiding needs it to exist.
+    #[account(seeds = [b"mint", idea.key.as_slice()], bump)]
+    pub mint: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct Refund<'info> {
+    #[account(mut, seeds = [b"lobby", lobby.id.to_le_bytes().as_ref()], bump = lobby.bump)]
+    pub lobby: Box<Account<'info, Lobby>>,
+    #[account(mut, seeds = [b"pledge", lobby.key().as_ref(), user.key().as_ref()], bump = pledge.bump)]
+    pub pledge: Box<Account<'info, Pledge>>,
+    #[account(mut)]
+    pub user: SystemAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct ClaimFounder<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(seeds = [b"lobby", lobby.id.to_le_bytes().as_ref()], bump = lobby.bump)]
+    pub lobby: Box<Account<'info, Lobby>>,
+    #[account(mut, seeds = [b"pledge", lobby.key().as_ref(), pledge.user.as_ref()], bump = pledge.bump)]
+    pub pledge: Box<Account<'info, Pledge>>,
+    #[account(init_if_needed, payer = payer, space = 8 + Commitment::INIT_SPACE, seeds = [b"commit", lobby.mint.as_ref(), pledge.user.as_ref()], bump)]
+    pub commitment: Box<Account<'info, Commitment>>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct ReturnBond<'info> {
+    #[account(mut, seeds = [b"lobby", lobby.id.to_le_bytes().as_ref()], bump = lobby.bump)]
+    pub lobby: Box<Account<'info, Lobby>>,
+    #[account(mut, seeds = [b"idea", lobby.key().as_ref(), idea.key.as_slice()], bump = idea.bump)]
+    pub idea: Box<Account<'info, Idea>>,
+    #[account(mut, address = idea.proposer)]
+    pub proposer: SystemAccount<'info>,
 }
