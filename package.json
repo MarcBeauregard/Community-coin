@@ -21,7 +21,8 @@
     "test:lobby-chain": "cd solana && cargo test --test lobby --test lobby_walk && cd .. && node web/lobbies/chain-check.mjs",
     "index:lobbies": "node web/lobbies/indexer.mjs",
     "serve:lobbies": "node web/lobbies/server/server.mjs --guests",
-    "test:realtime": "node web/lobbies/realtime-check.mjs"
+    "test:realtime": "node web/lobbies/realtime-check.mjs",
+    "test:crank": "node web/lobbies/crank-check.mjs"
   },
   "devDependencies": {
     "@ethereumjs/block": "^10.1.3",

@@ -8,7 +8,7 @@
 import { CLANS, CROWD, CHATTER, ME, seedClanMessages, seedLobbyChat, message } from "./data.js";
 import { HOUR, sol } from "../format.js";
 import { connectLobby } from "../realtime/client.js";
-import { createDemoLobby, ideasFrom, ideaMeta, myPledge, act, crank, launchSummary, toLamports, toSol, errorText, receiptFor } from "./lobby.js";
+import { createDemoLobby, ideasFrom, ideaMeta, myPledge, act, crank, launchSummary, lockedOf, liveLaunch, founderAllocation, toLamports, toSol, errorText, receiptFor } from "./lobby.js";
 
 export const PHASES = [
   { id: "gather", label: "Gather", start: 0, end: 300, color: "var(--text)" },
@@ -42,6 +42,7 @@ function initialState() {
     amount: 1,
     pledge: null, // { id, amount }
     balance: 14.2,
+    locked: null, // { winner, pot, total, voided } once the lobby is finalized
     launched: null,
     voice: { listening: false, hand: false, onStage: false, mic: true },
     chat: seedLobbyChat(),
@@ -91,7 +92,7 @@ export function createStore({ scene, freeze } = {}) {
   function settle(s) {
     const events = crank(s.chain, s.elapsed);
     if (!events.length) return {};
-    const patch = { ideas: ideasFrom(s.chain, s.meta), pledge: myPledge(s.chain) };
+    const patch = { ideas: ideasFrom(s.chain, s.meta), pledge: myPledge(s.chain), locked: lockedOf(s.chain) };
     const launched = launchSummary(s.chain, events);
     if (!launched) return patch;
     const win = patch.ideas.find((d) => d.id === launched.id);
@@ -120,11 +121,39 @@ export function createStore({ scene, freeze } = {}) {
       case "hello":
         set({ live: { connected: true, inside: m.inside, listening: m.listening, opensAt: m.opensAt, you: m.you, guest: m.guest, race: m.race },
           elapsed: Math.floor((m.now - m.opensAt) / 1000), ideas: raceIdeas(m.race, s.meta), chat: m.chat.map((l) => lineToChat(l, m.you)) });
+        // A late joiner gets what the crank already announced.
+        if (m.locked) onLive({ t: "locked", ...m.locked });
+        if (m.launch) onLive({ t: "launch", ...m.launch });
         break;
       case "race": {
         const rows = s.live.race.map((r) => m.ideas.find((x) => x.index === r.index) ?? r);
         for (const x of m.ideas) if (!rows.some((r) => r.index === x.index)) rows.push(x);
         set({ live: { ...s.live, race: rows }, ideas: raceIdeas(rows, s.meta) });
+        break;
+      }
+      case "locked": {
+        const win = m.winner === null ? null : s.live.race.find((r) => r.index === m.winner);
+        set({ locked: { winner: win ? win.symbol : null, pot: win ? toSol(BigInt(win.pledged)) : 0, total: toSol(BigInt(m.total)), voided: !!m.voided } });
+        break;
+      }
+      case "voided":
+        set({ locked: { ...s.locked, voided: true } });
+        toast("The winning ticker was taken elsewhere. No launch tonight: every pledge is refunded.", "white");
+        break;
+      case "launch":
+        set({ launched: liveLaunch(m, s.locked?.total ?? 0), route: s.route.screen === "lobby" ? { screen: "launch" } : s.route, sheet: null });
+        break;
+      case "settled": {
+        const amount = toSol(BigInt(m.amount));
+        const l = s.launched;
+        if (m.kind === "founder" && l) {
+          set({ launched: { ...l, founder: true, rank: m.rank, myAmount: amount, myId: l.id, allocation: founderAllocation(l.pot, BigInt(m.amount)) },
+            clans: [{ id: "new", name: m.name ?? s.ideas.find((d) => d.id === l.id)?.name ?? l.id, ticker: l.id.toUpperCase(), hue: s.ideas.find((d) => d.id === l.id)?.hue ?? 150,
+              members: l.backers, born: "Born tonight", change: null, voice: 0, unread: 0, fresh: true, story: "" }, ...s.clans.filter((c) => c.id !== "new")] });
+        } else if (m.kind === "refund") {
+          set({ launched: l && { ...l, refund: amount, myAmount: amount } });
+          toast(`${sol(amount)} refunded to your wallet`, "white");
+        }
         break;
       }
       case "presence": set({ live: { ...s.live, inside: m.inside, listening: m.listening } }); break;
@@ -253,7 +282,7 @@ export function createStore({ scene, freeze } = {}) {
     replay() {
       const chain = createDemoLobby();
       const meta = ideaMeta();
-      set({ chain, meta, launched: null, elapsed: START_ELAPSED, ideas: ideasFrom(chain, meta), pledge: null, selected: "wif", route: { screen: "lobby" }, voice: { listening: false, hand: false, onStage: false, mic: true } });
+      set({ chain, meta, locked: null, launched: null, elapsed: START_ELAPSED, ideas: ideasFrom(chain, meta), pledge: null, selected: "wif", route: { screen: "lobby" }, voice: { listening: false, hand: false, onStage: false, mic: true } });
       toast("A fresh run of the lobby has started", "sky");
     },
 

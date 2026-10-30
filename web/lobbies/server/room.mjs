@@ -17,10 +17,11 @@ export function cleanText(text, max) {
   return String(text ?? "").replace(CONTROL, " ").replace(/\s+/g, " ").trim().slice(0, max);
 }
 
-export function createRoom({ id, opensAt, source, now = () => Date.now(), chatSlowMs = 3000, chatMax = 200, historySize = 200, rate = { burst: 20, perSec: 2 } }) {
+export function createRoom({ id, opensAt, source, crank = null, now = () => Date.now(), chatSlowMs = 3000, chatMax = 200, historySize = 200, rate = { burst: 20, perSec: 2 } }) {
   const conns = new Map(); // connId -> { session, send, listening, lastChat, tokens, at }
   const history = [];
   let sent = { phase: null, race: new Map(), inside: -1, listening: -1, clockAt: 0 };
+  let outcome = { locked: null, launch: null }; // what the crank announced, for late joiners
   let seq = 0;
 
   const elapsed = () => Math.floor((now() - opensAt) / 1000);
@@ -43,9 +44,10 @@ export function createRoom({ id, opensAt, source, now = () => Date.now(), chatSl
     size: () => conns.size,
     join(connId, session, send) {
       conns.set(connId, { session, send, listening: false, lastChat: -Infinity, tokens: rate.burst, at: now() });
-      return { t: "hello", lobby: id, now: now(), opensAt, phase: phaseAt(elapsed()), race: raceRows(), ...presence(), chat: history.slice(-50), you: session.sub, guest: !!session.guest };
+      return { t: "hello", lobby: id, now: now(), opensAt, phase: phaseAt(elapsed()), race: raceRows(), ...presence(), chat: history.slice(-50), you: session.sub, guest: !!session.guest, ...outcome };
     },
     leave(connId) { conns.delete(connId); },
+    setCrank(c) { crank = c; },
     snapshot() { return { lobby: id, now: now(), opensAt, phase: phaseAt(elapsed()), race: raceRows(), ...presence(), chat: history.slice(-50) }; },
 
     /** Handles one message from a connection. Returns an error message to send back, `"close"` to drop it, or null. */
@@ -84,10 +86,37 @@ export function createRoom({ id, opensAt, source, now = () => Date.now(), chatSl
       }
     },
 
+    /**
+     * What the crank did, told to the room: the lock (who won), the launch (the ceremony), and to each wallet what
+     * happened to its pledge (refunded, or founder with its rank in the clan, from the registry).
+     */
+    announce(events, clans = null) {
+      const names = Object.fromEntries(events.filter((e) => e.event === "Launched").map((e) => [e.mint, e]));
+      for (const e of events) {
+        if (e.event === "LobbyFinalized") {
+          outcome.locked = { winner: e.winner === 255 ? null : e.winner, pot: String(e.pot), total: String(e.total) };
+          broadcast({ t: "locked", ...outcome.locked });
+        } else if (e.event === "WinnerVoided") {
+          // The winner's ticker was taken elsewhere before the launch: no coin, everyone is refunded.
+          outcome.locked = { ...outcome.locked, voided: true };
+          broadcast({ t: "voided", idea: e.idea });
+        } else if (e.event === "LobbyLaunched") {
+          outcome.launch = { mint: e.mint, idea: e.idea, pot: String(e.pot), founders: e.founders, symbol: names[e.mint]?.symbol, name: names[e.mint]?.name };
+          broadcast({ t: "launch", ...outcome.launch });
+        } else if (e.event === "PledgeRefunded" || e.event === "FounderJoined") {
+          const msg = JSON.stringify(e.event === "PledgeRefunded"
+            ? { t: "settled", kind: "refund", amount: String(e.amount) }
+            : { t: "settled", kind: "founder", amount: String(e.amount), rank: clans?.rankOf(e.mint, e.user) ?? null, mint: e.mint });
+          for (const c of conns.values()) if (c.session.sub === e.user) c.send(msg);
+        }
+      }
+    },
+
     /** Runs every batch interval: phase changes, race deltas, presence, and the clock every 5 s. */
     tick() {
       const t = now();
       source.tick?.(elapsed());
+      crank?.tick(elapsed());
       const phase = phaseAt(elapsed());
       if (phase !== sent.phase) {
         if (sent.phase !== null) broadcast({ t: "phase", phase, now: t });

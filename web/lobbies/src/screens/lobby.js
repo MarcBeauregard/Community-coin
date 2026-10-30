@@ -105,7 +105,12 @@ function Dock({ s, a, ideas, phone }) {
   } else if (d.mode === "move") {
     action = html`<${Button} variant="prim" onClick=${a.movePledge}>Move my ${sol(d.mine)} here</${Button}>`;
   } else {
-    action = html`<${Chip} tone="amber" class="dock-chip">Pledges locked · launch in ${t.launchIn}</${Chip}>`;
+    // After the lock, the dock says what the lock decided: who launches, or that everyone is refunded.
+    const k = s.locked;
+    const text = !k ? `Pledges locked · launch in ${t.launchIn}`
+      : k.winner && !k.voided ? `${ticker(k.winner)} won · launch in ${t.launchIn}`
+      : `No launch · refunds at 01:00`;
+    action = html`<${Chip} tone="amber" class="dock-chip" role="status">${text}</${Chip}>`;
   }
   return html`<section class="dock glass" aria-label="Your pledge">
     <div class="row" style="flex-wrap:nowrap;gap:12px;flex:1 1 260px;min-width:0">

@@ -4,6 +4,7 @@
 
 import { LobbyRules, LAMPORTS } from "../chain/rules.js";
 import { receipt as receiptOf } from "../chain/indexer.js";
+import { planCrank, stateOfRules } from "../chain/crank.js";
 import { buyOut, mulDiv, ROOT_VIRTUAL_QUOTE, VIRTUAL_TOKENS, TOKEN } from "../../../src/protocol.js";
 import { IDEAS, ME } from "./data.js";
 
@@ -66,19 +67,29 @@ export function act(chain, op, args, now) {
  * founder's commitment and every bond. Returns the events, and what they mean for us.
  */
 export function crank(chain, now) {
-  const events = [];
+  const ops = planCrank(stateOfRules(chain), now);
+  // At the lock the program finalizes, and the launch comes only once the hour is up: one step at a time.
+  return ops.flatMap(({ op, args }) => chain.apply(op, args, now).events);
+}
+
+/** A founder's tokens: their share of the opening batch, which buys the whole pot at one price (rounded down as the program's claim does). */
+export function founderAllocation(pot, mine) {
+  const [batchTokens] = buyOut(ROOT_VIRTUAL_QUOTE, VIRTUAL_TOKENS, pot);
+  return Number(mulDiv(batchTokens, mine, pot)) / Number(TOKEN);
+}
+
+/** What the lock decided, as the screens read it: the winning ticker (null: no winner, or voided) and its pot. */
+export function lockedOf(chain) {
   const l = chain.lobby;
-  const symbols = chain.ideas.map((d) => d.symbol);
-  if (!l.finalized && BigInt(now) >= l.lock_at) events.push(...chain.apply("finalize", { symbols }, now).events);
-  if (l.finalized && !l.launched && BigInt(now) >= l.launch_at && l.winner !== 255) {
-    events.push(...chain.apply("launch_winner", { symbol: chain.ideas[l.winner].symbol }, now).events);
-    for (const user of chain.pledges.keys()) {
-      events.push(...chain.apply("refund", { user }, now).events);
-      events.push(...chain.apply("claim_founder", { user }, now).events);
-    }
-    for (const s of symbols) events.push(...chain.apply("return_bond", { symbol: s }, now).events);
-  }
-  return events;
+  if (!l.finalized) return null;
+  const win = l.winner === 255 ? null : chain.ideas[l.winner];
+  return { winner: win ? win.symbol : null, pot: win ? toSol(win.pledged) : 0, total: toSol(l.total), voided: false };
+}
+
+/** The launch the realtime server announced, before the crank tells this wallet what it got (`settled`). */
+export function liveLaunch(m, total) {
+  return { id: m.symbol.toLowerCase(), sol: toSol(BigInt(m.pot)), pot: BigInt(m.pot), total, backers: m.founders, founder: false, rank: null,
+    refund: 0, bondBack: 0, myAmount: 0, myId: null, allocation: 0 };
 }
 
 /** The launch as the screens read it, from the chain after the crank. */
@@ -93,12 +104,11 @@ export function launchSummary(chain, events) {
   const bond = events.find((e) => e.event === "BondReturned" && e.proposer === ME);
   // The opening batch buys the whole pot at once; a founder's tokens are their share of it, rounded down as the
   // program's claim does.
-  const [batchTokens] = buyOut(ROOT_VIRTUAL_QUOTE, VIRTUAL_TOKENS, win.pledged);
   return {
     id: win.symbol.toLowerCase(), sol: toSol(win.pledged), total: toSol(l.total), backers: win.backers, founder,
-    rank: founder ? me.seq + 1 : null, refund: refund ? toSol(refund.amount) : 0, bondBack: bond ? toSol(bond.amount) : 0,
+    rank: founder ? [...chain.pledges.values()].filter((p) => p.idea === l.winner && p.amount > 0n && p.seq <= me.seq).length : null, refund: refund ? toSol(refund.amount) : 0, bondBack: bond ? toSol(bond.amount) : 0,
     myAmount: toSol(mine), myId: me && mine > 0n ? chain.ideas[me.idea].symbol.toLowerCase() : null,
-    allocation: founder ? Number(mulDiv(batchTokens, mine, win.pledged)) / Number(TOKEN) : 0,
+    allocation: founder ? founderAllocation(win.pledged, mine) : 0,
   };
 }
 

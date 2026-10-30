@@ -8,6 +8,7 @@
 //   POST /auth/verify {address, nonce, signature(base64)} → { token }
 //   POST /auth/guest                  → { token }  (read-only; only with --guests)
 //   GET  /lobbies/:id                 → the room's snapshot
+//   GET  /clans/:mint                 → a launched lobby's clan: its founders by rank
 //   WS   /ws?lobby=:id&token=…        → hello, then chat / race / presence / phase / clock; send chat, listen, ping
 
 import http from "node:http";
@@ -16,6 +17,8 @@ import { WebSocketServer } from "ws";
 import { createAuth, signInMessage } from "./auth.mjs";
 import { createRoom } from "./room.mjs";
 import { simulatedSource, chainSource } from "./sources.mjs";
+import { createCrank, stateOfRules, rulesExecutor } from "./crank.mjs";
+import { createClans } from "./clans.mjs";
 
 const json = (res, status, body) => {
   res.writeHead(status, { "content-type": "application/json", "access-control-allow-origin": "*", "access-control-allow-headers": "content-type" });
@@ -29,6 +32,15 @@ const readBody = (req) => new Promise((resolve) => {
 
 export function createServer({ port = 0, guests = false, lobbies, auth = createAuth(), now = () => Date.now(), batchMs = 250, maxPerRoom = 20000 }) {
   const rooms = new Map(lobbies.map((l) => [String(l.id), createRoom({ ...l, now })]));
+  const clans = createClans();
+  // A lobby played on the program's rules gets the crank on those rules; a lobby on a cluster brings its own
+  // (`crank` built with a clusterExecutor). Either way its events go to the room and the clan registry.
+  for (const l of lobbies) {
+    const room = rooms.get(String(l.id));
+    const onEvents = (events) => { clans.apply(events, now()); room.announce(events, clans); };
+    if (l.crank) room.setCrank(l.crank(onEvents));
+    else if (l.source.chain) room.setCrank(createCrank({ state: () => stateOfRules(l.source.chain), execute: rulesExecutor(l.source.chain), onEvents }));
+  }
   const server = http.createServer(async (req, res) => {
     if (req.method === "OPTIONS") return json(res, 204, {});
     const url = new URL(req.url, "http://x");
@@ -39,6 +51,11 @@ export function createServer({ port = 0, guests = false, lobbies, auth = createA
     if (req.method === "POST" && url.pathname === "/auth/guest") {
       if (!guests) return json(res, 403, { error: "Guests are not allowed" });
       return json(res, 200, { token: auth.issue(`guest-${randomUUID().slice(0, 8)}`, { guest: true }) });
+    }
+    const c = /^\/clans\/([^/]+)$/.exec(url.pathname);
+    if (req.method === "GET" && c) {
+      const clan = clans.toJSON(decodeURIComponent(c[1]));
+      return json(res, clan ? 200 : 404, clan ?? { error: "No clan for this mint" });
     }
     const m = /^\/lobbies\/(\d+)$/.exec(url.pathname);
     if (req.method === "GET" && m && rooms.has(m[1])) return json(res, 200, rooms.get(m[1]).snapshot());
@@ -65,7 +82,7 @@ export function createServer({ port = 0, guests = false, lobbies, auth = createA
 
   const timer = setInterval(() => { for (const r of rooms.values()) r.tick(); }, batchMs);
   return new Promise((resolve) => server.listen(port, () => resolve({
-    port: server.address().port, rooms, auth,
+    port: server.address().port, rooms, auth, clans,
     close: () => new Promise((r) => { clearInterval(timer); for (const c of wss.clients) c.terminate(); wss.close(); server.close(r); }),
   })));
 }

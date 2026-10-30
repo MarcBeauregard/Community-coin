@@ -65,3 +65,22 @@ Sheets: propose (invalid, valid, ticker taken), pledge (idle, signing), host, wa
 ## Left
 - Wallet sign-in in the screens (the server and client support it; the screens offer guest only until wallet mode).
 - Several server instances behind one lobby (a pub/sub between them), for step 7's load.
+
+# Step 4: the crank, the launch ceremony, the clan's birth
+
+## Done
+- The crank (`src/chain/crank.js`, shared by the app and the server): from the lobby's state, what is due now:
+  `finalize` at the lock; at 01:00 `launch_winner` (or `void_winner` if its ticker was taken meanwhile), then every
+  pledge settled its way (`refund` or `claim_founder`) and every bond returned. Idempotent and resumable: a crank
+  cut short picks up where it stopped. `server/crank.mjs` runs it on the program's rules or on a cluster
+  (one transaction per operation, events read back from the logs).
+- The room announces it: `locked` (winner, pot, total) to everyone, `voided` if the winner can't launch, `launch`
+  (mint, symbol, pot, founders) to everyone, and `settled` to each wallet only (its refund, or founder with its rank
+  in the clan). A late joiner's hello carries the lock and the launch.
+- The clan registry (`server/clans.mjs`) is built from the events only: a clan per launched mint, its members the
+  winner's backers ranked in pledge order; `GET /clans/:mint`; `isFounder` gates step 5's channels.
+- App: the dock says what the lock decided ("$WIF won · launch in 04:12", or "No launch · refunds at 01:00"); live,
+  the launch moves the lobby to the launch screen, a founder sees their rank and allocation, a refunded wallet a toast.
+- Checks: `crank-check.mjs` (the plan in every state; a whole hour through the server on a fake clock: winner = most
+  SOL, refunds to the lamport, clan = winner's backers, lobby balance 0, no repeats, late joiners; the app live from
+  the lock to the launch in Chromium).

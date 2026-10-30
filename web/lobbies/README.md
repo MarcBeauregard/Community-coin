@@ -44,3 +44,9 @@ signs a one-time nonce; guests can read but not write), the server's clock (clie
 race as deltas batched every 250 ms, and phase changes. The race comes from the chain through the indexer
 (`--rpc`), or from the demo lobby on the program's rules. `npm run test:realtime` checks the room on a fake clock,
 sign-in, the server over real sockets, and the app joining it in Chromium.
+
+The end of the hour (`src/chain/crank.js`, `server/crank.mjs`, `server/clans.mjs`): the server cranks each lobby
+(anyone may: the program checks the time). At the lock it finalizes and announces the winner; at 01:00 it launches
+the winner, refunds every other pledge, turns every winning pledge into its founder's commitment, returns the bonds,
+and the clan is born with exactly the winner's backers as members (`GET /clans/:mint`). Each wallet hears only what
+its own pledge became. `npm run test:crank` plays a whole hour through the server on a fake clock and checks it.
