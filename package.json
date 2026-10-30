@@ -13,7 +13,9 @@
     "test:web": "node web/e2e.cjs",
     "deploy": "hardhat run scripts/deploy.js --network target",
     "test:wallet": "node web/e2e-wallet.cjs",
-    "test:curve": "node web/curve-check.mjs"
+    "test:curve": "node web/curve-check.mjs",
+    "test:protocol": "node web/protocol-check.mjs",
+    "test:solana": "cd solana && cargo test"
   },
   "devDependencies": {
     "@ethereumjs/block": "^10.1.3",

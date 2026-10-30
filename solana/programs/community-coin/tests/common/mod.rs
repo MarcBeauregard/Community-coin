@@ -235,6 +235,10 @@ impl Hub {
     // ------------------------------------------------------------------ instructions
 
     pub async fn launch(&mut self, i: usize, symbol: &str, parent: Option<Pubkey>, sol_in: u64) -> Result<Pubkey, BanksClientError> {
+        self.launch_named(i, &format!("{symbol} coin"), symbol, parent, sol_in).await
+    }
+
+    pub async fn launch_named(&mut self, i: usize, name: &str, symbol: &str, parent: Option<Pubkey>, sol_in: u64) -> Result<Pubkey, BanksClientError> {
         let creator = self.user(i).pubkey();
         let key = community_coin::math::symbol_key(symbol).map(|k| k).unwrap_or_else(|_| symbol.as_bytes().to_vec());
         let mint = pda(&[b"mint", &key]);
@@ -261,7 +265,7 @@ impl Hub {
         let ix = Instruction {
             program_id: community_coin::ID,
             accounts,
-            data: community_coin::instruction::Launch { key, name: format!("{symbol} coin"), symbol: symbol.to_string(), uri: String::new(), sol_in }.data(),
+            data: community_coin::instruction::Launch { key, name: name.to_string(), symbol: symbol.to_string(), uri: String::new(), sol_in }.data(),
         };
         self.send_as(i, vec![ix]).await.map(|_| mint)
     }
