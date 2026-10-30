@@ -16,4 +16,5 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run build:web
+      - run: npm run build:lobbies
       - run: npm run test:curve

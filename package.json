@@ -15,7 +15,9 @@
     "test:wallet": "node web/e2e-wallet.mjs",
     "test:protocol": "node web/protocol-check.mjs",
     "test:solana": "cd solana && cargo test",
-    "test:wire": "node web/wire-check.mjs"
+    "test:wire": "node web/wire-check.mjs",
+    "build:lobbies": "node web/lobbies/build.mjs",
+    "test:lobbies": "node web/lobbies/visual.mjs"
   },
   "devDependencies": {
     "@ethereumjs/block": "^10.1.3",
