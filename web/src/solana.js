@@ -124,8 +124,16 @@ class Writer {
   bool(v) {
     return this.u8(v ? 1 : 0);
   }
+  u16(v) {
+    return this.bytes(Uint8Array.of(v & 0xff, v >> 8));
+  }
   u64(v) {
     return this.bytes(u64le(v));
+  }
+  i64(v) {
+    const b = new Uint8Array(8);
+    new DataView(b.buffer).setBigInt64(0, BigInt(v), true);
+    return this.bytes(b);
   }
   vec(b) {
     const len = new Uint8Array(4);
@@ -290,6 +298,20 @@ export function eventsFromLogs(logs, programId = PROGRAM_ID) {
 // ------------------------------------------------------------------ instructions
 
 const meta = (pubkey, isSigner, isWritable) => ({ pubkey: new PublicKey(pubkey), isSigner, isWritable });
+
+/**
+ * Sets the hub's parameters, once, right after the program is deployed (solana/scripts/initialize.mjs). `params`:
+ * openWindow, vestWindow, unionWindow (seconds), spikeShareBps, protocolFeeBps, feeRecipient (address).
+ */
+export function initializeInstruction(addresses, payer, p) {
+  const A = addresses;
+  return new TransactionInstruction({
+    programId: A.programId,
+    keys: [meta(payer, true, true), meta(A.config(), false, true), meta(A.authority(), false, false), meta(A.vault(), false, true), meta(SYSTEM, false, false)],
+    data: Buffer.from(new Writer(IX.initialize).i64(p.openWindow).i64(p.vestWindow).u16(p.spikeShareBps).i64(p.unionWindow).u16(p.protocolFeeBps)
+      .bytes(new PublicKey(p.feeRecipient).toBytes()).done()),
+  });
+}
 
 /**
  * The instructions of one hub operation, as the Rust tests send them: an optional creation of the signer's account

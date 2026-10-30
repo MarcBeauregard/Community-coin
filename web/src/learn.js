@@ -166,7 +166,7 @@ function Results() {
   const rows = [...report.groups, { key: "retail", label: "All retail buyers", ...report.retail }];
   const max = Math.max(...rows.flatMap((r) => [Math.abs(r.pvp), Math.abs(r.cc)]));
   const bar = (v, tone) => html`<span class="rbar-track"><span class=${`rbar ${v < 0 ? "neg" : "pos"} ${tone}`} style=${`width:${((Math.abs(v) / max) * 50).toFixed(2)}%`}></span></span>`;
-  const money = (v) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toFixed(2)} SOL`;
+  const money = (v) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${Math.abs(v).toLocaleString(f.LOCALE, { maximumFractionDigits: Math.abs(v) >= 100 ? 0 : 1 })} SOL`;
   const orig = report.groups.find((g) => g.key === "originalBuyers");
   const devs = report.groups.find((g) => g.key === "copycatDevs");
   const sniper = report.groups.find((g) => g.key === "sniper");
@@ -191,7 +191,7 @@ function Results() {
       <li><b class="tnum">${money(devs.pvp)} → ${money(devs.cc)}</b><span>for the people launching copies: vamping stops paying</span></li>
       <li><b class="tnum">${money(sniper.cc)}</b><span>still made by the sniper bot: a meme market stays zero-sum</span></li>
     </ul>
-    <p class="explain">Mean of ${simulation.seeds} runs of the same viral scenario on the program's rules: one original with ${simulation.buyers.original} buyers, then ${simulation.buyers.copycats} copies with ${simulation.buyers.perCopycat} buyers each, about ${Math.round(simulation.retailInSol)} SOL of retail money. Everyone ends in SOL, so the rows add up to zero: the question is only who pays whom. Source: <code>${simulation.source}</code>.</p>
+    <p class="explain">Mean of ${simulation.seeds} runs of the same viral scenario on the program's rules: one original with ${simulation.buyers.original} buyers, then ${simulation.buyers.copycats} copies with ${simulation.buyers.perCopycat} buyers each, about ${Math.round(simulation.retailInSol).toLocaleString(f.LOCALE)} SOL of retail money. Everyone ends in SOL, so the rows add up to zero: the question is only who pays whom. Source: <code>${simulation.source}</code>.</p>
   </div>`;
 }
 

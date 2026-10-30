@@ -226,8 +226,14 @@ impl Hub {
         let payer = Keypair::from_bytes(&signer.to_bytes()).unwrap();
         let tx = Transaction::new_signed_with_payer(&ixs, Some(&payer.pubkey()), &[&payer], hash);
         let r = self.ctx.banks_client.process_transaction_with_metadata(tx).await.unwrap();
-        // Every transaction gets a fresh blockhash so identical retries are not deduplicated.
-        let _ = self.ctx.get_new_latest_blockhash().await;
+        // Every transaction gets a fresh blockhash so identical retries are not deduplicated. Under load the wait
+        // for one can time out: ask again until it is really new.
+        for _ in 0..20 {
+            match self.ctx.get_new_latest_blockhash().await {
+                Ok(next) if next != hash => break,
+                _ => {}
+            }
+        }
         let events = std::mem::take(&mut *EVENT_DATA.lock().unwrap());
         self.sent.push(Sent { instructions: ixs, logs: r.metadata.map(|m| m.log_messages).unwrap_or_default(), events });
         r.result.map_err(BanksClientError::TransactionError)

@@ -6,11 +6,11 @@
 // of the 1%). Both are fixed forever at deployment; on a local chain the recipient defaults to the deployer.
 //
 // The contracts are not audited: deploy to a testnet. Before sending anything the script checks the chain and
-// the deployer's balance; afterwards it reads the parameters back from the chain, records the deployment in
-// deployments/<chainId>.json and registers the hub in web/src/deployments.js so the app can connect to it.
+// the deployer's balance; afterwards it reads the parameters back from the chain and records the deployment in
+// deployments/<chainId>.json. (The app now runs on Solana: solana/scripts/initialize.mjs registers that deployment.)
 
 const { ethers, network } = require("hardhat");
-const { mkdirSync, readFileSync, writeFileSync } = require("node:fs");
+const { mkdirSync, writeFileSync } = require("node:fs");
 const { join } = require("node:path");
 
 const PARAMS = {
@@ -29,19 +29,6 @@ const CHAINS = {
 };
 
 const root = join(__dirname, "..");
-
-/** Adds or replaces the entry for `chainId` in web/src/deployments.js. */
-function registerInApp(chainId, entry) {
-  const file = join(root, "web/src/deployments.js");
-  const source = readFileSync(file, "utf8");
-  const match = source.match(/export const DEPLOYMENTS = (\{[\s\S]*?\});/);
-  const current = match ? Function(`return (${match[1]});`)() : {};
-  current[chainId] = entry;
-  const body = Object.entries(current)
-    .map(([id, d]) => `  ${id}: { ${Object.entries(d).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(", ")} },`)
-    .join("\n");
-  writeFileSync(file, source.replace(/export const DEPLOYMENTS = \{[\s\S]*?\};/, `export const DEPLOYMENTS = {\n${body}\n};`));
-}
 
 async function main() {
   const [deployer] = await ethers.getSigners();
@@ -104,8 +91,7 @@ async function main() {
       deployedAt: new Date((await ethers.provider.getBlock(receipt.blockNumber)).timestamp * 1000).toISOString(),
     };
     writeFileSync(join(root, `deployments/${chainId}.json`), JSON.stringify(record, null, 2) + "\n");
-    registerInApp(chainId, { name: chain.name, hub: address, ...(chain.explorer ? { explorer: chain.explorer } : {}) });
-    console.log(`Recorded  deployments/${chainId}.json and web/src/deployments.js`);
+    console.log(`Recorded  deployments/${chainId}.json`);
     if (chain.explorer) console.log(`Explorer  ${chain.explorer}/address/${address}`);
   }
 }

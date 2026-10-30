@@ -1,0 +1,22 @@
+# Anchor workspace. `anchor keys sync` writes the program's real address here and in declare_id! (lib.rs) after
+# `anchor build` has created its keypair; see "Déployer sur Solana" in README.md.
+
+[toolchain]
+anchor_version = "0.31.1"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+community_coin = "CommCoin11111111111111111111111111111111111"
+
+[programs.devnet]
+community_coin = "CommCoin11111111111111111111111111111111111"
+
+[provider]
+cluster = "devnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "cargo test"
