@@ -13,6 +13,7 @@ export function simulatedSource({ everySec = 3, random = Math.random } = {}) {
   let n = 0;
   return {
     chain,
+    host: () => chain.lobby.host,
     ideas: () => rows(chain.ideas),
     tick(elapsed) {
       if (last === null) last = elapsed;
@@ -35,6 +36,7 @@ export function chainSource({ rpc, programId, lobby, pollMs = 2000, now = () => 
   let polling = null;
   return {
     ideas: () => rows((indexer.view(lobby)?.ideas ?? []).filter(Boolean)),
+    host: () => indexer.view(lobby)?.lobby?.host ?? null,
     tick() {
       if (polling || now() - polledAt < pollMs) return;
       polledAt = now();

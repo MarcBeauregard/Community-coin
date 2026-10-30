@@ -7,7 +7,7 @@
 
 import { CLANS, CROWD, CHATTER, ME, seedClanMessages, seedLobbyChat, message } from "./data.js";
 import { HOUR, sol } from "../format.js";
-import { connectLobby } from "../realtime/client.js";
+import { connectLobby, connectClan, voiceToken } from "../realtime/client.js";
 import { createDemoLobby, ideasFrom, ideaMeta, myPledge, act, crank, launchSummary, lockedOf, liveLaunch, founderAllocation, toLamports, toSol, errorText, receiptFor } from "./lobby.js";
 
 export const PHASES = [
@@ -119,7 +119,7 @@ export function createStore({ scene, freeze } = {}) {
     const s = state;
     switch (m.t) {
       case "hello":
-        set({ live: { connected: true, inside: m.inside, listening: m.listening, opensAt: m.opensAt, you: m.you, guest: m.guest, race: m.race },
+        set({ live: { connected: true, lobby: m.lobby, inside: m.inside, listening: m.listening, opensAt: m.opensAt, you: m.you, guest: m.guest, race: m.race, stage: m.stage },
           elapsed: Math.floor((m.now - m.opensAt) / 1000), ideas: raceIdeas(m.race, s.meta), chat: m.chat.map((l) => lineToChat(l, m.you)) });
         // A late joiner gets what the crank already announced.
         if (m.locked) onLive({ t: "locked", ...m.locked });
@@ -156,12 +156,76 @@ export function createStore({ scene, freeze } = {}) {
         }
         break;
       }
+      case "stage": {
+        const v = s.voice;
+        const onStage = m.speakers.includes(s.live.you);
+        const hand = m.hands.includes(s.live.you);
+        set({ live: { ...s.live, stage: { host: m.host, speakers: m.speakers, cohosts: m.cohosts, hands: m.hands } }, voice: { ...v, onStage, hand, listening: v.listening || onStage } });
+        if (onStage !== v.onStage) {
+          toast(onStage ? "You’re on stage. Your mic is live." : "You’re back in the audience.", "sky");
+          joinVoice({ lobby: s.live.lobby }); // a new right to speak (or not) needs a new token
+        }
+        break;
+      }
       case "presence": set({ live: { ...s.live, inside: m.inside, listening: m.listening } }); break;
       case "chat": set({ chat: chatLine(lineToChat(m.line, s.live.you)) }); break;
       case "error": toast(LIVE_ERRORS[m.code] || m.code, "white"); break;
       case "closed": if (s.live) set({ live: { ...s.live, connected: false } }); break;
       default:
     }
+  }
+
+  // ------------------------------------------------------------------ live clan (founders only)
+  // The clan's channels come from the server once this wallet is a founder of a live launch; the screens read the
+  // same message shape as the demo's.
+  let server = null; // { base, token }
+  let clanLink = null;
+  const hhmm = (at) => new Date(at).toTimeString().slice(0, 5);
+  function lineToMessage(l, you) {
+    const mine = new Set(l.mine);
+    return { id: l.id, who: l.from === you ? ME : short(l.from), from: l.from, role: l.role, t: hhmm(l.at), text: l.text, deleted: l.deleted, hidden: l.hidden,
+      media: l.media.map((m) => ({ url: clanLink.mediaUrl(m.id), video: m.type.startsWith("video/") })),
+      hearts: l.reactions.heart - (mine.has("heart") ? 1 : 0), fires: l.reactions.fire - (mine.has("fire") ? 1 : 0),
+      heartOn: mine.has("heart"), fireOn: mine.has("fire"), yours: l.from === you, live: true };
+  }
+  function onClan(m) {
+    const s = state;
+    const you = s.liveClan?.you;
+    switch (m.t) {
+      case "hello":
+        set({ liveClan: { connected: true, you: m.you, role: m.role, rank: m.rank, mods: m.mods, mutedUntil: m.mutedUntil, campfire: m.campfire },
+          clanMessages: Object.fromEntries(m.channels.map((c) => [c.id, c.lines.map((l) => lineToMessage(l, m.you))])) });
+        break;
+      case "post": {
+        const ch = m.line.ch;
+        set({ clanMessages: { ...s.clanMessages, [ch]: [...(s.clanMessages[ch] || []), lineToMessage(m.line, you)] } });
+        break;
+      }
+      case "update": {
+        const ch = m.line.ch;
+        set({ clanMessages: { ...s.clanMessages, [ch]: (s.clanMessages[ch] || []).map((x) => (x.id === m.line.id ? lineToMessage(m.line, you) : x)) } });
+        break;
+      }
+      case "reported": toast("Reported to the clan’s moderators", "white"); break;
+      case "muted": if (m.user === you) { set({ liveClan: { ...s.liveClan, mutedUntil: m.until } }); if (m.until) toast(`A moderator muted you until ${hhmm(m.until)}`, "white"); } break;
+      case "mods": set({ liveClan: { ...s.liveClan, mods: m.mods } }); break;
+      case "campfire": set({ liveClan: { ...s.liveClan, campfire: m.people } }); break;
+      case "error": toast(CLAN_ERRORS[m.code] || m.code, "white"); break;
+      case "closed": if (s.liveClan) set({ liveClan: { ...s.liveClan, connected: false } }); break;
+      default:
+    }
+  }
+  const CLAN_ERRORS = { TooFast: "One moment between messages.", SlowMode: "Slow mode is on in this channel.", Muted: "You are muted for now.",
+    NotAllowed: "Only moderators can do that.", EmptyMessage: "Write something first.", UnknownMedia: "That file was not uploaded." };
+
+  // Voice: an SFU token for where we listen or speak. The audio transport (LiveKit's client) connects with it; a
+  // server without an SFU says so once.
+  let voiceOffTold = false;
+  function joinVoice(where) {
+    if (!server) return;
+    voiceToken(server.base, server.token, where).then((v) => set({ voice: { ...state.voice, sfu: { room: v.room, canPublish: v.canPublish } } }), (e) => {
+      if (e.status === 503 && !voiceOffTold) { voiceOffTold = true; toast("Voice isn’t connected on this server yet. The stage still works.", "white"); }
+    });
   }
 
   function tick() {
@@ -188,17 +252,24 @@ export function createStore({ scene, freeze } = {}) {
     set(patch);
   }
 
+  const liveClanOn = () => !!(clanLink && state.liveClan?.connected && state.clan === "new");
   const canPledge = () => state.elapsed < LOCK_AT && !state.launched;
   const selectedIdea = () => state.ideas.find((i) => i.id === state.selected) || state.ideas[0];
 
   const actions = {
     goLive({ base, lobby, token }) {
+      server = { base, token };
       if (link) link.close();
       link = connectLobby({ base, lobby, token, onMessage: onLive });
     },
     go(route) { set({ route, sheet: null }); },
     openClan(id) {
       set((s) => ({ route: { screen: "clan" }, clan: id, clanView: "list", sheet: null, clans: s.clans.map((c) => (c.id === id ? { ...c, unread: 0 } : c)) }));
+      const mint = state.launched?.mint;
+      if (id === "new" && mint && server && state.launched.founder && !clanLink) {
+        clanLink = connectClan({ base: server.base, mint, token: server.token, onMessage: onClan });
+        set({ channel: "general" });
+      }
     },
     openSheet(sheet) { set({ sheet, signing: false }); },
     closeSheet() { if (!state.signing) set({ sheet: null }); },
@@ -218,11 +289,21 @@ export function createStore({ scene, freeze } = {}) {
     // Voice on the lobby stage.
     toggleListen() {
       const listening = !state.voice.listening;
-      if (link) link.listen(listening);
+      if (link) {
+        link.listen(listening);
+        if (listening) joinVoice({ lobby: state.live?.lobby });
+        if (!listening && state.voice.onStage) link.down();
+        if (!listening && state.voice.hand) link.hand(false);
+      }
       set({ voice: { listening, hand: false, onStage: listening && state.voice.onStage, mic: true } });
       if (listening) toast("Listening to the stage", "sky");
     },
     toggleHand() {
+      if (link && state.live) {
+        if (state.live.guest) return toast("Connect a wallet to speak.", "white");
+        if (!state.voice.listening) actions.toggleListen();
+        return link.hand(!state.voice.hand); // the server's stage update sets it
+      }
       if (state.voice.hand) return set({ voice: { ...state.voice, hand: false } });
       set({ voice: { ...state.voice, listening: true, hand: true } });
       later(() => {
@@ -232,7 +313,11 @@ export function createStore({ scene, freeze } = {}) {
       }, 3200);
     },
     toggleMic() { set({ voice: { ...state.voice, mic: !state.voice.mic } }); },
-    stepDown() { set({ voice: { ...state.voice, onStage: false } }); },
+    stepDown() {
+      if (link && state.live) return link.down();
+      set({ voice: { ...state.voice, onStage: false } });
+    },
+    bringUp(user) { link?.bring(user); },
     setLobbyTab(lobbyTab) { set({ lobbyTab }); },
 
     // The race.
@@ -304,10 +389,17 @@ export function createStore({ scene, freeze } = {}) {
     backToChannels() { set({ clanView: "list" }); },
     toggleMembers() { set({ showMembers: !state.showMembers }); },
     joinCampfire(openCall = false) {
+      if (liveClanOn() && !state.campfire.joined) {
+        clanLink.campfire(true);
+        joinVoice({ clan: state.launched.mint });
+      }
       if (!state.campfire.joined) toast("Connected to Campfire", "sky");
       set((s) => ({ campfire: { ...s.campfire, joined: true }, clanView: openCall ? "chat" : s.clanView }));
     },
-    leaveCampfire() { set({ campfire: { joined: false, muted: false, deafened: false, sharing: false } }); },
+    leaveCampfire() {
+      if (liveClanOn()) clanLink.campfire(false);
+      set({ campfire: { joined: false, muted: false, deafened: false, sharing: false } });
+    },
     toggleMute() { set((s) => ({ campfire: { ...s.campfire, muted: !s.campfire.muted } })); },
     toggleDeafen() { set((s) => ({ campfire: { ...s.campfire, deafened: !s.campfire.deafened, muted: !s.campfire.deafened || s.campfire.muted } })); },
     toggleShare() { set((s) => ({ campfire: { ...s.campfire, sharing: !s.campfire.sharing } })); },
@@ -315,6 +407,7 @@ export function createStore({ scene, freeze } = {}) {
     sendClan() {
       const text = state.clanDraft.trim();
       if (!text) return;
+      if (liveClanOn()) return clanLink.post(state.channel, text), set({ clanDraft: "" });
       set((s) => ({ clanDraft: "", clanMessages: { ...s.clanMessages, [s.channel]: [...(s.clanMessages[s.channel] || []), message(ME, text)] } }));
     },
     shareMeme() {
@@ -322,8 +415,30 @@ export function createStore({ scene, freeze } = {}) {
       const media = [{ hue: clan.hue }, { hue: (clan.hue + 40) % 360 }, { hue: (clan.hue + 300) % 360, video: true }];
       set((s) => ({ clanMessages: { ...s.clanMessages, [s.channel]: [...(s.clanMessages[s.channel] || []), message(ME, "", { media })] } }));
     },
+    /** Live: uploads the chosen file to the clan, then posts it in the channel. */
+    async shareFile(file) {
+      if (!liveClanOn() || !file) return;
+      try {
+        const up = await clanLink.upload(file);
+        clanLink.post(state.channel, "", [up.id]);
+      } catch (e) {
+        toast(e.message, "white");
+      }
+    },
+    deleteMessage(id) {
+      if (liveClanOn()) return clanLink.remove(id);
+      set((s) => ({ clanMessages: { ...s.clanMessages, [s.channel]: s.clanMessages[s.channel].map((m) => (m.id === id ? { ...m, deleted: true, text: "", media: [] } : m)) } }));
+    },
+    reportMessage(id) {
+      if (liveClanOn()) return clanLink.report(id);
+      toast("Reported to the clan’s moderators", "white");
+    },
     react(id, kind) {
       const key = kind === "heart" ? "heartOn" : "fireOn";
+      if (liveClanOn()) {
+        const m = state.clanMessages[state.channel].find((x) => x.id === id);
+        return clanLink.react(id, kind, !m[key]);
+      }
       set((s) => ({ clanMessages: { ...s.clanMessages, [s.channel]: s.clanMessages[s.channel].map((m) => (m.id === id ? { ...m, [key]: !m[key] } : m)) } }));
     },
     copyAddress() { toast("Address copied", "white"); },
@@ -362,7 +477,7 @@ export function createStore({ scene, freeze } = {}) {
     subscribe(fn) { subscribers.add(fn); return () => subscribers.delete(fn); },
     actions,
     start() { if (!freeze && !interval) interval = setInterval(tick, 1000); },
-    stop() { clearInterval(interval); interval = null; timers.forEach(clearTimeout); timers.clear(); if (link) link.close(); },
+    stop() { clearInterval(interval); interval = null; timers.forEach(clearTimeout); timers.clear(); if (link) link.close(); if (clanLink) clanLink.close(); },
     tick,
   };
 }

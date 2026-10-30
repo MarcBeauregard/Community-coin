@@ -11,11 +11,17 @@ const AMOUNTS = [0.5, 1, 2, 5];
 const TABS = [{ id: "ideas", label: "Ideas" }, { id: "stage", label: "Stage" }, { id: "chat", label: "Chat" }];
 
 function speakers(s) {
+  // Live, the stage is the server's: who speaks is its list (the talking light needs the SFU's audio levels).
+  const st = s.live?.stage;
+  if (st) return st.speakers.map((who) => ({ who: who === s.live.you ? ME : who, speaking: false, muted: who === s.live.you && !s.voice.mic }));
   const spk = s.beat % 4 === 3 ? 2 : s.beat % 4 === 2 ? 0 : 1;
   const list = SPEAKERS.map((who, i) => ({ who, speaking: i === spk, muted: MUTED_SPEAKERS.includes(who) }));
   if (s.voice.onStage) list.push({ who: ME, speaking: s.voice.mic && s.beat % 5 === 0, muted: !s.voice.mic });
   return list;
 }
+
+// The host and their co-hosts run the stage: they see the raised hands and bring people up.
+const manages = (s) => !!s.live?.stage && (s.live.stage.host === s.live.you || s.live.stage.cohosts.includes(s.live.you));
 
 function Stage({ s, a, phone }) {
   const v = s.voice;
@@ -45,6 +51,14 @@ function Stage({ s, a, phone }) {
               <${IconButton} label="Leave audio" tone="danger" onClick=${a.toggleListen} style=${phone ? "width:54px;height:54px" : ""}><${I.Close} size=${15} /></${IconButton}>
             </div>`}
     </div>
+    ${manages(s) && html`<div class="panel" style="padding:14px;display:flex;flex-direction:column;gap:10px" aria-label="Raised hands">
+      <span class="t2 num" style="font-size:13px;font-weight:600">Raised hands · ${s.live.stage.hands.length}</span>
+      ${s.live.stage.hands.length === 0 && html`<span class="t2" style="font-size:13px">Nobody is waiting. Hands show up here in the order raised.</span>`}
+      ${s.live.stage.hands.map((who) => html`<span key=${who} class="row" style="flex-wrap:nowrap;gap:10px">
+        <${Avatar} person=${person(who)} size=${32} /><span class="ellipsis" style="flex:1;font-size:14px">${who}</span>
+        <${Button} size="sm" onClick=${() => a.bringUp(who)}>Bring up</${Button}>
+      </span>`)}
+    </div>`}
     <div style="display:flex;flex-direction:column;gap:10px">
       <span class="t2 num" style="font-size:13px;font-weight:600">${phone ? `In the room · ${listeners} listening` : "In the room"}</span>
       <div class="row" style="gap:6px">
@@ -52,7 +66,7 @@ function Stage({ s, a, phone }) {
         <span class="num" style="height:28px;padding:0 10px;border-radius:14px;background:var(--fill);font-size:12px;font-weight:600;display:inline-flex;align-items:center">+${int(Math.max(0, pres.inside - 15))}</span>
       </div>
     </div>
-    ${phone && html`<${Button} variant="ghost" size="sm" style="align-self:center" disabled=${s.elapsed >= 3594} onClick=${a.skipToLock}>Demo · skip to lock</${Button}>`}
+    ${phone && !s.live && html`<${Button} variant="ghost" size="sm" style="align-self:center" disabled=${s.elapsed >= 3594} onClick=${a.skipToLock}>Demo · skip to lock</${Button}>`}
   </section>`;
 }
 
@@ -186,7 +200,7 @@ export function Lobby({ s, a, phone }) {
     </div>
     ${!phone && html`<div class="tl"><${GestationTimeline} phases=${timeline(s.elapsed)} /></div>`}
     <div class="row" style="flex-wrap:nowrap;gap:14px">
-      ${!phone && html`<${Button} variant="ghost" size="sm" disabled=${s.elapsed >= 3594} title="Prototype only: jump to the last seconds before launch" onClick=${a.skipToLock}>Demo · skip to lock</${Button}>`}
+      ${!phone && !s.live && html`<${Button} variant="ghost" size="sm" disabled=${s.elapsed >= 3594} title="Prototype only: jump to the last seconds before launch" onClick=${a.skipToLock}>Demo · skip to lock</${Button}>`}
       <div class="clock">
         <span class="t2" style="font-size:12px;font-weight:600">${t.phase === "lock" ? "Locked · launching in" : "Launch in"}</span>
         <span class="value display num" style=${{ color: t.phase === "lock" ? "#ffb340" : "var(--text)" }} role="timer" aria-label=${`Launch in ${t.launchIn}`}>${t.launchIn}</span>

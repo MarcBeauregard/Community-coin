@@ -1,5 +1,5 @@
 // The app's side of the realtime server: signs in (wallet or guest), keeps one socket per lobby open (reconnecting
-// with backoff), follows the server's clock, and hands every message to the store.
+// with backoff), follows the server's clock, and hands every message to the store. Clans get their own socket.
 
 /** A guest session: read-only, for people without a wallet yet. */
 export async function guestSession(base) {
@@ -20,15 +20,63 @@ export async function walletSession(base, wallet, messageFor) {
   return (await r.json()).token;
 }
 
+/** A dev session (servers started with --dev-sessions only): tests and local development as a named wallet. */
+export async function devSession(base, sub) {
+  const r = await fetch(`${base}/auth/dev`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sub }) });
+  if (!r.ok) throw new Error("Dev sessions are off on this server");
+  return (await r.json()).token;
+}
+
 export function connectLobby({ base, lobby, token, onMessage, WebSocketImpl = globalThis.WebSocket }) {
-  const wsBase = base.replace(/^http/, "ws");
+  const link = connect({ url: `${base.replace(/^http/, "ws")}/ws?lobby=${lobby}&token=${encodeURIComponent(token)}`, onMessage, WebSocketImpl });
+  return {
+    chat: (text) => link.send({ t: "chat", text }),
+    listen: (on) => link.send({ t: "listen", on }),
+    hand: (up) => link.send({ t: "hand", up }),
+    bring: (user) => link.send({ t: "bring", user }),
+    down: (user) => link.send({ t: "down", user }),
+    cohost: (user, on) => link.send({ t: "cohost", user, on }),
+    ping: () => link.send({ t: "ping", echo: Date.now() }),
+    /** The server's time now, in ms. */
+    now: link.now,
+    close: link.close,
+  };
+}
+
+/** A clan's channels: post, react, delete, report, and the moderators' tools. Members only (4403 otherwise). */
+export function connectClan({ base, mint, token, onMessage, WebSocketImpl = globalThis.WebSocket }) {
+  const link = connect({ url: `${base.replace(/^http/, "ws")}/ws?clan=${encodeURIComponent(mint)}&token=${encodeURIComponent(token)}`, onMessage, WebSocketImpl });
+  return {
+    post: (ch, text, media = [], reply = null) => link.send({ t: "post", ch, text, media, reply }),
+    react: (id, emoji, on) => link.send({ t: "react", id, emoji, on }),
+    remove: (id) => link.send({ t: "delete", id }),
+    report: (id) => link.send({ t: "report", id }),
+    restore: (id) => link.send({ t: "restore", id }),
+    mute: (user, minutes) => link.send({ t: "mute", user, minutes }),
+    slow: (ch, sec) => link.send({ t: "slow", ch, sec }),
+    mod: (user, on) => link.send({ t: "mod", user, on }),
+    campfire: (on) => link.send({ t: "campfire", on }),
+    history: (ch, before) => link.send({ t: "history", ch, before }),
+    /** Uploads a file to the clan; resolves to `{ id, type, size }` to attach to a post. */
+    async upload(file) {
+      const r = await fetch(`${base}/clans/${encodeURIComponent(mint)}/media`, { method: "POST", headers: { authorization: `Bearer ${token}` }, body: file });
+      const body = await r.json();
+      if (!r.ok) throw new Error(body.error);
+      return body;
+    },
+    mediaUrl: (id) => `${base}/media/${id}?token=${encodeURIComponent(token)}`,
+    close: link.close,
+  };
+}
+
+function connect({ url, onMessage, WebSocketImpl }) {
   let ws = null;
   let offset = 0;
   let retry = 0;
   let closed = false;
   const queue = [];
   function open() {
-    ws = new WebSocketImpl(`${wsBase}/ws?lobby=${lobby}&token=${encodeURIComponent(token)}`);
+    ws = new WebSocketImpl(url);
     ws.onopen = () => {
       retry = 0;
       while (queue.length) ws.send(queue.shift());
@@ -51,12 +99,16 @@ export function connectLobby({ base, lobby, token, onMessage, WebSocketImpl = gl
     if (ws.readyState === 1) ws.send(s);
     else queue.push(s);
   };
-  return {
-    chat: (text) => send({ t: "chat", text }),
-    listen: (on) => send({ t: "listen", on }),
-    ping: () => send({ t: "ping", echo: Date.now() }),
-    /** The server's time now, in ms. */
-    now: () => Date.now() + offset,
-    close() { closed = true; ws.close(); },
-  };
+  return { send, now: () => Date.now() + offset, close() { closed = true; ws.close(); } };
+}
+
+/**
+ * An SFU access token for a lobby's stage or a clan's Campfire: `{ url, room, token, canPublish }`. Ask again when
+ * the stage says your role changed. 503 means the server has no voice configured.
+ */
+export async function voiceToken(base, token, where) {
+  const r = await fetch(`${base}/voice/token`, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}` }, body: JSON.stringify(where) });
+  const body = await r.json();
+  if (!r.ok) throw Object.assign(new Error(body.error), { status: r.status });
+  return body;
 }

@@ -1,6 +1,9 @@
 // One lobby's live room: who is inside and listening, the chat, the race and the phase, all on the server's clock.
-// Pure logic: the server (server.mjs) wires sockets to it, the tests drive it directly. Updates are batched: the
+// Pure logic: the server (server.mjs) wires sockets to it, the tests drive it directly. The voice stage's rules are
+// in voice.mjs; the room relays them. Updates are batched: the
 // race and presence go out at most every `batchMs`, only what changed.
+
+import { createStage } from "./voice.mjs";
 
 export const PHASES = [
   { id: "gather", end: 300 },
@@ -17,12 +20,18 @@ export function cleanText(text, max) {
   return String(text ?? "").replace(CONTROL, " ").replace(/\s+/g, " ").trim().slice(0, max);
 }
 
-export function createRoom({ id, opensAt, source, crank = null, now = () => Date.now(), chatSlowMs = 3000, chatMax = 200, historySize = 200, rate = { burst: 20, perSec: 2 } }) {
+export function createRoom({ id, opensAt, source, host = null, onStage = null, crank = null, now = () => Date.now(), chatSlowMs = 3000, chatMax = 200, historySize = 200, rate = { burst: 20, perSec: 2 } }) {
   const conns = new Map(); // connId -> { session, send, listening, lastChat, tokens, at }
   const history = [];
   let sent = { phase: null, race: new Map(), inside: -1, listening: -1, clockAt: 0 };
   let outcome = { locked: null, launch: null }; // what the crank announced, for late joiners
   let seq = 0;
+  // The stage: the lobby's host speaks first; `onStage(user, canPublish)` tells the SFU when someone's right changes.
+  const stage = createStage({ host: host ?? (() => source.host?.() ?? null) });
+  const stageChanged = (user, before) => {
+    broadcast({ t: "stage", ...stage.view() });
+    if (user && before !== stage.isSpeaker(user)) onStage?.(user, stage.isSpeaker(user));
+  };
 
   const elapsed = () => Math.floor((now() - opensAt) / 1000);
   // What every joiner gets in its hello counts as sent: the first tick only sends what changed after it.
@@ -44,9 +53,20 @@ export function createRoom({ id, opensAt, source, crank = null, now = () => Date
     size: () => conns.size,
     join(connId, session, send) {
       conns.set(connId, { session, send, listening: false, lastChat: -Infinity, tokens: rate.burst, at: now() });
-      return { t: "hello", lobby: id, now: now(), opensAt, phase: phaseAt(elapsed()), race: raceRows(), ...presence(), chat: history.slice(-50), you: session.sub, guest: !!session.guest, ...outcome };
+      return { t: "hello", lobby: id, now: now(), opensAt, phase: phaseAt(elapsed()), race: raceRows(), ...presence(), chat: history.slice(-50), you: session.sub, guest: !!session.guest, stage: stage.view(), ...outcome };
     },
-    leave(connId) { conns.delete(connId); },
+    leave(connId) {
+      const c = conns.get(connId);
+      conns.delete(connId);
+      // Their last tab gone: off the stage and out of the hand queue.
+      if (c && ![...conns.values()].some((x) => x.session.sub === c.session.sub)) {
+        const was = stage.isSpeaker(c.session.sub);
+        const v = JSON.stringify(stage.view());
+        stage.leave(c.session.sub);
+        if (JSON.stringify(stage.view()) !== v) stageChanged(c.session.sub, was);
+      }
+    },
+    stage,
     setCrank(c) { crank = c; },
     snapshot() { return { lobby: id, now: now(), opensAt, phase: phaseAt(elapsed()), race: raceRows(), ...presence(), chat: history.slice(-50) }; },
 
@@ -79,6 +99,20 @@ export function createRoom({ id, opensAt, source, crank = null, now = () => Date
           history.push(line);
           if (history.length > historySize) history.shift();
           broadcast({ t: "chat", line });
+          return null;
+        }
+        case "hand": case "bring": case "down": case "cohost": {
+          if (c.session.guest) return { t: "error", code: "SignInToSpeak" };
+          const me = c.session.sub;
+          const named = typeof msg.user === "string" ? msg.user : "";
+          const target = msg.t === "hand" ? me : msg.t === "down" ? named || me : named;
+          const was = stage.isSpeaker(target);
+          const code = msg.t === "hand" ? stage.raise(me, !!msg.up)
+            : msg.t === "bring" ? stage.bring(me, target)
+            : msg.t === "down" ? stage.down(me, target)
+            : stage.cohost(me, target, !!msg.on);
+          if (code) return { t: "error", code };
+          stageChanged(target, was);
           return null;
         }
         default:

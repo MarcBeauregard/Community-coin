@@ -84,3 +84,46 @@ Sheets: propose (invalid, valid, ticker taken), pledge (idle, signing), host, wa
 - Checks: `crank-check.mjs` (the plan in every state; a whole hour through the server on a fake clock: winner = most
   SOL, refunds to the lamport, clan = winner's backers, lobby balance 0, no repeats, late joiners; the app live from
   the lock to the launch in Chromium).
+
+# Step 5: the clan's channels: text, media, reactions, moderation
+
+## Done
+- Clan rooms (`server/clan-room.mjs`), one per launched coin, over `WS /ws?clan=<mint>`: only the founders (the
+  registry, from the chain) and the winning idea's creator get in; guests and other wallets are refused (4403).
+  Five channels; posts cleaned and capped at 2000 characters, a moment between two posts, history paged back.
+- Media (`server/media.mjs`): PNG, JPEG, GIF, WebP, MP4, MOV, WebM, recognised from the bytes (never SVG or HTML),
+  8 MB at most, stored under their hash, served only to the clan's members with `nosniff` and a sandboxing CSP.
+- Reactions (one per member per kind), deleting one's own message (the text is gone, a tombstone stays),
+  reporting (once per member; the third report hides a message until a moderator restores it).
+- Moderation: the creator is the first moderator and names others among the founders; moderators delete, mute
+  (up to 7 days; never the creator) and set a channel's slow mode. Everyone is told.
+- Forever: with `--data <dir>`, the registry, every clan's log and the media are on disk; the log is replayed and
+  compacted at start, so deleted text is not kept.
+- App: live, a founder enters their clan from the launch; posts, reactions, delete, report and image upload go to
+  the server. In the demo, delete and report work on the seeded clan.
+- Checks: `clan-check.mjs` (access, posts, media, reactions, reports, moderation, a restart; the app live as a
+  founder in Chromium).
+
+## Left
+- The creator's settings screen (naming moderators: the server and client support it).
+- Wallet sign-in in the screens (as step 3).
+
+# Step 6: voice: the lobby stage, the clan Campfire
+
+## Done
+- The server decides who may speak; the audio goes through an SFU (LiveKit, or anything taking its access tokens).
+  `server/voice.mjs`: HS256 access tokens with a `video` grant (listeners subscribe only; speakers publish the
+  microphone only), and LiveKit's admin API (`UpdateParticipant`) so a lost right takes effect at once.
+- The lobby stage: the host (from the chain) speaks, up to 8 speakers; listeners raise hands in a queue; the host or
+  a co-host brings a raised hand up (nobody is pulled up without asking); speakers step down, the host moves them
+  back; leaving the lobby leaves the stage. Guests listen only.
+- The clan Campfire: every member may talk; a moderator's mute silences them at the SFU at once.
+- `POST /voice/token {lobby | clan}`; `--sfu wss://…` with `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET`. Without an
+  SFU the server answers 503 and the app says once that voice isn't connected; the stage itself still works.
+- App, live: raise hand, the host's raised-hands list with "Bring up", step down, Campfire presence.
+- Checks: `voice-check.mjs` (tokens, the stage's rules, the server and a fake SFU's admin API, the Campfire, the
+  host and a listener in two Chromium pages).
+
+## Left
+- The audio transport in the app (LiveKit's client, connecting with the token the app already gets) and its
+  speaking levels for the talking lights; it needs an SFU deployment to test against.

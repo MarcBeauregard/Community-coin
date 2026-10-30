@@ -7,7 +7,7 @@ import { person, coin, CAMPFIRE, ROLES, ME } from "../demo/data.js";
 import { channels, currentClan, founders, myFounderRank } from "../demo/select.js";
 import { int, sol, signedPct, ticker } from "../format.js";
 
-const ROLE_TONE = { host: "sky", creator: "pink", founder: "lime" };
+const ROLE_TONE = { host: "sky", creator: "pink", mod: "sky", founder: "lime" };
 
 function change(k) {
   if (k.change === null) return html`<span class="num" style="font-size:13px;font-weight:600;color:var(--sky)">New</span>`;
@@ -68,9 +68,18 @@ function Call({ s, a, phone }) {
   </section>`;
 }
 
-function Message({ m, k, a, phone }) {
+function Message({ m, k, a, phone, mod }) {
   const p = person(m.who);
-  const role = ROLES[m.who] || "founder";
+  const role = m.role || ROLES[m.who] || "founder";
+  const mine = m.yours ?? m.who === ME;
+  if (m.deleted) {
+    return html`<li class="cmsg"><${Avatar} person=${p} size=${phone ? 36 : 40} />
+      <span class="t2" style="font-size:14px;font-style:italic;align-self:center">${p.name} deleted a message</span></li>`;
+  }
+  if (m.hidden && !m.text) {
+    return html`<li class="cmsg"><${Avatar} person=${p} size=${phone ? 36 : 40} />
+      <span class="t2" style="font-size:14px;font-style:italic;align-self:center">Hidden after reports. A moderator will look at it.</span></li>`;
+  }
   return html`<li class="cmsg">
     <${Avatar} person=${p} size=${phone ? 36 : 40} />
     <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
@@ -80,13 +89,22 @@ function Message({ m, k, a, phone }) {
         <span class="t2 num" style="font-size:12px">${m.t}</span>
       </span>
       ${m.text && html`<span style="font-size:15px;line-height:1.5;overflow-wrap:anywhere">${m.text}</span>`}
-      ${m.media.length > 0 && html`<span class="media">${m.media.map((x, i) => html`<span key=${i} role="img" aria-label=${x.video ? "Video clip of the mascot" : "Meme of the mascot"} style=${{ background: `radial-gradient(circle at 50% 35%, hsla(${x.hue},85%,50%,.5), #141416 78%)` }}>
+      ${m.hidden && html`<span style="font-size:12px;font-weight:600;color:var(--amber)">Hidden from founders after reports${mine ? "" : " · only moderators see this"}</span>`}
+      ${m.media.length > 0 && m.media[0].url && html`<span class="media">${m.media.map((x, i) => (x.video
+        ? html`<video key=${i} src=${x.url} controls preload="metadata" aria-label=${`Clip shared by ${p.name}`} />`
+        : html`<img key=${i} src=${x.url} alt=${`Image shared by ${p.name}`} loading="lazy" />`))}</span>`}
+      ${m.media.length > 0 && !m.media[0].url && html`<span class="media">${m.media.map((x, i) => html`<span key=${i} role="img" aria-label=${x.video ? "Video clip of the mascot" : "Meme of the mascot"} style=${{ background: `radial-gradient(circle at 50% 35%, hsla(${x.hue},85%,50%,.5), #141416 78%)` }}>
         <${Coin} coin=${coin(k)} size=${phone ? 52 : 70} />
         ${x.video && html`<span class="glass chip" style="position:absolute;right:8px;bottom:8px;height:24px;font-size:11px"><${I.Play} size=${9} />0:14</span>`}
       </span>`)}</span>`}
       <span class="row" style="gap:6px">
         <button type="button" class="react" aria-pressed=${String(m.heartOn)} aria-label=${`Love, ${m.hearts + (m.heartOn ? 1 : 0)}`} onClick=${() => a.react(m.id, "heart")}><${I.Heart} size=${13} /><span class="num">${m.hearts + (m.heartOn ? 1 : 0)}</span></button>
         <button type="button" class="react" aria-pressed=${String(m.fireOn)} aria-label=${`Hype, ${m.fires + (m.fireOn ? 1 : 0)}`} onClick=${() => a.react(m.id, "fire")}><${I.Flame} size=${13} /><span class="num">${m.fires + (m.fireOn ? 1 : 0)}</span></button>
+        <span style="flex:1" />
+        ${mine || mod
+          ? html`<button type="button" class="msg-tool" aria-label=${mine ? "Delete your message" : `Delete message from ${p.name}`} onClick=${() => a.deleteMessage(m.id)}>Delete</button>`
+          : null}
+        ${!mine && html`<button type="button" class="msg-tool" aria-label=${`Report message from ${p.name}`} onClick=${() => a.reportMessage(m.id)}>Report</button>`}
       </span>
     </div>
   </li>`;
@@ -94,6 +112,9 @@ function Message({ m, k, a, phone }) {
 
 function Conversation({ s, a, k, phone }) {
   const list = s.clanMessages[s.channel] || [];
+  // Live, the clan is the server's: the plus button picks a real file to upload; in the demo it shares a meme.
+  const live = k.id === "new" && !!s.liveClan;
+  let picker = null;
   const chan = channels(s).find((c) => c.current);
   return html`<main class="clan-main" style=${{ background: `radial-gradient(60% 35% at 50% 0%, hsla(${k.hue},90%,55%,.09), transparent 70%), #000` }}>
     <header class="clan-head">
@@ -109,7 +130,7 @@ function Conversation({ s, a, k, phone }) {
     </header>
     ${s.campfire.joined && html`<${Call} s=${s} a=${a} phone=${phone} />`}
     <ol class="cfeed scroll">
-      ${list.slice().reverse().map((m) => html`<${Message} key=${m.id} m=${m} k=${k} a=${a} phone=${phone} />`)}
+      ${list.slice().reverse().map((m) => html`<${Message} key=${m.id} m=${m} k=${k} a=${a} phone=${phone} mod=${live && (s.liveClan.role !== "founder")} />`)}
       <li class="birth">
         <${Coin} coin=${coin(k)} size=${48} />
         <span style="flex:1;display:flex;flex-direction:column;gap:3px"><span style="font-size:15px;font-weight:600">The beginning of #${chan.id}</span><span class="t2" style="font-size:13px;line-height:1.45">${birthLine(s, k)}</span></span>
@@ -118,7 +139,11 @@ function Conversation({ s, a, k, phone }) {
     </ol>
     <div style=${{ padding: phone ? "8px 10px 14px" : "0 20px 20px" }}>
       <${Composer} label=${`Message #${chan.id}`} value=${s.clanDraft} placeholder=${`Message #${chan.id}`} onInput=${a.setClanDraft} onSend=${a.sendClan}
-        leading=${html`<${IconButton} label="Share a meme" onClick=${a.shareMeme}><${I.Plus} size=${17} /></${IconButton}>`} />
+        leading=${live
+          ? html`<${IconButton} label="Share an image or clip" onClick=${() => picker?.click()}><${I.Plus} size=${17} /></${IconButton}>
+              <input type="file" hidden accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/quicktime,video/webm" ref=${(el) => { picker = el; }}
+                onChange=${(e) => { a.shareFile(e.currentTarget.files[0]); e.currentTarget.value = ""; }} />`
+          : html`<${IconButton} label="Share a meme" onClick=${a.shareMeme}><${I.Plus} size=${17} /></${IconButton}>`} />
     </div>
   </main>`;
 }

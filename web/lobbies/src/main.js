@@ -8,7 +8,7 @@ import { html, IconButton, Avatar, Toast } from "./ui.js";
 import * as I from "./icons.js";
 import { phoneBreakpoint } from "./tokens.js";
 import { createStore } from "./demo/store.js";
-import { guestSession } from "./realtime/client.js";
+import { guestSession, devSession } from "./realtime/client.js";
 import { person, SPEAKERS, FEATURED } from "./demo/data.js";
 import { Discover } from "./screens/discover.js";
 import { Lobby } from "./screens/lobby.js";
@@ -27,7 +27,8 @@ const store = createStore({ scene: params.get("scene"), freeze: params.has("free
 // ?live=<server> joins the realtime server (as a guest until wallet sign-in is wired to a deployment).
 if (params.get("live")) {
   const base = params.get("live");
-  guestSession(base).then((token) => store.actions.goLive({ base, lobby: FEATURED.id === "fnd" ? 412 : FEATURED.id, token })).catch((e) => console.error(e.message));
+  // `&as=<name>` signs in as that wallet on a server started with --dev-sessions (tests, local development).
+  (params.get("as") ? devSession(base, params.get("as")) : guestSession(base)).then((token) => store.actions.goLive({ base, lobby: FEATURED.id === "fnd" ? 412 : FEATURED.id, token })).catch((e) => console.error(e.message));
 }
 const SCREENS = ["discover", "lobby", "launch", "clan"];
 

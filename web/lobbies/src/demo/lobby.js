@@ -88,7 +88,7 @@ export function lockedOf(chain) {
 
 /** The launch the realtime server announced, before the crank tells this wallet what it got (`settled`). */
 export function liveLaunch(m, total) {
-  return { id: m.symbol.toLowerCase(), sol: toSol(BigInt(m.pot)), pot: BigInt(m.pot), total, backers: m.founders, founder: false, rank: null,
+  return { id: m.symbol.toLowerCase(), mint: m.mint, sol: toSol(BigInt(m.pot)), pot: BigInt(m.pot), total, backers: m.founders, founder: false, rank: null,
     refund: 0, bondBack: 0, myAmount: 0, myId: null, allocation: 0 };
 }
 
@@ -116,7 +116,7 @@ const ERROR_TEXT = {
   LobbyNotOpen: "The lobby is not open yet.", ProposalsClosed: "Proposals are closed.", PledgesLocked: "Pledges are locked.",
   OnAnotherIdea: "Your pledge is on another idea: move it instead.", PledgeCap: "That is above this lobby’s pledge limit.",
   MemeExists: "This ticker already exists on the launchpad.", AccountInUse: "This ticker is already in the race.", ZeroAmount: "Enter an amount above zero.",
-  TooManyIdeas: "This lobby is full.", PledgeSettled: "Already refunded or committed.",
+  TooManyIdeas: "This lobby is full.", PledgeSettled: "Already refunded or committed.", TickerHeld: "Another lobby is racing this ticker right now.",
 };
 /** What a person reads when the program refuses an operation. */
 export const errorText = (name) => ERROR_TEXT[name] || `The program refused it (${name}).`;

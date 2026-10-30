@@ -50,3 +50,14 @@ The end of the hour (`src/chain/crank.js`, `server/crank.mjs`, `server/clans.mjs
 the winner, refunds every other pledge, turns every winning pledge into its founder's commitment, returns the bonds,
 and the clan is born with exactly the winner's backers as members (`GET /clans/:mint`). Each wallet hears only what
 its own pledge became. `npm run test:crank` plays a whole hour through the server on a fake clock and checks it.
+
+The clans (`server/clan-room.mjs`, `server/media.mjs`): each launched coin's founders get its channels forever, over
+`/ws?clan=<mint>`: posts, images and clips (checked from their bytes, members-only), reactions, deletes, reports that
+hide a message after three, and moderators (the winning idea's creator first) who mute and set slow mode. With
+`--data <dir>` it all survives restarts. `npm run test:clans` checks it, then plays it in the app as a founder.
+For local development, `--dev-sessions` lets the app sign in as a named wallet with `&as=<name>`.
+
+Voice (`server/voice.mjs`): the server runs the lobby stage (host, raised hands, up to 8 speakers, co-hosts) and the
+clan Campfire, and hands out SFU access tokens (LiveKit's format) that say who may publish; a change is pushed to
+the SFU's admin API at once. Start the server with `--sfu wss://…` and `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET`.
+`npm run test:voice` checks it against a fake SFU, then runs the stage from two browsers.

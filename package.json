@@ -22,7 +22,9 @@
     "index:lobbies": "node web/lobbies/indexer.mjs",
     "serve:lobbies": "node web/lobbies/server/server.mjs --guests",
     "test:realtime": "node web/lobbies/realtime-check.mjs",
-    "test:crank": "node web/lobbies/crank-check.mjs"
+    "test:crank": "node web/lobbies/crank-check.mjs",
+    "test:clans": "node web/lobbies/clan-check.mjs",
+    "test:voice": "node web/lobbies/voice-check.mjs"
   },
   "devDependencies": {
     "@ethereumjs/block": "^10.1.3",
