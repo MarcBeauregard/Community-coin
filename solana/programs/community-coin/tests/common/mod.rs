@@ -10,6 +10,7 @@ use community_coin::state::{Commitment, Config, Lock, Meme, Union};
 use solana_program_test::{processor, BanksClientError, ProgramTest, ProgramTestContext};
 use solana_sdk::{
     account::Account,
+    program_stubs,
     clock::Clock,
     instruction::{AccountMeta, Instruction},
     native_token::LAMPORTS_PER_SOL,
@@ -84,6 +85,96 @@ pub struct Hub {
     pub users: Vec<Keypair>,
     pub treasury: Keypair,
     pub now: i64,
+    /// Every transaction sent, with its instructions and the program's logs, for the wire format cross-check.
+    pub sent: Vec<Sent>,
+}
+
+pub struct Sent {
+    pub instructions: Vec<Instruction>,
+    pub logs: Vec<String>,
+    /// The events the program emitted (each as its 8-byte discriminator and Borsh fields), when tapped.
+    pub events: Vec<Vec<u8>>,
+}
+
+/// Event data emitted since the last transaction. Natively, solana-program-test prints `sol_log_data` to stdout
+/// instead of logging "Program data: …" as a validator does; `tap_events` routes it here instead.
+static EVENT_DATA: std::sync::Mutex<Vec<Vec<u8>>> = std::sync::Mutex::new(Vec::new());
+
+struct EventTap(Box<dyn program_stubs::SyscallStubs>);
+
+impl program_stubs::SyscallStubs for EventTap {
+    fn sol_log(&self, message: &str) {
+        self.0.sol_log(message)
+    }
+    fn sol_log_compute_units(&self) {
+        self.0.sol_log_compute_units()
+    }
+    fn sol_remaining_compute_units(&self) -> u64 {
+        self.0.sol_remaining_compute_units()
+    }
+    fn sol_invoke_signed(&self, instruction: &Instruction, account_infos: &[anchor_lang::prelude::AccountInfo], signers_seeds: &[&[&[u8]]]) -> anchor_lang::solana_program::entrypoint::ProgramResult {
+        self.0.sol_invoke_signed(instruction, account_infos, signers_seeds)
+    }
+    fn sol_get_sysvar(&self, id: *const u8, var: *mut u8, offset: u64, length: u64) -> u64 {
+        self.0.sol_get_sysvar(id, var, offset, length)
+    }
+    fn sol_get_clock_sysvar(&self, var: *mut u8) -> u64 {
+        self.0.sol_get_clock_sysvar(var)
+    }
+    fn sol_get_epoch_schedule_sysvar(&self, var: *mut u8) -> u64 {
+        self.0.sol_get_epoch_schedule_sysvar(var)
+    }
+    fn sol_get_fees_sysvar(&self, var: *mut u8) -> u64 {
+        self.0.sol_get_fees_sysvar(var)
+    }
+    fn sol_get_rent_sysvar(&self, var: *mut u8) -> u64 {
+        self.0.sol_get_rent_sysvar(var)
+    }
+    fn sol_get_epoch_rewards_sysvar(&self, var: *mut u8) -> u64 {
+        self.0.sol_get_epoch_rewards_sysvar(var)
+    }
+    fn sol_get_last_restart_slot(&self, var: *mut u8) -> u64 {
+        self.0.sol_get_last_restart_slot(var)
+    }
+    fn sol_get_epoch_stake(&self, vote: *const u8) -> u64 {
+        self.0.sol_get_epoch_stake(vote)
+    }
+    unsafe fn sol_memcpy(&self, dst: *mut u8, src: *const u8, n: usize) {
+        self.0.sol_memcpy(dst, src, n)
+    }
+    unsafe fn sol_memmove(&self, dst: *mut u8, src: *const u8, n: usize) {
+        self.0.sol_memmove(dst, src, n)
+    }
+    unsafe fn sol_memcmp(&self, s1: *const u8, s2: *const u8, n: usize, result: *mut i32) {
+        self.0.sol_memcmp(s1, s2, n, result)
+    }
+    unsafe fn sol_memset(&self, s: *mut u8, c: u8, n: usize) {
+        self.0.sol_memset(s, c, n)
+    }
+    fn sol_get_return_data(&self) -> Option<(Pubkey, Vec<u8>)> {
+        self.0.sol_get_return_data()
+    }
+    fn sol_set_return_data(&self, data: &[u8]) {
+        self.0.sol_set_return_data(data)
+    }
+    fn sol_log_data(&self, fields: &[&[u8]]) {
+        EVENT_DATA.lock().unwrap().push(fields.concat());
+    }
+    fn sol_get_processed_sibling_instruction(&self, index: usize) -> Option<Instruction> {
+        self.0.sol_get_processed_sibling_instruction(index)
+    }
+    fn sol_get_stack_height(&self) -> u64 {
+        self.0.sol_get_stack_height()
+    }
+}
+
+/// Records the events of every later transaction in `Sent::events`. Call once a hub has started (solana-program-test
+/// installs its own stubs then), and only from a test binary whose tests run one at a time.
+pub fn tap_events() {
+    struct Placeholder;
+    impl program_stubs::SyscallStubs for Placeholder {}
+    let inner = program_stubs::set_syscall_stubs(Box::new(Placeholder));
+    program_stubs::set_syscall_stubs(Box::new(EventTap(inner)));
 }
 
 pub fn program() -> ProgramTest {
@@ -109,7 +200,7 @@ impl Hub {
             pt.add_account(u.pubkey(), Account { lamports: 10_000 * SOL, owner: system_program::ID, ..Account::default() });
         }
         let ctx = pt.start_with_context().await;
-        let mut hub = Hub { ctx, users, treasury, now: T0 };
+        let mut hub = Hub { ctx, users, treasury, now: T0, sent: vec![] };
         hub.set_time(T0).await;
         hub
     }
@@ -134,10 +225,12 @@ impl Hub {
         let hash = self.ctx.banks_client.get_latest_blockhash().await.unwrap();
         let payer = Keypair::from_bytes(&signer.to_bytes()).unwrap();
         let tx = Transaction::new_signed_with_payer(&ixs, Some(&payer.pubkey()), &[&payer], hash);
-        let r = self.ctx.banks_client.process_transaction(tx).await;
+        let r = self.ctx.banks_client.process_transaction_with_metadata(tx).await.unwrap();
         // Every transaction gets a fresh blockhash so identical retries are not deduplicated.
         let _ = self.ctx.get_new_latest_blockhash().await;
-        r
+        let events = std::mem::take(&mut *EVENT_DATA.lock().unwrap());
+        self.sent.push(Sent { instructions: ixs, logs: r.metadata.map(|m| m.log_messages).unwrap_or_default(), events });
+        r.result.map_err(BanksClientError::TransactionError)
     }
 
     pub async fn send_as(&mut self, i: usize, ixs: Vec<Instruction>) -> Result<(), BanksClientError> {

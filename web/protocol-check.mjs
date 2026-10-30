@@ -11,75 +11,15 @@
 import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, join, basename } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Engine, LAMPORTS, SOL, MIN_UNION_RESERVE } from "./src/protocol.js";
+import { LAMPORTS, SOL, MIN_UNION_RESERVE } from "./src/protocol.js";
+import { Scenario } from "./src/scenario.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const scenarioDir = join(root, "solana/programs/community-coin/tests/scenarios");
 const outDir = join(root, "solana/target/cross-check");
-const T0 = 1_800_000_000; // the start time of the Rust harness
 
-const lamports = (sol) => {
-  const [whole, frac = ""] = String(sol).split(".");
-  return BigInt(whole) * LAMPORTS + BigInt((frac + "000000000").slice(0, 9));
-};
-
-/** A scenario, replayed on an engine. `step(s)` applies one step and returns "ok" or the error's name. */
-export class Replay {
-  constructor(scenario) {
-    const p = scenario.params;
-    this.names = scenario.accounts;
-    this.engine = new Engine({ ...p }, { mintOf: (key) => `mint:${key}` });
-    for (const n of this.names) this.engine.state.lamports.set(n, lamports(scenario.lamportsEach));
-    this.now = T0;
-    this.mints = new Map(); // ticker as launched -> mint
-  }
-  mint(symbol) {
-    return this.mints.get(symbol) ?? (symbol ? `mint:${symbol}` : "");
-  }
-  amount(actor, spec, mint) {
-    const e = this.engine;
-    if (spec.startsWith("all:")) return e.balance(this.mint(spec.slice(4)), actor);
-    if (spec === "all") return e.balance(mint, actor);
-    if (spec === "half") return e.balance(mint, actor) / 2n;
-    return BigInt(spec);
-  }
-  step(s) {
-    if (s.warp !== undefined) {
-      this.now += s.warp;
-      return null;
-    }
-    const e = this.engine, a = s.actor, now = this.now, m = this.mint(s.meme ?? "");
-    const sol = s.sol !== undefined ? lamports(s.sol) : BigInt(s.lamports ?? 0);
-    const minOut = BigInt(s.minOut ?? 0);
-    try {
-      switch (s.op) {
-        case "launch": {
-          const ev = e.launch(a, { name: s.name, symbol: s.symbol, parent: s.parent ? this.mint(s.parent) : SOL, solIn: sol }, now);
-          this.mints.set(s.symbol, ev[0].args.mint);
-          break;
-        }
-        case "commitSol": e.commitSol(a, m, sol, 0n, now); break;
-        case "commit": e.commit(a, m, this.amount(a, s.amount, m), now); break;
-        case "settle": e.settle(m, now); break;
-        case "claim": e.claim(a, m, now); break;
-        case "buySol": e.buySol(a, m, sol, minOut, now); break;
-        case "buy": e.buy(a, m, this.amount(a, s.amount, m), minOut, now); break;
-        case "sell": e.sell(a, m, this.amount(a, s.amount, m), minOut, now); break;
-        case "sellToSol": e.sellToSol(a, m, this.amount(a, s.amount, m), minOut, now); break;
-        case "claimFees": e.claimFees(a, m, !!s.protocol, now); break;
-        case "proposeUnion": e.proposeUnion(a, m, this.mint(s.target), now); break;
-        case "lockUnion": e.lockUnion(a, s.union, this.amount(a, s.amount, ""), now); break;
-        case "unlockUnion": e.unlockUnion(a, s.union); break;
-        case "executeUnion": e.executeUnion(a, s.union, 0n, now); break;
-        default: throw new Error(`unknown op ${s.op}`);
-      }
-      return "ok";
-    } catch (err) {
-      if (!err.code) throw err;
-      return err.code;
-    }
-  }
-  /** The state in the shape the Rust test writes it. */
+/** A scenario replayed on the engine, with its state in the shape the Rust test writes it. */
+class Replay extends Scenario {
   snapshot() {
     const st = this.engine.state;
     const symbolOf = new Map([...this.mints].map(([s, m]) => [m, s]));
@@ -88,24 +28,24 @@ export class Replay {
     for (const [symbol, mint] of this.mints) {
       const x = st.memes.get(mint);
       memes[symbol] = {
-        parent: symbolOf.get(x.parent) ?? "", creator: x.creator, settled: x.settled, height: x.height,
+        parent: symbolOf.get(x.parent) ?? "", creator: this.nameOf.get(x.creator), settled: x.settled, height: x.height,
         openUntil: str(x.openUntil), refTime: str(x.refTime), reference: str(x.reference),
         vQuote: str(x.vQuote), vToken: str(x.vToken), floor: str(x.floor),
         batchQuote: str(x.batchQuote), batchTokens: str(x.batchTokens), batchClaimed: str(x.batchClaimed),
         escrowed: str(x.escrowed), creatorFees: str(x.creatorFees), protocolFees: str(x.protocolFees),
       };
       supply[symbol] = str(st.supply.get(mint) ?? 0n);
-      for (const n of this.names) {
-        const b = this.engine.balance(mint, n);
+      for (const [n, id] of this.ids) {
+        const b = this.engine.balance(mint, id);
         if (b > 0n) balances[`${n}|${symbol}`] = str(b);
-        const c = st.commitments.get(`${mint}|${n}`);
+        const c = st.commitments.get(`${mint}|${id}`);
         if (c) commitments[`${symbol}|${n}`] = { committed: str(c.committed), claimed: str(c.claimed) };
       }
     }
     const unions = st.unions.map((u) => ({ meme: symbolOf.get(u.meme), target: symbolOf.get(u.target), deadline: str(u.deadline), executed: u.executed, locked: str(u.locked) }));
     st.unions.forEach((u) => {
-      for (const n of this.names) {
-        const l = this.engine.lock(u.id, n);
+      for (const [n, id] of this.ids) {
+        const l = this.engine.lock(u.id, id);
         if (l > 0n) locks[`${u.id}|${n}`] = str(l);
       }
     });

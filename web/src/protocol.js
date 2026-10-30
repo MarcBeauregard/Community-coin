@@ -571,6 +571,30 @@ export class Engine {
     });
   }
 
+  /**
+   * Any instruction by name, its arguments in one object: the shape web/src/solana.js builds transactions from and
+   * web/src/scenario.js resolves steps into.
+   */
+  exec(op, signer, a, now) {
+    switch (op) {
+      case "launch": return this.launch(signer, a, now);
+      case "commitSol": return this.commitSol(signer, a.mint, a.solIn, a.minQuote ?? 0n, now);
+      case "commit": return this.commit(signer, a.mint, a.amount, now);
+      case "settle": return this.settle(a.mint, now);
+      case "claim": return this.claim(signer, a.mint, now);
+      case "buySol": return this.buySol(signer, a.mint, a.solIn, a.minOut ?? 0n, now);
+      case "buy": return this.buy(signer, a.mint, a.amount, a.minOut ?? 0n, now);
+      case "sell": return this.sell(signer, a.mint, a.amount, a.minOut ?? 0n, now);
+      case "sellToSol": return this.sellToSol(signer, a.mint, a.amount, a.minOut ?? 0n, now);
+      case "claimFees": return this.claimFees(signer, a.mint, !!a.protocol, now);
+      case "proposeUnion": return this.proposeUnion(signer, a.meme, a.target, now);
+      case "lockUnion": return this.lockUnion(signer, a.id, a.amount, now);
+      case "unlockUnion": return this.unlockUnion(signer, a.id);
+      case "executeUnion": return this.executeUnion(signer, a.id, a.minTargetIn ?? 0n, now);
+      default: throw new Error(`unknown instruction ${op}`);
+    }
+  }
+
   // -------------------------------------------------- views (computed, like a client would)
 
   /** Spot price in the quote asset, quote base units per token base unit, 1e18-scaled, as if settled now. */

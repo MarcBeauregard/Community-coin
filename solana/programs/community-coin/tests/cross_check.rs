@@ -14,6 +14,55 @@ use solana_program_test::BanksClientError;
 use solana_sdk::signer::Signer;
 use std::path::{Path, PathBuf};
 
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// The transactions a step sent, as the wire format check reads them: every instruction with its accounts and
+/// data, the program's logs and its events (on a validator, the "Program data: …" lines of the logs).
+fn wire(sent: Vec<Sent>) -> Value {
+    let txs: Vec<Value> = sent
+        .into_iter()
+        .map(|t| {
+            let ixs: Vec<Value> = t
+                .instructions
+                .iter()
+                .map(|ix| {
+                    let keys: Vec<Value> = ix.accounts.iter().map(|a| json!([a.pubkey.to_string(), a.is_signer, a.is_writable])).collect();
+                    json!({ "program": ix.program_id.to_string(), "keys": keys, "data": hex(&ix.data) })
+                })
+                .collect();
+            let events: Vec<String> = t.events.iter().map(|e| hex(e)).collect();
+            json!({ "instructions": ixs, "logs": t.logs, "events": events })
+        })
+        .collect();
+    json!(txs)
+}
+
+/// The raw data of every account the hub has, by address, to check the decoders of web/src/solana.js.
+async fn raw_accounts(hub: &mut Hub, owners: &[Pubkey], mints: &[(String, Pubkey)]) -> Value {
+    let mut keys = vec![config_pda(), vault_pda()];
+    for (_, m) in mints {
+        keys.extend([*m, meme_pda(m)]);
+        for o in owners {
+            keys.extend([commit_pda(m, o), ata(o, m)]);
+        }
+    }
+    for id in 0..hub.config().await.union_count {
+        keys.push(union_pda(id));
+        for o in owners {
+            keys.push(lock_pda(id, o));
+        }
+    }
+    let mut out = Map::new();
+    for k in keys {
+        if let Some(a) = hub.account(k).await {
+            out.insert(k.to_string(), json!({ "owner": a.owner.to_string(), "lamports": a.lamports, "data": hex(&a.data) }));
+        }
+    }
+    Value::Object(out)
+}
+
 fn lamports(sol: &str) -> u64 {
     let (whole, frac) = sol.split_once('.').unwrap_or((sol, ""));
     let frac = format!("{frac:0<9}");
@@ -115,6 +164,8 @@ async fn replay(name: &str, file: &Path) {
         None => mint_of(s),
     };
     let mut trace = vec![];
+    let mut sent = vec![];
+    hub.sent.clear(); // the hub's initialization
 
     for step in scenario["steps"].as_array().unwrap() {
         if let Some(w) = step.get("warp") {
@@ -171,11 +222,20 @@ async fn replay(name: &str, file: &Path) {
         }
         let state = snapshot(&mut hub, &names, &owners, &mints).await;
         trace.push(json!({ "result": result, "state": state }));
+        sent.push(wire(std::mem::take(&mut hub.sent)));
     }
 
     let out = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/cross-check");
     std::fs::create_dir_all(&out).unwrap();
     std::fs::write(out.join(format!("{name}.json")), serde_json::to_string(&json!({ "steps": trace })).unwrap()).unwrap();
+    let accounts: Map<String, Value> = names.iter().zip(&owners).map(|(n, o)| (n.clone(), json!(o.to_string()))).collect();
+    let wire = json!({
+        "programId": community_coin::ID.to_string(),
+        "accounts": accounts,
+        "steps": sent,
+        "final": raw_accounts(&mut hub, &owners, &mints).await,
+    });
+    std::fs::write(out.join(format!("{name}.wire.json")), serde_json::to_string(&wire).unwrap()).unwrap();
 }
 
 fn scenarios() -> Vec<(String, PathBuf)> {
@@ -191,6 +251,8 @@ fn scenarios() -> Vec<(String, PathBuf)> {
 
 #[tokio::test]
 async fn scenarios_replay() {
+    let _ = Hub::bare(0).await; // solana-program-test installs its syscall stubs on the first start
+    tap_events();
     for (name, file) in scenarios() {
         replay(&name, &file).await;
     }
