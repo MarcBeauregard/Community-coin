@@ -27,6 +27,24 @@ export function createRoom({ id, opensAt, source, host = null, onStage = null, c
   let outcome = { locked: null, launch: null }; // what the crank announced, for late joiners
   const settled = new Map(); // user -> their settled message, for when they come back
   let seq = 0;
+  // Practice SOL: what each signed-in wallet may play with in a practice lobby, minus what it has in play.
+  const PRACTICE = 10_000_000_000n;
+  function practiceBalance(user) {
+    const ch = source.chain;
+    if (!ch) return 0n;
+    const p = ch.pledges.get(user);
+    const held = p && !p.settled ? p.amount : 0n;
+    const committed = p && p.settled && ch.lobby.launched && p.idea === ch.lobby.winner ? p.amount : 0n; // spent on the coin
+    const bonds = ch.ideas.filter((d) => d.proposer === user && !d.bond_returned).length;
+    return PRACTICE - held - committed - BigInt(bonds) * ch.lobby.bond;
+  }
+  const practiceOf = (user) => {
+    if (!source.practice) return {};
+    const p = source.chain.pledges.get(user);
+    const mine = p && !p.settled && p.amount > 0n ? { symbol: source.chain.ideas[p.idea].symbol, amount: String(p.amount) } : null;
+    return { mine, balance: String(practiceBalance(user)) };
+  };
+
   // The stage: the lobby's host speaks first; `onStage(user, canPublish)` tells the SFU when someone's right changes.
   const stage = createStage({ host: host ?? (() => source.host?.() ?? null) });
   const stageChanged = (user, before) => {
@@ -55,7 +73,8 @@ export function createRoom({ id, opensAt, source, host = null, onStage = null, c
     join(connId, session, send) {
       conns.set(connId, { session, send, listening: false, lastChat: -Infinity, tokens: rate.burst, at: now() });
       if (settled.has(session.sub)) queueMicrotask(() => send(settled.get(session.sub))); // after the hello
-      return { t: "hello", lobby: id, now: now(), opensAt, phase: phaseAt(elapsed()), race: raceRows(), ...presence(), chat: history.slice(-50), you: session.sub, guest: !!session.guest, stage: stage.view(), ...outcome };
+      return { t: "hello", lobby: id, now: now(), opensAt, phase: phaseAt(elapsed()), race: raceRows(), ...presence(), chat: history.slice(-50), you: session.sub, guest: !!session.guest, stage: stage.view(), ...outcome,
+        practice: !!source.practice, ...(source.practice && !session.guest ? practiceOf(session.sub) : {}) };
     },
     leave(connId) {
       const c = conns.get(connId);
@@ -102,6 +121,25 @@ export function createRoom({ id, opensAt, source, host = null, onStage = null, c
           if (history.length > historySize) history.shift();
           broadcast({ t: "chat", line });
           return null;
+        }
+        case "pledge": case "withdraw": case "move": case "propose": {
+          // The practice lobby's money, for signed-in people only, through the program's rules.
+          if (!source.practice) return { t: "error", code: "NotPractice" };
+          if (c.session.guest) return { t: "error", code: "SignInToPledge" };
+          const me = c.session.sub;
+          const text = (v, max) => (typeof v === "string" && v.length <= max ? v : null);
+          const lamports = (v) => (typeof v === "string" && /^\d{1,20}$/.test(v) ? BigInt(v) : null);
+          const args = msg.t === "pledge" ? { user: me, symbol: text(msg.symbol, 12), amount: lamports(msg.amount) }
+            : msg.t === "withdraw" ? { user: me, symbol: text(msg.symbol, 12), amount: lamports(msg.amount) }
+            : msg.t === "move" ? { user: me, from: text(msg.from, 12), to: text(msg.to, 12) }
+            : { proposer: me, symbol: text(msg.symbol, 12), name: text(msg.name, 40) };
+          if (Object.values(args).some((v) => v === null)) return { t: "error", code: "BadMessage" };
+          if ((msg.t === "pledge" || msg.t === "propose") && practiceBalance(me) < (msg.t === "pledge" ? args.amount : source.chain.lobby.bond)) {
+            return { t: "practice", op: msg.t, ok: false, error: "NotEnoughPractice", ...practiceOf(me) };
+          }
+          const op = { pledge: "pledge", withdraw: "withdraw", move: "move_pledge", propose: "propose_idea" }[msg.t];
+          const r = source.chain.apply(op, args, elapsed());
+          return { t: "practice", op: msg.t, ok: r.ok, error: r.error ?? null, ...practiceOf(me) };
         }
         case "hand": case "bring": case "down": case "cohost": {
           if (c.session.guest) return { t: "error", code: "SignInToSpeak" };

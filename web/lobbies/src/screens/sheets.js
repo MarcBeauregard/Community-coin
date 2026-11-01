@@ -23,8 +23,8 @@ function PledgeSheet({ s, a }) {
       <${Chip} tone="amber">Practice pledge</${Chip}>
     </div>
     <div class="rows">
-      <div><span>If it wins</span><span class="num">${d.shareIfWins.toFixed(2)}% of its pot, at the same price as every backer</span></div>
-      <div><span>If it loses</span><span>Full refund at 00:55</span></div>
+      <div><span>If it wins</span><span class="num">${d.shareIfWins >= 99.995 ? "You’d be its only backer: the whole opening batch" : `About ${d.shareIfWins.toFixed(2)}% of its opening batch, at the same price as every backer`}</span></div>
+      <div><span>If it loses</span><span>Full refund at the lock (00:55 on the lobby clock)</span></div>
       <div><span>Change your mind</span><span>Withdraw or move any time before 00:55</span></div>
       <div><span>Your wallet</span><span>No SOL leaves it: this lobby is a rehearsal until it runs on Solana</span></div>
     </div>
@@ -86,6 +86,7 @@ const WHY = {
   chat: "Connect a wallet to chat.",
   speak: "Connect a wallet to speak on stage.",
   clan: "Connect the wallet you pledged with to enter your clan.",
+  pledge: "Connect a wallet to pledge. Each wallet gets 10 practice SOL here; none of your own SOL moves.",
 };
 
 // Connect: the installed wallets first, each one tap. Only the address is shared; on a live server the wallet then
@@ -255,7 +256,7 @@ function ReceiptSheet({ s, a }) {
       <h2 id="receipt-title" class="display" style="font-size:24px">${r.title}</h2>
     </div>
     <div class="rows">${r.lines.map(([k, v]) => html`<div key=${k}><span>${k}</span><span class="num">${sol(v)}</span></div>`)}</div>
-    <span class="t2" style="font-size:12px;line-height:1.5;text-align:center">Practice: worked out by the lobby program’s own rules on this device; no SOL moved. Pledges can be withdrawn or moved until 00:55; losing pledges are refunded at the lock.</span>
+    <span class="t2" style="font-size:12px;line-height:1.5;text-align:center">${r.practice ? "Practice: recorded by the lobby server under the lobby program’s rules; no SOL moved." : "Practice: worked out by the lobby program’s own rules on this device; no SOL moved."} Pledges can be withdrawn or moved until 00:55; losing pledges are refunded at the lock.</span>
     <${Button} variant="white" size="lg" onClick=${a.closeSheet}>Done</${Button}>`;
 }
 

@@ -190,7 +190,7 @@ textarea.inp { height: 84px; padding: 12px 14px; resize: none; line-height: 1.45
 .rows > div + div { border-top: 1px solid rgba(255, 255, 255, 0.07); }
 .rows > div > :first-child { color: var(--text2); white-space: nowrap; }
 .rows > div > :last-child { text-align: right; font-weight: 500; }
-.toast { position: fixed; left: 50%; top: 84px; z-index: 60; transform: translateX(-50%); max-width: calc(100% - 32px); min-height: 48px; padding: 10px 20px 10px 12px; border-radius: 999px; display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; animation: toast-in 0.5s cubic-bezier(0.2, 0.9, 0.25, 1); }
+.toast { position: fixed; left: 50%; bottom: 28px; z-index: 60; transform: translateX(-50%); max-width: calc(100% - 32px); min-height: 48px; padding: 10px 20px 10px 12px; border-radius: 999px; display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; animation: toast-in 0.5s cubic-bezier(0.2, 0.9, 0.25, 1); }
 .toast .tick { width: 26px; height: 26px; border-radius: 50%; color: #000; display: flex; align-items: center; justify-content: center; flex: none; }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, -16px) scale(0.96); } }
 
@@ -408,3 +408,5 @@ a.wallet-row { text-decoration: none; }
 .wallet-pill.placeholder { display: inline-block; width: 120px; border-radius: 999px; background: rgba(118, 118, 128, 0.16); }
 .wallet-pill.compact.placeholder { width: 44px; }
 h1[tabindex="-1"]:focus { outline: none; }
+/* Buttons are tapped, not read: a double click never selects their text. */
+button, .btn, .ibtn { -webkit-user-select: none; user-select: none; }

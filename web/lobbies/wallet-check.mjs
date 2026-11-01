@@ -109,7 +109,7 @@ const pill = (page) => page.locator(".wallet-pill").first();
   await pill(page).click();
   check(await page.getByRole("button", { name: /Phantom.*Detected/ }).isVisible(), "an installed wallet shows as detected, first");
   await page.getByRole("button", { name: /Phantom/ }).click();
-  check(await page.getByText("Approve in Phantom").waitFor({ timeout: 1500 }).then(() => true, () => false), "while the wallet asks, the row says where to look");
+  check(await page.getByText("Approve in Phantom").first().waitFor({ timeout: 1500 }).then(() => true, () => false), "while the wallet asks, the row says where to look");
   const short = `${keys[0].address.slice(0, 4)}…${keys[0].address.slice(-4)}`;
   check(await until(async () => (await pill(page).textContent()).includes(short)), "connected: the corner shows the address");
   check(signs === 0, "without a server, connecting asks for no signature");
@@ -123,7 +123,8 @@ const pill = (page) => page.locator(".wallet-pill").first();
 }
 
 // ------------------------------------------------------------------ live: sign in, chat as the wallet, come back, switch
-const server = await createServer({ guests: true, batchMs: 50, lobbies: [{ id: 412, opensAt: Date.now() - 1452 * 1000, source: simulatedSource({ everySec: 5 }) }] });
+const practice = simulatedSource({ everySec: 5 });
+const server = await createServer({ guests: true, batchMs: 50, lobbies: [{ id: 412, opensAt: Date.now() - 1452 * 1000, source: practice }] });
 const base = `http://localhost:${server.port}`;
 const peer = [];
 const cp = connectLobby({ base, lobby: 412, token: server.auth.issue("peer"), onMessage: (m) => peer.push(m) });
@@ -139,10 +140,17 @@ const live = `${app}?live=${encodeURIComponent(base)}#/lobby`;
   check(await until(async () => (await pill(page).textContent()).includes(keys[0].address.slice(0, 4))), "and the app is signed in as that address");
   check(await until(() => peer.some((m) => m.t === "chat" && m.line.text === "gm from my wallet" && m.line.from === keys[0].address)), "the message typed before connecting goes out by itself, from the wallet's address");
   check(await page.getByText("gm from my wallet").first().isVisible() && await page.locator(".msg", { hasText: "gm from my wallet" }).getByText("you", { exact: true }).isVisible(), "and shows as theirs: \"you\", not someone else");
+  // A practice pledge goes to the lobby's server: counted for everyone, kept across reloads.
+  await page.locator(".idea", { hasText: "dogwifhat" }).first().click();
+  await page.getByRole("button", { name: /^Pledge/ }).first().click();
+  await page.getByRole("button", { name: "Confirm practice pledge" }).click();
+  check(await page.getByText(/^Practice pledge · 1\.0 SOL on \$WIF/).waitFor({ timeout: 4000 }).then(() => true, () => false), "a practice pledge gets its receipt");
+  check(practice.chain.pledges.get(keys[0].address)?.amount === 1_000_000_000n, "and is in the lobby's server, under the wallet's address");
   await page.close();
   page = await open(live, { context });
   check(await until(async () => (await pill(page).textContent()).includes(keys[0].address.slice(0, 4))), "coming back reconnects quietly");
   check(signs === 1, "without signing again");
+  check(await page.getByText(/Backing with 1\.0 SOL/).first().waitFor({ timeout: 4000 }).then(() => true, () => false), "and the pledge is still there");
   await page.evaluate(() => window.__wallet.switchTo(1));
   check(await page.getByText("You switched accounts in Phantom").waitFor({ timeout: 3000 }).then(() => true, () => false), "switching accounts in the wallet signs out, and says why");
   check(await until(async () => (await pill(page).textContent()).includes("Connect")), "back to Connect");

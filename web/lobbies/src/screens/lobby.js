@@ -102,7 +102,7 @@ function Stage({ s, a, phone }) {
       <span class="t2 num" style="font-size:13px;font-weight:600">On stage · ${s.live.stage.speakers.length - 1} besides you</span>
       ${s.live.stage.speakers.filter((who) => who !== s.live.you && who !== s.live.stage.host).map((who) => html`<span key=${who} class="row" style="flex-wrap:nowrap;gap:10px">
         <${Avatar} person=${person(who)} size=${32} speaking=${s.audio.speaking.includes(who)} /><span class="ellipsis" style="flex:1;font-size:14px">${person(who).name}</span>
-        <${Button} size="sm" variant="ghost" aria-label=${`Move ${person(who).name} to the audience`} onClick=${() => a.moveDown(who)}>Move to audience</${Button}>
+        <${Button} size="sm" variant="ghost" aria-label=${`Move ${person(who).name} to the audience`} onClick=${() => a.moveDown(who)}>To audience</${Button}>
       </span>`)}
     </div>`}
     ${manages(s) && html`<div class="panel" style="padding:14px;display:flex;flex-direction:column;gap:10px" role="region" aria-label="Raised hands">

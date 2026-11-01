@@ -60,7 +60,9 @@ export function createAudio({ onChange }) {
       last = { url, token, name };
       const id = ++attempt;
       wantSpeak = speak;
-      emit({ status: "connecting", room: name, error: null, speaking: [] });
+      // A blocked microphone is still blocked after a reconnection: keep saying so.
+      const keep = rejoin && ["mic-denied", "no-mic", "mic-failed"].includes(state.error) ? state.error : null;
+      emit({ status: "connecting", room: name, error: keep, speaking: [] });
       let lk;
       try { lk = await loadLiveKit(); } catch { emit({ status: "off", error: "connect-failed" }); return; }
       ({ RoomEvent, Track } = lk);
@@ -76,7 +78,7 @@ export function createAudio({ onChange }) {
       r.on(RoomEvent.Disconnected, () => {
         if (attempt !== id || state.status === "connecting") return;
         room = null;
-        const speak = state.micOn;
+        const speak = state.micOn && !["mic-denied", "no-mic", "mic-failed"].includes(state.error);
         if (retries >= 3) { emit({ status: "off", speaking: [], micOn: false, error: "connect-failed" }); return; }
         emit({ status: "reconnecting", speaking: [], micOn: false });
         const tryNo = retries++;

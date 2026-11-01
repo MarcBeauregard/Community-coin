@@ -6,13 +6,18 @@ import { createIndexer } from "../indexer.mjs";
 
 const rows = (ideas) => ideas.map((d) => ({ index: d.index, symbol: d.symbol, name: d.name, proposer: d.proposer, pledged: d.pledged, backers: d.backers }));
 
-/** The demo lobby: every `everySec` seconds of lobby time a new wallet pledges on an idea, weighted by its pot. */
+/**
+ * The demo lobby: every `everySec` seconds of lobby time a new wallet pledges on an idea, weighted by its pot. It is a
+ * practice lobby: signed-in people pledge, withdraw, move and propose in it (on the program's rules, with practice
+ * SOL), so their pledges count for everyone, survive a reload and settle at the launch like real ones.
+ */
 export function simulatedSource({ everySec = 3, random = Math.random } = {}) {
   const chain = createDemoLobby();
   let last = null;
   let n = 0;
   return {
     chain,
+    practice: true,
     host: () => chain.lobby.host,
     ideas: () => rows(chain.ideas),
     tick(elapsed) {

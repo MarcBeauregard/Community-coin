@@ -135,6 +135,8 @@ export function createStore({ scene, freeze } = {}) {
       case "hello":
         set({ live: { connected: true, lobby: m.lobby, inside: m.inside, listening: m.listening, opensAt: m.opensAt, you: m.you, guest: m.guest, race: m.race, stage: m.stage },
           elapsed: Math.floor((m.now - m.opensAt) / 1000), ideas: raceIdeas(m.race, s.meta), chat: m.chat.map((l) => lineToChat(l, m.you)), voice: { ...s.voice, onStage: !!m.stage?.speakers.includes(m.you) } });
+        // A practice lobby: this wallet's pledge and practice SOL, as the server keeps them (across reloads).
+        if (m.practice) set({ live: { ...state.live, practice: true }, pledge: m.guest ? null : liveMine(m), balance: m.guest ? 10 : toSol(BigInt(m.balance ?? "0")) }); // a guest sees the allowance they get by signing in
         // A late joiner gets what the crank already announced.
         if (m.locked) onLive({ t: "locked", ...m.locked });
         if (m.launch) onLive({ t: "launch", ...m.launch });
@@ -170,6 +172,30 @@ export function createStore({ scene, freeze } = {}) {
         }
         break;
       }
+      case "practice": {
+        const op = pending;
+        pending = null;
+        const patch = { signing: false, pledge: liveMine(m), balance: toSol(BigInt(m.balance ?? "0")) };
+        if (!m.ok) {
+          set({ ...patch, sheet: op?.op === "pledge" ? null : state.sheet });
+          toast(m.error === "NotEnoughPractice" ? "Not enough practice SOL for that." : errorText(m.error), "error");
+          break;
+        }
+        if (op?.op === "pledge") {
+          const r = liveReceipt(`Practice pledge · ${sol(op.amount)} on $${op.symbol}`, [["Pledged", op.amount], ["Your pledge on $" + op.symbol, patch.pledge?.amount ?? op.amount], ["Practice SOL left", patch.balance]]);
+          set({ ...patch, sheet: "receipt", receipt: r, receipts: [r, ...state.receipts] });
+        } else if (op?.op === "withdraw") {
+          set({ ...patch, sheet: null });
+          toast(`${sol(op.amount)} of practice SOL back`, "white");
+        } else if (op?.op === "move") {
+          set(patch);
+          toast(`Moved your ${sol(op.amount)} to $${op.symbol}`);
+        } else if (op?.op === "propose") {
+          set({ ...patch, meta: { ...state.meta, [op.ticker]: { id: op.ticker.toLowerCase(), hue: op.hue, pitch: op.pitch } }, selected: op.ticker.toLowerCase(), sheet: null });
+          toast(`$${op.ticker} is in the race. Back it to give it a start.`, "sky");
+        } else set(patch);
+        break;
+      }
       case "stage": {
         const v = s.voice;
         const onStage = m.speakers.includes(s.live.you);
@@ -187,7 +213,7 @@ export function createStore({ scene, freeze } = {}) {
         break;
       }
       case "presence": set({ live: { ...s.live, inside: m.inside, listening: m.listening } }); break;
-      case "chat": set({ chat: chatLine(lineToChat(m.line, s.live.you)) }); break;
+      case "chat": set({ chat: chatLine(lineToChat(m.line, s.live.you)), draft: m.line.from === s.live.you && m.line.text === s.draft.trim() ? "" : s.draft }); break;
       case "error":
         // A guest who tries to talk is offered the wallet, not just told.
         if (m.code === "SignInToChat" || m.code === "SignInToSpeak") actions.openConnect(m.code === "SignInToChat" ? "chat" : "speak");
@@ -301,6 +327,12 @@ export function createStore({ scene, freeze } = {}) {
     set(patch);
   }
 
+  // Live on a practice lobby, the money goes to the server's lobby (shared, kept, settled at the launch).
+  const practiceLive = () => !!(link && state.live?.practice);
+  const signedLive = () => !!(state.live && (!state.live.guest || state.wallet.signedIn));
+  let pending = null; // the practice operation waiting for the server's answer
+  const liveMine = (m) => (m.mine ? { id: m.mine.symbol.toLowerCase(), symbol: m.mine.symbol, amount: toSol(BigInt(m.mine.amount)), lamports: BigInt(m.mine.amount) } : null);
+  const liveReceipt = (title, rows) => ({ title, lines: rows, practice: true });
   const liveClanOn = () => !!(clanLink && state.liveClan?.connected && state.clan === "new");
   const canPledge = () => state.elapsed < LOCK_AT && !state.launched;
   const selectedIdea = () => state.ideas.find((i) => i.id === state.selected) || state.ideas[0];
@@ -352,6 +384,7 @@ export function createStore({ scene, freeze } = {}) {
       if (!link || state.wallet.status !== "connected") return;
       if (why === "chat" && state.draft.trim()) actions.send();
       if (why === "speak" && !state.voice.hand && !state.voice.onStage) actions.toggleHand();
+      if (why === "pledge") set({ sheet: "pledge", sheetAt: Date.now() });
     },
     /** After connecting: the server session (live), the balance, and following the wallet's own switches. */
     async signIn(w, address) {
@@ -471,6 +504,11 @@ export function createStore({ scene, freeze } = {}) {
     select(id) { set({ selected: id }); },
     setAmount(amount) { set({ amount }); },
     proposeIdea({ name, ticker, pitch, hue }) {
+      if (practiceLive()) {
+        if (!signedLive()) return actions.openConnect("pledge");
+        pending = { op: "propose", ticker, name, hue, pitch };
+        return link.practice("propose", { symbol: ticker, name });
+      }
       const r = act(state.chain, "propose_idea", { proposer: ME, symbol: ticker, name }, state.elapsed);
       if (!r.ok) return toast(errorText(r.error), "error");
       set((s) => {
@@ -481,6 +519,13 @@ export function createStore({ scene, freeze } = {}) {
       toast(`$${ticker} is in the race. Back it to give it a start.`, "sky");
     },
     confirmPledge() {
+      if (practiceLive()) {
+        if (!signedLive()) return actions.openConnect("pledge");
+        const idea = selectedIdea();
+        set({ signing: true });
+        pending = { op: "pledge", symbol: idea.ticker, amount: state.amount };
+        return link.practice("pledge", { symbol: idea.ticker, amount: String(toLamports(state.amount)) });
+      }
       set({ signing: true });
       later(() => {
         const idea = selectedIdea();
@@ -497,6 +542,7 @@ export function createStore({ scene, freeze } = {}) {
     withdraw() {
       const p = state.pledge;
       if (!p) return;
+      if (practiceLive()) { pending = { op: "withdraw", amount: p.amount }; return link.practice("withdraw", { symbol: p.symbol, amount: String(p.lamports) }); }
       const r = act(state.chain, "withdraw", { user: ME, symbol: p.symbol, amount: p.lamports }, state.elapsed);
       if (!r.ok) return toast(errorText(r.error), "error");
       set((s) => ({ balance: s.balance + p.amount, pledge: myPledge(s.chain), ideas: shownIdeas(s), sheet: null, receipt: r.receipt, receipts: [r.receipt, ...s.receipts] }));
@@ -505,6 +551,7 @@ export function createStore({ scene, freeze } = {}) {
     movePledge() {
       const p = state.pledge;
       const idea = selectedIdea();
+      if (practiceLive()) { pending = { op: "move", symbol: idea.ticker, amount: p.amount }; return link.practice("move", { from: p.symbol, to: idea.ticker }); }
       const r = act(state.chain, "move_pledge", { user: ME, from: p.symbol, to: idea.ticker }, state.elapsed);
       if (!r.ok) return toast(errorText(r.error), "error");
       set((s) => ({ pledge: myPledge(s.chain), ideas: shownIdeas(s), receipt: r.receipt, receipts: [r.receipt, ...s.receipts] }));
@@ -525,7 +572,7 @@ export function createStore({ scene, freeze } = {}) {
       if (!text) return;
       // A guest's message waits in the field while they connect, then goes out by itself.
       if (link && state.live?.guest && !state.wallet.signedIn) return actions.openConnect("chat");
-      if (link) return link.chat(text), set({ draft: "" });
+      if (link) return link.chat(text); // the draft clears when the room shows it; refused (slow mode), it stays
       set({ draft: "", chat: chatLine({ who: ME, text }) });
     },
     shareArt() {

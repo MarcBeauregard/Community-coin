@@ -97,7 +97,7 @@ for (const [w, h] of [[1440, 900], [390, 844]]) {
 
   await page.locator(".idea", { hasText: "dogwifhat" }).click();
   await click(phone ? "Pledge" : "Pledge 1.0 SOL");
-  check(await page.getByText("Full refund at 00:55").isVisible(), `@${w} the pledge sheet says what happens if it loses`);
+  check(await page.getByText(/Full refund at the lock/).isVisible(), `@${w} the pledge sheet says what happens if it loses`);
   await click("Confirm practice pledge");
   await page.waitForTimeout(1500);
   check(await page.getByRole("heading", { name: "Pledged 1 SOL to $WIF" }).isVisible(), `@${w} the receipt reads the pledge from the program's events`);

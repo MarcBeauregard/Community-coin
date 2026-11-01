@@ -18,7 +18,7 @@ export function Launch({ s, a, phone }) {
   const bg = `radial-gradient(55% 55% at ${phone ? "50% 20%" : "28% 45%"}, hsla(${win.hue},90%,55%,.28), transparent 70%), radial-gradient(40% 50% at 100% 0%, hsla(${(win.hue + 150) % 360},80%,55%,.12), transparent 70%), #000`;
   const recap = [
     { t: "00:00", c: "var(--text)", text: `Lobby opens · ${int(FEATURED.inside)} join` },
-    { t: "00:07", c: "var(--sky)", text: `@${win.by === "you" ? "you" : win.by} pitches ${ticker(win.ticker)} on stage` },
+    { t: "00:07", c: "var(--sky)", text: `${win.by === "you" ? "You pitch" : win.by ? `@${person(win.by).name} pitches` : "The winner is pitched"} ${ticker(win.ticker)} on stage` },
     { t: "00:30", c: "var(--sky)", text: `Proposals close · ${s.ideas.length} ideas` },
     { t: "00:55", c: "var(--amber)", text: `Lock · ${sol(l.total)} pledged` },
     { t: "01:00", c: "var(--lime)", text: `${ticker(win.ticker)} minted · the clan opens` },
@@ -75,7 +75,7 @@ export function Launch({ s, a, phone }) {
               </div>
               <div class="row" style=${phone ? "flex-direction:column;align-items:stretch" : ""}>
                 <${Button} variant="white" size="lg" onClick=${() => a.go({ screen: "discover" })}>Find the next lobby</${Button}>
-                <${Button} size="lg" onClick=${a.replay}>Run this lobby again</${Button}>
+                ${!s.live && html`<${Button} size="lg" onClick=${a.replay}>Run this lobby again</${Button}>`}
               </div>`}
         </div>
       </div>

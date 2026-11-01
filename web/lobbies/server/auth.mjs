@@ -15,31 +15,37 @@ const ED25519_SPKI = Buffer.from("302a300506032b6570032100", "hex");
 export { signInMessage };
 
 export function createAuth({ secret = randomBytes(32), domain = "lobbies.communitycoin", uri = `https://${domain}`, chain = "solana:mainnet", now = () => Date.now() } = {}) {
-  const nonces = new Map(); // nonce -> issuedAt
+  const nonces = new Map(); // nonce -> { at, domain, uri }
   const mac = (body) => createHmac("sha256", secret).update(body).digest("base64url");
 
   return {
     domain,
     uri,
     chain,
-    nonce() {
+    /**
+     * A one-time nonce. `site` (`{ domain, uri }`): the page asking, when the server lets it name itself (only an
+     * allowed origin, see server.mjs), so the wallet shows the site the person is on; the signature is bound to it.
+     */
+    nonce(site = null) {
       const n = randomBytes(16).toString("hex");
       const t = now();
       // Expired nonces go first (oldest at the front of the map); a flood beyond the cap is refused.
-      for (const [k, at] of nonces) { if (t - at <= NONCE_TTL) break; nonces.delete(k); }
+      for (const [k, v] of nonces) { if (t - v.at <= NONCE_TTL) break; nonces.delete(k); }
       if (nonces.size >= MAX_NONCES) throw new Error("Too many sign-ins in progress");
-      nonces.set(n, t);
-      return { nonce: n, issuedAt: t };
+      const d = site ?? { domain, uri };
+      nonces.set(n, { at: t, ...d });
+      return { nonce: n, issuedAt: t, domain: d.domain, uri: d.uri, chain };
     },
     /** Checks a signed sign-in message; returns a session token, or throws with the reason. */
     verify({ address, nonce, signature }) {
-      const issuedAt = nonces.get(nonce);
-      if (issuedAt === undefined || now() - issuedAt > NONCE_TTL) throw new Error("Unknown or expired nonce");
+      const held = nonces.get(nonce);
+      if (held === undefined || now() - held.at > NONCE_TTL) throw new Error("Unknown or expired nonce");
+      const issuedAt = held.at;
       nonces.delete(nonce); // one use
       let raw;
       try { raw = new PublicKey(address).toBytes(); } catch { throw new Error("Not a Solana address"); }
       const key = createPublicKey({ key: Buffer.concat([ED25519_SPKI, Buffer.from(raw)]), format: "der", type: "spki" });
-      const message = Buffer.from(signInMessage(domain, address, nonce, issuedAt, { uri, chain }));
+      const message = Buffer.from(signInMessage(held.domain, address, nonce, issuedAt, { uri: held.uri, chain }));
       if (!verify(null, message, key, Buffer.from(signature, "base64"))) throw new Error("Bad signature");
       return this.issue(address);
     },

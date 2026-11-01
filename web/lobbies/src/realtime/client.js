@@ -34,6 +34,8 @@ export function connectLobby({ base, lobby, token, onMessage, WebSocketImpl = gl
   const link = connect({ url: `${base.replace(/^http/, "ws")}/ws?lobby=${lobby}&token=${encodeURIComponent(token)}`, onMessage, WebSocketImpl });
   return {
     chat: (text) => link.send({ t: "chat", text }),
+    /** The practice lobby's money (signed in): pledge / withdraw (symbol, amount in lamports), move (from, to), propose (symbol, name). */
+    practice: (t, args) => link.send({ t, ...args }),
     listen: (on) => link.send({ t: "listen", on }),
     hand: (up) => link.send({ t: "hand", up }),
     bring: (user) => link.send({ t: "bring", user }),
