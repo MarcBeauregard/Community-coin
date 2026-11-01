@@ -20,7 +20,7 @@ const shots = process.argv[2] || join(dist, "shots");
 mkdirSync(shots, { recursive: true });
 
 const WIDTHS = [[390, 844], [768, 1024], [1280, 800], [1440, 900]];
-const SCENES = ["discover", "listening", "lobby", "lobby-stage", "lobby-chat", "lobby-backed", "lobby-finale", "lobby-locked", "sheet-pledge", "sheet-propose",
+const SCENES = ["discover", "listening", "lobby", "lobby-stage", "lobby-chat", "lobby-backed", "lobby-finale", "lobby-intro", "lobby-locked", "sheet-pledge", "sheet-propose",
   "sheet-host", "sheet-wallet", "sheet-receipt", "sheet-terms", "sheet-connect", "sheet-card", "launch-founder", "launch-refund", "clan", "clan-voice"];
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".png": "image/png", ".jpg": "image/jpeg" };
 

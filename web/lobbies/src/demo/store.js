@@ -50,6 +50,7 @@ function initialState() {
     voice: { listening: false, hand: false, onStage: false, mic: true, invited: false },
     chat: seedLobbyChat(),
     draft: "",
+    intro: null, // the first minute's card being shown (0 to 2), or null
     nudgeOff: null, // the finale's "move your pledge" offer, set aside for this pledge
     filter: "all",
     query: "",
@@ -83,8 +84,13 @@ export function pledgedOn(state, idea) {
   return idea.sol;
 }
 
+const INTRO = "lobbies.intro";
+const introSeen = () => { try { return localStorage.getItem(INTRO) === "1"; } catch { return true; } };
+
 export function createStore({ scene, freeze } = {}) {
   let state = initialState();
+  // The first minute: three short cards on how a lobby works, once (not over the scenes' screenshots).
+  if (!scene && !introSeen()) state.intro = 0;
   const subscribers = new Set();
   const timers = new Set();
   const later = (fn, ms) => { const t = setTimeout(() => { timers.delete(t); fn(); }, ms); timers.add(t); };
@@ -578,6 +584,8 @@ export function createStore({ scene, freeze } = {}) {
       set((s) => ({ pledge: myPledge(s.chain), ideas: shownIdeas(s), receipt: r.receipt, receipts: [r.receipt, ...s.receipts] }));
       toast(`Moved your ${sol(p.amount)} to $${idea.ticker}`);
     },
+    introNext() { set((s) => ({ intro: s.intro === null ? null : s.intro + 1 })); },
+    introDone() { set({ intro: null }); try { localStorage.setItem(INTRO, "1"); } catch {} },
     dismissNudge() { set((s) => ({ nudgeOff: s.pledge?.symbol ?? null })); },
     skipToLock() { set((s) => ({ elapsed: Math.max(s.elapsed, HOUR - 6), sheet: null })); set(settle(state)); },
     replay() {
@@ -679,6 +687,7 @@ export function createStore({ scene, freeze } = {}) {
     "lobby-stage": () => set({ route: { screen: "lobby" }, lobbyTab: "stage", voice: { listening: true, hand: false, onStage: true, mic: true } }),
     "lobby-chat": () => set({ route: { screen: "lobby" }, lobbyTab: "chat" }),
     "lobby-backed": () => { pledgeNow("WIF", 1); set({ route: { screen: "lobby" } }); },
+    "lobby-intro": () => set({ route: { screen: "lobby" }, intro: 0 }),
     "lobby-finale": () => { pledgeNow("BRETT", 2); set({ route: { screen: "lobby" }, elapsed: 3060 }); },
     "lobby-finale-close": () => {
       // $WIF ahead of $POPCAT by 3.2 SOL: one pledge can turn the race.

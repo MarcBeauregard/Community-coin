@@ -434,3 +434,11 @@ button, .btn, .ibtn { -webkit-user-select: none; user-select: none; }
 .lobby-head .clock.urgent .value { animation: tight 1s steps(1) infinite; }
 @keyframes tight { 50% { opacity: 0.72; } }
 @media (prefers-reduced-motion: reduce) { .lobby-head .clock.urgent .value { animation: none; } .finale { animation: none; } }
+
+/* ---------------------------------------------------------------- the first minute */
+.intro { display: flex; gap: 14px; padding: 16px 18px; border-radius: 20px; margin-bottom: 16px; border: 1px solid rgba(100, 210, 255, 0.2); animation: rise 0.5s var(--spring); }
+.intro-icon { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: rgba(100, 210, 255, 0.14); color: var(--sky); }
+.intro-dots { display: inline-flex; gap: 6px; }
+.intro-dots span { width: 6px; height: 6px; border-radius: 50%; background: rgba(235, 235, 245, 0.25); transition: width 0.3s var(--spring), background 0.3s; }
+.intro-dots span.on { width: 18px; border-radius: 3px; background: var(--sky); }
+@media (prefers-reduced-motion: reduce) { .intro { animation: none; } }

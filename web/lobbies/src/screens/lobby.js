@@ -253,6 +253,39 @@ function Finale({ f, a, phone }) {
   </section>`;
 }
 
+const INTRO = [
+  { icon: I.Wallet, title: "Your pledge is your vote", text: "Back the idea you want launched with SOL. The idea with the most SOL when pledges lock at 00:55 wins." },
+  { icon: I.Back, title: "Lost? Refunded at 00:55", text: "If your idea doesn’t win, your SOL comes back to your wallet at the lock. Nothing to claim." },
+  { icon: I.Flame, title: "Won? You’re a founder", text: "At 01:00 the coin launches. Your SOL buys its first tokens, and you get a founder number in its clan, for good." },
+];
+
+// The first minute in a lobby: three cards, once. Not a dialog: the lobby stays usable around it.
+function Intro({ step, a }) {
+  const ref = useRef(null);
+  const c = INTRO[step];
+  const last = step === INTRO.length - 1;
+  const done = () => {
+    const inside = ref.current?.contains(document.activeElement);
+    a.introDone();
+    if (inside) requestAnimationFrame(() => document.querySelector(".ideas .idea")?.focus());
+  };
+  return html`<section class="intro glass" ref=${ref} aria-label="How a lobby works">
+    <div class="intro-icon" aria-hidden="true"><${c.icon} size=${20} /></div>
+    <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0">
+      <span class="t2 num" style="font-size:12px;font-weight:600">${step + 1} of ${INTRO.length}</span>
+      <h3 style="font-size:17px;font-weight:650">${c.title}</h3>
+      <p class="t2" style="font-size:14px;line-height:1.45">${c.text}</p>
+      <div class="row" style="justify-content:space-between;gap:8px;margin-top:8px;flex-wrap:nowrap">
+        <span class="intro-dots" aria-hidden="true">${INTRO.map((_, i) => html`<span class=${i === step ? "on" : ""} />`)}</span>
+        <div class="row" style="gap:6px;flex-wrap:nowrap">
+          ${!last && html`<${Button} key="skip" size="sm" variant="ghost" onClick=${done}>Skip</${Button}>`}
+          <${Button} key="next" size="sm" variant=${last ? "prim" : undefined} onClick=${last ? done : a.introNext}>${last ? "Got it" : "Next"}</${Button}>
+        </div>
+      </div>
+    </div>
+  </section>`;
+}
+
 function Ideas({ s, a, phone }) {
   const ideas = race(s);
   const t = lobbyClock(s);
@@ -260,6 +293,7 @@ function Ideas({ s, a, phone }) {
   return html`<main class="ideas-col">
     <div class="list scroll">
       ${f && html`<${Finale} f=${f} a=${a} phone=${phone} />`}
+      ${s.intro !== null && html`<${Intro} step=${s.intro} a=${a} />`}
       ${phone
         ? html`<div class="row" style="justify-content:space-between;padding:0 4px 10px">
             <span class="t2 num" style="font-size:13px">${sol(ideas.reduce((x, d) => x + d.total, 0))} · ${t.proposeHint}</span>
