@@ -96,7 +96,7 @@ export async function drawBirthCard(c, format = "post") {
   g.fillStyle = LIME;
   g.font = `600 ${size.kicker}px ${FONT}`;
   g.letterSpacing = "4px";
-  g.fillText("FOUNDER", x, y.kicker);
+  g.fillText(c.practice ? "FOUNDER · PRACTICE LOBBY" : "FOUNDER", x, y.kicker);
   g.letterSpacing = "0px";
   g.fillStyle = "#f5f5f7";
   g.font = `700 ${size.rank}px ${FONT}`;
@@ -162,10 +162,10 @@ function fit(g, text, max) {
 }
 
 /** Everything the card says, in words: its alt text. */
-export const cardText = (c) => `Birth card: Founder #${int(c.rank)} of $${c.ticker}, ${c.name}. Born ${day(c.date)} in Lobby ${c.lobby}. ${sol(c.pot)} raised, ${int(c.founders)} founders.`;
+export const cardText = (c) => `Birth card: ${c.practice ? "practice lobby, " : ""}Founder #${int(c.rank)} of $${c.ticker}, ${c.name}. Born ${day(c.date)} in Lobby ${c.lobby}. ${sol(c.pot)} raised, ${int(c.founders)} founders.`;
 
 /** The words that go with the card when it is shared, with the way to the app. */
-export const cardCaption = (c, link) => `I’m Founder #${int(c.rank)} of $${c.ticker}. ${int(c.founders)} of us picked it together in one hour on Community Coin.${c.mint ? ` CA: ${c.mint}` : ""}${link ? ` ${link}` : ""}`;
+export const cardCaption = (c, link) => `I’m Founder #${int(c.rank)} of $${c.ticker}${c.practice ? " in a Community Coin practice lobby" : ""}. ${int(c.founders)} of us picked it together in one hour${c.practice ? "" : " on Community Coin"}.${c.mint ? ` CA: ${c.mint}` : ""}${link ? ` ${link}` : ""}`;
 
 /** A file name for the card. */
 export const cardFileName = (c, format = "post") => `founder-${c.rank}-${c.ticker.toLowerCase()}${format === "story" ? "-story" : ""}.png`;

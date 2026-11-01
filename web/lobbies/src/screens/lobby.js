@@ -44,7 +44,7 @@ function StageControls({ s, a, vs, phone }) {
   if (vs.needsTap) return html`<${Button} variant="white" size=${lg} block data-primary onClick=${a.startAudio}><${I.Speaker} size=${16} />Turn on sound</${Button}>${below(leave)}`;
   if (v.onStage && v.invited) {
     return html`<${Button} variant="prim" size=${lg} block data-primary onClick=${a.acceptInvite}><${I.Mic} size=${16} />Speak now</${Button}>
-      ${below(html`<${Button} size="sm" onClick=${a.declineInvite}>Not now</${Button}>`)}`;
+      ${below(html`<${Button} size="sm" onClick=${a.declineInvite}>Not now</${Button}>`, leave)}`;
   }
   if (v.onStage) {
     return html`${vs.micBlocked

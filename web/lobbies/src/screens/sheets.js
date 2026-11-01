@@ -143,7 +143,7 @@ function WalletSheet({ s, a }) {
     <div style="display:flex;flex-direction:column;gap:2px">
       ${real
         ? html`<span class="display num" style="font-size:44px">${sol(w.balance)}</span><span class="t2" style="font-size:13px">Balance on Solana</span>`
-        : html`<${Chip} tone="amber">Practice SOL</${Chip}>
+        : html`<span style="align-self:flex-start"><${Chip} tone="amber">Practice SOL</${Chip}></span>
             <span class="display num" style="font-size:28px">${sol(s.balance)}</span>
             <span class="t2" style="font-size:13px;line-height:1.45">For pledging in practice lobbies. Not your wallet’s SOL: none of yours moves until a lobby runs on Solana.</span>`}
     </div>

@@ -85,6 +85,9 @@ for (const [w, h] of [[1440, 900], [390, 844]]) {
   const start = await balance();
   await click("Join the lobby");
   check(await page.locator(".lobby").isVisible(), `@${w} joining opens the lobby`);
+  // The main action is always whole on screen: nothing pushes it past the edge.
+  const pledgeBox = await page.getByRole("button", { name: phone ? "Pledge" : "Pledge 1.0 SOL", exact: true }).boundingBox();
+  check(pledgeBox && pledgeBox.x >= 0 && pledgeBox.x + pledgeBox.width <= w, `@${w} the Pledge button is fully on screen`);
 
   await click(phone ? "Propose" : "Propose an idea");
   await page.getByPlaceholder("Pigeon Wizard").fill("Lazy Llama");

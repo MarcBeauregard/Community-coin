@@ -50,7 +50,7 @@ export function dock(s, ideas) {
   let mode = "closed";
   if (canPledge) mode = !s.pledge ? "pick" : s.pledge.id === sel.id ? "backed" : "move";
   const sub = {
-    pick: `About ${shareIfWins.toFixed(2)}% of its opening batch if it wins · refunded if it loses`,
+    pick: `About ${shareIfWins.toFixed(2)}% of its opening batch if it wins`,
     backed: `About ${((mine / sel.total) * 100).toFixed(2)}% of its opening batch right now`,
     move: `Your ${sol(mine)} is on another idea`,
     closed: `${sol(sel.total)} pledged`,

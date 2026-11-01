@@ -415,3 +415,6 @@ button, .btn, .ibtn { -webkit-user-select: none; user-select: none; }
 /* Sheets are read and tapped, not selected: a double tap never highlights their text (fields still are). */
 .sheet { -webkit-user-select: none; user-select: none; }
 .sheet input, .sheet textarea { -webkit-user-select: text; user-select: text; }
+/* The dock never pushes its button off a phone: the words give way first. */
+.dock .who { min-width: 0; overflow: hidden; }
+.dock .who > span { max-width: 100%; }

@@ -184,7 +184,8 @@ export function createStore({ scene, freeze } = {}) {
           break;
         }
         if (op?.op === "pledge") {
-          const r = liveReceipt(`Practice pledge · ${sol(op.amount)} on $${op.symbol}`, [["Pledged", op.amount], ["Your pledge on $" + op.symbol, patch.pledge?.amount ?? op.amount], ["Practice SOL left", patch.balance]]);
+          const total = patch.pledge?.amount ?? op.amount;
+          const r = liveReceipt(`Practice pledge · ${sol(op.amount)} on $${op.symbol}`, [["Pledged", op.amount], ...(total !== op.amount ? [["Your pledge on $" + op.symbol, total]] : []), ["Practice SOL left", patch.balance]]);
           set({ ...patch, sheet: "receipt", receipt: r, receipts: [r, ...state.receipts] });
         } else if (op?.op === "withdraw") {
           set({ ...patch, sheet: null });
