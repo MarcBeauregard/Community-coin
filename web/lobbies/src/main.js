@@ -18,7 +18,7 @@ import { Clan } from "./screens/clan.js";
 import { Sheets } from "./screens/sheets.js";
 
 const params = new URLSearchParams(location.search);
-const store = createStore({ scene: params.get("scene"), freeze: params.has("freeze") });
+const store = createStore({ scene: params.get("scene"), freeze: params.has("freeze"), live: !!params.get("live") });
 // A link to a screen opens on it (#/lobby, #/clan); #/launch only once there is a launch to show.
 {
   const screen = location.hash.replace("#/", "");
@@ -129,7 +129,7 @@ function App() {
     ${s.voice.listening && screen !== "lobby" && s.live && html`<${VoicePill} s=${s} a=${a} onOpen=${() => { a.go({ screen: "lobby" }); a.setLobbyTab("stage"); }} />`}
     ${showTabs && html`<${TabBar} s=${s} a=${a} />`}
     <${Sheets} s=${s} a=${a} />
-    <${NetBanner} net=${s.net} />
+    <${NetBanner} net=${s.net} pledged=${!!s.pledge} />
     <${Toast} toast=${s.toast} />
   </div>`;
 }
@@ -138,16 +138,18 @@ function App() {
 // a moment after. One status region, always in the page, so a screen reader hears each change once.
 const NET = {
   offline: ["amber", "You’re offline. The lobby catches up when you’re back."],
-  down: ["amber", "Can’t reach the lobby server. Still trying; your pledge is safe."],
+  down: ["amber", "Can’t reach the lobby server. Still trying."],
   reconnecting: ["sky", "Reconnecting to the lobby…"],
   solanaDown: ["amber", "Solana isn’t answering. Your balance may be out of date."],
   slow: ["sky", "The lobby is slow right now. Numbers may lag a few seconds."],
   solanaSlow: ["sky", "Solana is slow right now. Your balance may lag."],
   back: ["lime", "Back online"],
 };
-function NetBanner({ net }) {
+function NetBanner({ net, pledged }) {
   const k = netState(net);
-  return html`<div role="status" class="net-wrap">${k && html`<div class=${`net glass ${NET[k][0]}`}><span class="dot" aria-hidden="true" />${NET[k][1]}</div>`}</div>`;
+  // Someone with a pledge hears that it is safe: it is kept by the lobby, not by this page.
+  const text = k === "down" && pledged ? "Can’t reach the lobby server. Still trying; your pledge is safe on it." : k && NET[k][1];
+  return html`<div role="status" class="net-wrap">${k && html`<div class=${`net glass ${NET[k][0]}`}><span class="dot" aria-hidden="true" />${text}</div>`}</div>`;
 }
 
 render(html`<${App} />`, document.getElementById("app"));

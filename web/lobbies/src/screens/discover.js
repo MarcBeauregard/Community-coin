@@ -111,8 +111,9 @@ function HowItWorks() {
 const pal = Object.keys(PEOPLE);
 function LobbyAction({ l, s, a, compact }) {
   if (l.live) return html`<${Button} variant="white" size="sm" onClick=${() => a.go({ screen: s.launched ? "launch" : "lobby" })}>Join</${Button}>`;
-  if (compact) return html`<${IconButton} label=${l.reminder ? "Reminder on" : "Remind me when it opens"} tone="sky" size="sm" pressed=${l.reminder} onClick=${() => a.openReminder(l)}><${I.Bell} size=${15} /></${IconButton}>`;
-  return html`<${Button} variant="fill" size="sm" aria-pressed=${String(l.reminder)} onClick=${() => a.openReminder(l)}><${I.Bell} size=${13} />${l.reminder ? "On" : "Remind"}</${Button}>`;
+  // It opens the reminder sheet (not a toggle): its name says for which lobby, and whether one is set.
+  if (compact) return html`<${IconButton} label=${l.reminder ? `Reminder on for ${l.name}` : `Remind me when ${l.name} opens`} tone="sky" size="sm" aria-haspopup="dialog" onClick=${() => a.openReminder(l)}><${I.Bell} size=${15} /></${IconButton}>`;
+  return html`<${Button} variant="fill" size="sm" class=${l.reminder ? "remind-on" : ""} aria-haspopup="dialog" aria-label=${l.reminder ? `Reminder on for ${l.name}` : `Remind me when ${l.name} opens`} onClick=${() => a.openReminder(l)}><${I.Bell} size=${13} />${l.reminder ? "On" : "Remind"}</${Button}>`;
 }
 
 function ThisHour({ s, a, phone }) {

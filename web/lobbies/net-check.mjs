@@ -109,7 +109,7 @@ const banner = (page) => page.locator(".net-wrap");
   check(await banner(page).textContent() === "", "connected: no banner");
   await server.close();
   check(await visible(banner(page).getByText("Reconnecting to the lobby…")), "the server drops: Reconnecting to the lobby…");
-  check(await visible(banner(page).getByText("Can’t reach the lobby server. Still trying; your pledge is safe."), 17000), "still gone after 15 s: it says so, calmly");
+  check(await visible(banner(page).getByText("Can’t reach the lobby server. Still trying."), 17000), "still gone after 15 s: it says so, calmly");
   check(await page.getByRole("status").filter({ hasText: "Can’t reach the lobby server" }).count() === 1, "in a status region, for screen readers");
   server = await createServer({ port, auth, guests: true, batchMs: 30, lobbies: [{ id: 412, opensAt: Date.now() - 1452 * 1000, source }] });
   check(await visible(banner(page).getByText("Back online"), 35000), "back: Back online");

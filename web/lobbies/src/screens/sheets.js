@@ -266,6 +266,9 @@ function ReplaySheet({ s, a }) {
     return () => { live = false; player.current?.stop(); };
   }, []);
   useEffect(() => () => { if (video) URL.revokeObjectURL(video.url); }, [video]);
+  // The video made, its Save button takes the focus the Make a video button had.
+  const actions = useRef(null);
+  useEffect(() => { if (video) actions.current?.querySelector("button")?.focus(); }, [video]);
   function play(x = r, from = 0) {
     player.current?.stop();
     setPlaying(true);
@@ -302,9 +305,9 @@ function ReplaySheet({ s, a }) {
       <canvas ref=${canvas} width=${REPLAY_SIZE} height=${REPLAY_SIZE} role="img" aria-label="The lobby’s race, replayed. What happened is listed below."></canvas>
       <span class="replay-progress" aria-hidden="true"><span style=${{ width: `${progress * 100}%` }} /></span>
     </div>
-    <span class="sr" role="status">${recording ? "Recording the replay" : video ? "Video ready" : ""}</span>
+    <span class="sr" role="status">${recording ? "Recording the replay, 30 seconds" : video ? "Video ready: Save video" : ""}</span>
     <ol class="replay-story" aria-label="What happened">${story.map((e) => html`<li key=${e.t + e.text}><span class="num t2">${e.t}</span><span>${e.text}</span></li>`)}</ol>
-    <div class="sheet-actions">
+    <div class="sheet-actions" ref=${actions}>
       ${video
         ? html`<${Button} size="lg" onClick=${save}>Save video</${Button}>
             ${canShare && html`<${Button} variant="prim" size="lg" style="flex:1.4" onClick=${share}><${I.Share} size=${17} />Share…</${Button}>`}`
@@ -516,14 +519,14 @@ const SHEETS = {
   propose: { title: "Propose an idea", Body: ProposeSheet },
   host: { title: "Host a lobby", Body: HostSheet },
   wallet: { title: "Wallet", Body: WalletSheet, refocus: ".wallet-pill" },
-  receipt: { title: null, Body: ReceiptSheet, refocus: ".dock button" }, // back to the pledge it records
+  receipt: { title: null, Body: ReceiptSheet, refocus: ".dock .btn" }, // back to the pledge it records
   terms: { title: "Risks and terms", Body: TermsSheet },
   connect: { title: "Connect a wallet", Body: ConnectSheet, refocus: ".wallet-pill" },
   withdraw: { title: "Withdraw your pledge?", Body: WithdrawSheet },
   card: { title: "Your birth card", Body: BirthCardSheet },
   remind: { title: "Remind me", Body: RemindSheet },
-  report: { title: "Report this idea?", Body: ReportSheet, refocus: ".dock button" },
-  remove: { title: "Remove this idea?", Body: RemoveSheet, refocus: ".dock button" },
+  report: { title: "Report this idea?", Body: ReportSheet, refocus: ".idea[aria-pressed=true]" }, // back to the idea
+  remove: { title: "Remove this idea?", Body: RemoveSheet, refocus: ".idea[aria-pressed=true]", refocusFirst: true }, // to the idea now selected
   sibling: { title: "A sibling lobby", Body: SiblingSheet, refocus: ".sibling-open" },
   profile: { title: "Founder profile", Body: ProfileSheet, refocus: ".profile-open" },
   replay: { title: "The hour in 30 seconds", Body: ReplaySheet, refocus: ".replay-open" },
@@ -533,6 +536,6 @@ export function Sheets({ s, a }) {
   const def = s.sheet && SHEETS[s.sheet];
   if (!def) return null;
   const id = `${s.sheet}-title`;
-  return html`<${Sheet} key=${s.sheet} title=${def.title} labelledBy=${id} busy=${s.signing} onClose=${a.closeSheet} refocus=${def.refocus}><${def.Body} s=${s} a=${a} /></${Sheet}>`;
+  return html`<${Sheet} key=${s.sheet} title=${def.title} labelledBy=${id} busy=${s.signing} onClose=${a.closeSheet} refocus=${def.refocus} refocusFirst=${def.refocusFirst}><${def.Body} s=${s} a=${a} /></${Sheet}>`;
 }
 

@@ -92,9 +92,9 @@ function Stage({ s, a, phone }) {
       <div class="cheer-layer" aria-hidden="true">${s.cheers.map((c) => html`<span key=${c.id} class="cheer" style=${{ left: `${c.x}%`, animationDelay: `${c.delay}ms` }}>${c.kind === "fire" ? "🔥" : "💀"}</span>`)}</div>
     </div>
     <div class="row cheer-bar" role="group" aria-label="React to the pitch">
-      <button type="button" class="cheer-btn" aria-label="Fire: love this pitch" onClick=${() => a.cheer("fire")}><span aria-hidden="true">🔥</span><span class="num t2">${int(s.cheerCount.fire)}</span></button>
-      <button type="button" class="cheer-btn" aria-label="Skull: not this one" onClick=${() => a.cheer("skull")}><span aria-hidden="true">💀</span><span class="num t2">${int(s.cheerCount.skull)}</span></button>
-      <span class="t2" style="font-size:12px">Reactions fly over the stage</span>
+      <button type="button" class="cheer-btn" aria-label=${`Fire: love this pitch, ${int(s.cheerCount.fire)}`} onClick=${() => a.cheer("fire")}><span aria-hidden="true">🔥</span><span class="num t2" aria-hidden="true">${int(s.cheerCount.fire)}</span></button>
+      <button type="button" class="cheer-btn" aria-label=${`Skull: not this one, ${int(s.cheerCount.skull)}`} onClick=${() => a.cheer("skull")}><span aria-hidden="true">💀</span><span class="num t2" aria-hidden="true">${int(s.cheerCount.skull)}</span></button>
+      <span class="t2" style="font-size:12px">Everyone on the stage sees them</span>
     </div>
     <div class="panel" ref=${panel} style="padding:14px;display:flex;flex-direction:column;gap:12px">
       ${!v.listening && !v.onStage && html`<span class="t2" style="font-size:13px;line-height:1.45">Pitches happen out loud. Listen in, or raise your hand to pitch your idea on stage.</span>`}
@@ -126,7 +126,7 @@ function Stage({ s, a, phone }) {
       <span class="t2 num" style="font-size:13px;font-weight:600">${phone && !s.live ? `In the room · ${listeners} listening` : "In the room"}</span>
       ${s.live
         ? html`${s.live.people?.length > 0 && html`<ul class="row faces" style="gap:6px" aria-label="Some of the people inside">
-              ${s.live.people.map((who) => html`<li key=${who}><${Avatar} person=${person(who)} size=${phone ? 34 : 28} /></li>`)}
+              ${s.live.people.map((who) => html`<li key=${who}><${Avatar} person=${person(who)} size=${phone ? 34 : 28} /><span class="sr">${person(who).name}</span></li>`)}
               ${pres.inside > s.live.people.length && html`<li class="num more" aria-label=${`and ${int(pres.inside - s.live.people.length)} more`}>+${int(pres.inside - s.live.people.length)}</li>`}
             </ul>`}
             <span class="t2 num" style="font-size:13px">${int(pres.inside)} ${pres.inside === 1 ? "person" : "people"} inside</span>`
@@ -172,7 +172,7 @@ function IdeaCard({ d, s, a, phone }) {
     return html`<button type="button" class="idea" aria-pressed=${String(selected)} onClick=${() => a.select(d.id)}>
       <${Coin} coin=${coin(d)} size=${48} />
       <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
-        <span class="row" style="flex-wrap:nowrap;justify-content:space-between;gap:8px"><span class="ellipsis" style="font-size:15px;font-weight:600">${d.name}</span><span class="row" style="flex:none;gap:8px;flex-wrap:nowrap">${tr && html`<${Spark} points=${tr.points} width=${44} height=${18} color=${sparkColor} />`}<span class="num" style="font-size:14px;font-weight:600">${sol(d.total)}</span>${said}</span></span>
+        <span class="row" style="flex-wrap:nowrap;justify-content:space-between;gap:8px"><span class="ellipsis" style="font-size:15px;font-weight:600"><span class="sr">#${d.rank}, </span>${d.name}</span><span class="row" style="flex:none;gap:8px;flex-wrap:nowrap">${tr && html`<${Spark} points=${tr.points} width=${44} height=${18} color=${sparkColor} />`}<span class="num" style="font-size:14px;font-weight:600">${sol(d.total)}</span>${said}</span></span>
         <${Bar} value=${d.share} color=${barColor} />
         <span class="t2 num ellipsis" style="font-size:12px">${flagged > 0 ? html`<span style="color:#ffb340">Reported · ${flagged} · </span>` : ""}${ticker(d.ticker)} · ${d.backersShown} backers${d.yours ? " · you" : d.by ? ` · @${person(d.by).name}` : ""}${d.mine ? " · your pledge" : ""}</span>
       </span>
@@ -204,7 +204,7 @@ function Dock({ s, a, ideas, phone }) {
   if (d.mode === "pick") {
     action = html`<div class="row" style="flex-wrap:nowrap;gap:8px">
       <div style=${phone ? "flex:1" : ""}><${Segmented} label="Pledge amount in SOL" full=${phone} options=${amounts} value=${s.amount} onChange=${a.setAmount} /></div>
-      <${Button} variant="prim" disabled=${s.amount > s.balance} onClick=${() => a.openSheet("pledge")}>${phone ? "Pledge" : `Pledge ${sol(s.amount)}`}</${Button}>
+      <${Button} variant="prim" disabled=${s.amount > s.balance} aria-label=${`Pledge ${sol(s.amount)}`} onClick=${() => a.openSheet("pledge")}>${phone ? "Pledge" : `Pledge ${sol(s.amount)}`}</${Button}>
     </div>`;
   } else if (d.mode === "backed") {
     action = html`<div class="row" style="flex-wrap:nowrap;gap:8px">
@@ -256,13 +256,15 @@ function Finale({ f, a, phone }) {
     else if (lead.current !== f.lead.id) buzz([30, 60, 30]);
     lead.current = f.lead.id;
   }, [f.lead.id]);
-  return html`<section class=${`finale glass${f.urgent ? " urgent" : ""}`} aria-label="Final minutes">
+  // After Move or Keep it, the offer goes: the focus stays in the panel instead of falling to the page.
+  const panel = useRef(null);
+  const keep = (fn) => () => { fn(); requestAnimationFrame(() => panel.current?.focus()); };
+  return html`<section ref=${panel} tabIndex="-1" class=${`finale glass${f.urgent ? " urgent" : ""}`} aria-label="Final minutes">
     <div class="row" style="justify-content:space-between;gap:8px;flex-wrap:nowrap">
       <span class="finale-kicker">Final minutes</span>
       <span class="num finale-left" aria-hidden="true">Locks in ${f.lockIn}</span>
     </div>
     <p class="finale-gap num">${f.text}</p>
-    <span class="sr" role="status">${f.tied ? f.text : `$${f.lead.ticker} leads`}</span>
     <div class="finale-bar" aria-hidden="true">
       <span style=${{ width: `${f.leadShare}%`, background: `hsl(${f.lead.hue} 85% 62%)` }} />
       <span style=${{ width: `${100 - f.leadShare}%`, background: `hsl(${f.next.hue} 70% 55% / .55)` }} />
@@ -270,8 +272,8 @@ function Finale({ f, a, phone }) {
     ${f.nudge && html`<div class="finale-nudge">
       <span style="flex:1 1 200px;font-size:14px;line-height:1.4">${f.nudge.text}</span>
       <div class="row" style="flex-wrap:nowrap;gap:8px">
-        <${Button} size="sm" variant="ghost" onClick=${a.dismissNudge}>Keep it</${Button}>
-        <${Button} size="sm" variant="prim" onClick=${() => a.movePledge(f.nudge.to.id)}>Move to $${f.nudge.to.ticker}</${Button}>
+        <${Button} size="sm" variant="ghost" onClick=${keep(a.dismissNudge)}>Keep it</${Button}>
+        <${Button} size="sm" variant="prim" onClick=${keep(() => a.movePledge(f.nudge.to.id))}>Move to $${f.nudge.to.ticker}</${Button}>
       </div>
     </div>`}
   </section>`;
@@ -297,7 +299,8 @@ function Intro({ step, a }) {
     <div class="intro-icon" aria-hidden="true"><${c.icon} size=${20} /></div>
     <div style="display:flex;flex-direction:column;gap:4px;flex:1;min-width:0">
       <span class="t2 num" style="font-size:12px;font-weight:600">${step + 1} of ${INTRO.length}</span>
-      <h3 style="font-size:17px;font-weight:650">${c.title}</h3>
+      <h2 style="font-size:17px;font-weight:650">${c.title}</h2>
+      <span class="sr" role="status">${step > 0 ? `${step + 1} of ${INTRO.length}: ${c.title}. ${c.text}` : ""}</span>
       <p class="t2" style="font-size:14px;line-height:1.45">${c.text}</p>
       <div class="row" style="justify-content:space-between;gap:8px;margin-top:8px;flex-wrap:nowrap">
         <span class="intro-dots" aria-hidden="true">${INTRO.map((_, i) => html`<span class=${i === step ? "on" : ""} />`)}</span>
@@ -310,12 +313,30 @@ function Intro({ step, a }) {
   </section>`;
 }
 
+// What a screen reader hears of the final minutes, in one region that is always in the page: their start (with the
+// offer to move a pledge, if any), each change of leader, and the lock. Never every pledge.
+function useFinaleWords(f, locked) {
+  const [words, setWords] = useState("");
+  const was = useRef({ on: false, lead: null, nudge: false });
+  useEffect(() => {
+    const w = was.current;
+    if (f && !w.on) setWords(`Final minutes: pledges lock in ${f.lockIn.replace(/^0/, "")}. ${f.text}.${f.nudge ? ` ${f.nudge.text}` : ""}`);
+    else if (f && w.lead !== f.lead.id) setWords(`$${f.lead.ticker} takes the lead. ${f.text}.`);
+    else if (f && f.nudge && !w.nudge) setWords(f.nudge.text);
+    else if (!f && w.on && locked) setWords("Pledges are locked.");
+    was.current = { on: !!f, lead: f?.lead.id ?? null, nudge: !!f?.nudge };
+  }, [!!f, f?.lead.id, !!f?.nudge, locked]);
+  return words;
+}
+
 function Ideas({ s, a, phone }) {
   const ideas = race(s);
   const t = lobbyClock(s);
   const f = finale(s, ideas);
+  const finaleWords = useFinaleWords(f, !t.canPledge);
   return html`<main class="ideas-col">
     <div class="list scroll">
+      <span class="sr" role="status">${finaleWords}</span>
       ${f && html`<${Finale} f=${f} a=${a} phone=${phone} />`}
       ${s.intro !== null && html`<${Intro} step=${s.intro} a=${a} />`}
       ${phone
@@ -368,7 +389,7 @@ function Chat({ s, a, phone }) {
         <span style="font-size:12px;font-weight:600">${person(s.welcome.from ?? FEATURED.host).name} <span class="t2" style="font-weight:500">· host · pinned</span></span>
         <span style="font-size:13px;line-height:1.45">${s.welcome.text}</span>
       </div>
-      <${IconButton} label="Hide the welcome" size="sm" onClick=${a.hideWelcome}><${I.Close} size=${12} /></${IconButton}>
+      <${IconButton} label="Hide the welcome" size="sm" onClick=${() => { a.hideWelcome(); requestAnimationFrame(() => document.querySelector(".chat input, .chat textarea")?.focus()); }}><${I.Close} size=${12} /></${IconButton}>
     </div>`}
     <ol class="feed scroll" aria-live="off">${s.chat.slice().reverse().map((m, i) => html`<${ChatLine} key=${s.chat.length - i} m=${m} ideas=${byId} />`)}
       ${s.chat.length === 0 && html`<li class="t2 chat-empty">No messages yet. Say gm: everyone in the lobby reads this chat.</li>`}</ol>

@@ -101,8 +101,10 @@ export function pledgedOn(state, idea) {
 const INTRO = "lobbies.intro";
 const introSeen = () => { try { return localStorage.getItem(INTRO) === "1"; } catch { return true; } };
 
-export function createStore({ scene, freeze } = {}) {
+export function createStore({ scene, freeze, live = false } = {}) {
   let state = initialState();
+  // Live, nothing of the demo's past shows while the server's arrives: no curve, no history.
+  if (live) state = { ...state, curve: [], history: [] };
   // The first minute: three short cards on how a lobby works, once (not over the scenes' screenshots).
   if (!scene && !introSeen()) state.intro = 0;
   const subscribers = new Set();
@@ -126,6 +128,7 @@ export function createStore({ scene, freeze } = {}) {
     later(() => { if (state.toast && state.toast.id === mine) set({ toast: null }); }, 2800);
   };
   const chatLine = (line) => [...state.chat, line].slice(-60);
+  const hiddenWelcome = (text) => { try { return !!text && localStorage.getItem("lobbies.welcomeOff") === text; } catch { return false; } };
   // Reactions over the stage: a few at a time fly up and go; the counts keep what flew.
   let cheerId = 0;
   function flyCheers(fire, skull) {
@@ -222,7 +225,7 @@ export function createStore({ scene, freeze } = {}) {
       case "hello":
         linkBack();
         set({ live: { connected: true, reports: m.reports ?? {}, lobby: m.lobby, inside: m.inside, listening: m.listening, people: m.people ?? [], opensAt: m.opensAt, you: m.you, guest: m.guest, race: m.race, stage: m.stage },
-          welcome: m.welcome ?? null,
+          welcome: m.welcome ?? null, welcomeOff: hiddenWelcome(m.welcome?.text),
           elapsed: Math.floor((m.now - m.opensAt) / 1000), ideas: raceIdeas(m.race, s.meta), curve: Array.isArray(m.curve) ? m.curve : [], chat: m.chat.map((l) => lineToChat(l, m.you)), voice: { ...s.voice, onStage: !!m.stage?.speakers.includes(m.you) } });
         // A practice lobby: this wallet's pledge and practice SOL, as the server keeps them (across reloads).
         if (m.practice) set({ live: { ...state.live, practice: true }, pledge: m.guest ? null : liveMine(m), balance: m.guest ? 10 : toSol(BigInt(m.balance ?? "0")) }); // a guest sees the allowance they get by signing in
@@ -742,7 +745,7 @@ export function createStore({ scene, freeze } = {}) {
       const idea = state.ideas.find((d) => d.id === id);
       if (idea && link) link.remove(idea.ticker);
     },
-    hideWelcome() { set({ welcomeOff: true }); },
+    hideWelcome() { set({ welcomeOff: true }); try { localStorage.setItem("lobbies.welcomeOff", state.welcome?.text ?? ""); } catch {} },
     introNext() { set((s) => ({ intro: s.intro === null ? null : s.intro + 1 })); },
     introDone() { set({ intro: null }); try { localStorage.setItem(INTRO, "1"); } catch {} },
     dismissNudge() { set((s) => ({ nudgeOff: s.pledge?.symbol ?? null })); },
@@ -907,7 +910,11 @@ export function createStore({ scene, freeze } = {}) {
         if (rpc && state.wallet.address) readSolana(state.wallet.address);
       }, globalThis.__netEveryMs ?? 10000);
       if (typeof window !== "undefined" && !onlineWatch) {
-        onlineWatch = () => setNet({ offline: !navigator.onLine });
+        onlineWatch = () => {
+          const was = state.net.offline;
+          setNet({ offline: !navigator.onLine, ...(was && navigator.onLine ? { back: true } : {}) });
+          if (was && navigator.onLine) { clearTimeout(backTimer); backTimer = setTimeout(() => setNet({ back: false }), 3000); }
+        };
         addEventListener("online", onlineWatch);
         addEventListener("offline", onlineWatch);
         if (!navigator.onLine) onlineWatch();

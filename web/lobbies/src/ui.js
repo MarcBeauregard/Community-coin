@@ -22,9 +22,20 @@ export function IconButton({ label, tone, size, pressed, class: extra, children,
 
 // A segmented control; with `tabs` it switches between views and is announced as tabs (tablist, tab, selected).
 export function Segmented({ label, options, value, onChange, full, tabs }) {
-  return html`<div class=${cx("seg", full && "full")} role=${tabs ? "tablist" : "group"} aria-label=${label}>
+  // Tabs move with the arrow keys (and Home / End), as tabs do.
+  const onKey = tabs ? (e) => {
+    const i = options.findIndex((o) => o.id === value);
+    const to = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: options.length - 1 }[e.key];
+    if (to === undefined) return;
+    e.preventDefault();
+    const next = options[(to + options.length) % options.length];
+    onChange(next.id);
+    const list = e.currentTarget;
+    requestAnimationFrame(() => list.querySelectorAll("[role=tab]")[options.indexOf(next)]?.focus());
+  } : undefined;
+  return html`<div class=${cx("seg", full && "full")} role=${tabs ? "tablist" : "group"} aria-label=${label} onKeyDown=${onKey}>
     ${options.map((o) => tabs
-      ? html`<button type="button" key=${o.id} role="tab" aria-selected=${String(o.id === value)} aria-pressed=${String(o.id === value)} onClick=${() => onChange(o.id)}>${o.label}</button>`
+      ? html`<button type="button" key=${o.id} role="tab" aria-selected=${String(o.id === value)} aria-pressed=${String(o.id === value)} tabIndex=${o.id === value ? 0 : -1} onClick=${() => onChange(o.id)}>${o.label}</button>`
       : html`<button type="button" key=${o.id} aria-pressed=${String(o.id === value)} disabled=${o.disabled} onClick=${() => onChange(o.id)}>${o.label}</button>`)}
   </div>`;
 }
@@ -104,7 +115,7 @@ export function Orbit({ people, radius = 47, base = 34, reverse, offset = 0 }) {
 }
 
 // A modal sheet: centered on desktop, from the bottom on a phone. Escape and the backdrop close it; focus moves in.
-export function Sheet({ title, labelledBy, onClose, busy, refocus, children }) {
+export function Sheet({ title, labelledBy, onClose, busy, refocus, refocusFirst, children }) {
   const ref = useRef(null);
   const closeRef = useRef(null);
   closeRef.current = () => { if (!busy) onClose(); };
@@ -127,7 +138,9 @@ export function Sheet({ title, labelledBy, onClose, busy, refocus, children }) {
     // replaced it, else to the screen's heading.
     return () => { cancelAnimationFrame(settle); document.removeEventListener("keydown", esc); setTimeout(() => {
       if (document.querySelector("[role=dialog]")) return; // another sheet took over (pledge → receipt): it has the focus
-      if (opener && opener !== document.body && opener.isConnected) return opener.focus(); // the page itself is no opener
+      const preferred = refocusFirst && refocus && document.querySelector(refocus);
+      if (preferred) return preferred.focus(); // the opener now stands for something else (the next idea)
+      if (opener && opener !== document.body && opener.isConnected && !opener.disabled) return opener.focus(); // the page itself is no opener; a button the sheet disabled is none either
       const next = (refocus && document.querySelector(refocus)) || document.querySelector(".screen h1, h1");
       if (next) { if (!next.matches("button, a, input")) next.setAttribute("tabindex", "-1"); next.focus(); }
     }, 0); };

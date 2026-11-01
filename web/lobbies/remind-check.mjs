@@ -111,7 +111,7 @@ const sheet = (page) => page.getByRole("dialog", { name: "Remind me" });
 }
 {
   const page = await open({ answer: null, width: 390 });
-  await page.getByRole("button", { name: "Remind me when it opens" }).first().click();
+  await page.getByRole("button", { name: /Remind me when .* opens/ }).first().click();
   await sheet(page).getByRole("button", { name: "Notify me" }).click();
   check(await sheet(page).getByRole("alert").filter({ hasText: "can’t show notifications" }).isVisible(), "a browser without notifications says so, and points to the calendar");
   const box = await sheet(page).boundingBox();

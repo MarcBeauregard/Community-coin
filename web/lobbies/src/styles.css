@@ -498,3 +498,4 @@ button.profile-row:hover { background: rgba(255, 255, 255, 0.04); }
 .net.amber .dot { background: #ffb340; }
 .net.lime .dot { background: var(--lime); }
 .app.net-on .toast { top: calc(64px + env(safe-area-inset-top)); }
+.btn.fill.remind-on { background: rgba(100, 210, 255, 0.18); color: var(--sky); }
