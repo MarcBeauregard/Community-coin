@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { html, Button, IconButton, Segmented, Chip, Coin, Avatar, Bar, GestationTimeline, Equalizer, Composer } from "../ui.js";
 import * as I from "../icons.js";
 import { person, coin, FEATURED, SPEAKERS, MUTED_SPEAKERS, CROWD, PEOPLE, ME } from "../demo/data.js";
-import { race, timeline, lobbyClock, dock, presence, voiceStatus } from "../demo/select.js";
+import { race, timeline, lobbyClock, dock, presence, voiceStatus, finale } from "../demo/select.js";
 import { sol, int, ticker } from "../format.js";
 import { WalletPill } from "./discover.js";
 import { AUDIO_ERRORS } from "../voice/audio.js";
@@ -195,7 +195,7 @@ function Dock({ s, a, ideas, phone }) {
       <${Button} size="sm" onClick=${() => a.openSheet("withdraw")}>Withdraw</${Button}>
     </div>`;
   } else if (d.mode === "move") {
-    action = html`<${Button} variant="prim" onClick=${a.movePledge}>Move my ${sol(d.mine)} here</${Button}>`;
+    action = html`<${Button} variant="prim" onClick=${() => a.movePledge()}>Move my ${sol(d.mine)} here</${Button}>`;
   } else {
     // After the lock, the dock says what the lock decided: who launches, or that everyone is refunded.
     const k = s.locked;
@@ -213,11 +213,53 @@ function Dock({ s, a, ideas, phone }) {
   </section>`;
 }
 
+// A light tap on phones that can, once the person has touched the page (browsers refuse it before), never when they
+// asked for less motion.
+function buzz(pattern) {
+  try {
+    if (!navigator.vibrate || navigator.userActivation?.hasBeenActive === false) return;
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches || !matchMedia("(pointer: coarse)").matches) return;
+    navigator.vibrate(pattern);
+  } catch {}
+}
+
+// The last five minutes: the gap between the top two, live, and the lock coming. A screen reader hears the lead
+// when it changes, not every pledge.
+function Finale({ f, a, phone }) {
+  const lead = useRef(null);
+  useEffect(() => {
+    if (lead.current === null) buzz(20);
+    else if (lead.current !== f.lead.id) buzz([30, 60, 30]);
+    lead.current = f.lead.id;
+  }, [f.lead.id]);
+  return html`<section class=${`finale glass${f.urgent ? " urgent" : ""}`} aria-label="Final minutes">
+    <div class="row" style="justify-content:space-between;gap:8px;flex-wrap:nowrap">
+      <span class="finale-kicker">Final minutes</span>
+      <span class="num finale-left" aria-hidden="true">Locks in ${f.lockIn}</span>
+    </div>
+    <p class="finale-gap num">${f.text}</p>
+    <span class="sr" role="status">${f.tied ? f.text : `$${f.lead.ticker} leads`}</span>
+    <div class="finale-bar" aria-hidden="true">
+      <span style=${{ width: `${f.leadShare}%`, background: `hsl(${f.lead.hue} 85% 62%)` }} />
+      <span style=${{ width: `${100 - f.leadShare}%`, background: `hsl(${f.next.hue} 70% 55% / .55)` }} />
+    </div>
+    ${f.nudge && html`<div class="finale-nudge">
+      <span style="flex:1 1 200px;font-size:14px;line-height:1.4">${f.nudge.text}</span>
+      <div class="row" style="flex-wrap:nowrap;gap:8px">
+        <${Button} size="sm" variant="ghost" onClick=${a.dismissNudge}>Keep it</${Button}>
+        <${Button} size="sm" variant="prim" onClick=${() => a.movePledge(f.nudge.to.id)}>Move to $${f.nudge.to.ticker}</${Button}>
+      </div>
+    </div>`}
+  </section>`;
+}
+
 function Ideas({ s, a, phone }) {
   const ideas = race(s);
   const t = lobbyClock(s);
+  const f = finale(s, ideas);
   return html`<main class="ideas-col">
     <div class="list scroll">
+      ${f && html`<${Finale} f=${f} a=${a} phone=${phone} />`}
       ${phone
         ? html`<div class="row" style="justify-content:space-between;padding:0 4px 10px">
             <span class="t2 num" style="font-size:13px">${sol(ideas.reduce((x, d) => x + d.total, 0))} · ${t.proposeHint}</span>
@@ -272,6 +314,7 @@ function Chat({ s, a, phone }) {
 
 export function Lobby({ s, a, phone }) {
   const t = lobbyClock(s);
+  const f = finale(s, race(s));
   const sel = race(s).find((d) => d.id === s.selected) || race(s)[0];
   const head = html`<header class="lobby-head">
     <${IconButton} label="Back to lobbies" size=${phone ? "sm" : undefined} onClick=${() => a.go({ screen: "discover" })}><${I.Back} size=${15} /></${IconButton}>
@@ -282,9 +325,9 @@ export function Lobby({ s, a, phone }) {
     ${!phone && html`<div class="tl"><${GestationTimeline} phases=${timeline(s.elapsed)} /></div>`}
     <div class="row" style="flex-wrap:nowrap;gap:14px">
       ${!phone && !s.live && html`<${Button} variant="ghost" size="sm" disabled=${s.elapsed >= 3594} title="Prototype only: jump to the last seconds before launch" onClick=${a.skipToLock}>Demo · skip to lock</${Button}>`}
-      <div class="clock">
-        <span class="t2" style="font-size:12px;font-weight:600">${t.phase === "lock" ? "Locked · launching in" : "Launch in"}</span>
-        <span class="value display num" style=${{ color: t.phase === "lock" ? "#ffb340" : "var(--text)" }} role="timer" aria-label=${`Launch in ${t.launchIn}`}>${t.launchIn}</span>
+      <div class=${`clock${f ? " finale-clock" : ""}${f?.urgent ? " urgent" : ""}`}>
+        <span class="t2" style="font-size:12px;font-weight:600">${f ? "Pledges lock in" : t.phase === "lock" ? "Locked · launching in" : "Launch in"}</span>
+        <span class="value display num" style=${{ color: f ? (f.urgent ? "#ffb340" : "var(--lime)") : t.phase === "lock" ? "#ffb340" : "var(--text)" }} role="timer" aria-label=${f ? `Pledges lock in ${f.lockIn}` : `Launch in ${t.launchIn}`}>${f ? f.lockIn : t.launchIn}</span>
       </div>
       <${WalletPill} s=${s} a=${a} compact=${phone} />
     </div>

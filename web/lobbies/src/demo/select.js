@@ -1,6 +1,6 @@
 // Derived view data: everything the screens show that is computed from the store's state rather than stored.
 
-import { PHASES, PROPOSALS_CLOSE, LOCK_AT, phaseAt, pledgedOn } from "./store.js";
+import { PHASES, PROPOSALS_CLOSE, LOCK_AT, FINALE_AT, phaseAt, pledgedOn } from "./store.js";
 import { FEATURED, LOBBIES, CHANNELS, FOUNDERS, ME } from "./data.js";
 import { HOUR, clock, sol } from "../format.js";
 
@@ -39,6 +39,28 @@ export function lobbyClock(s) {
     canPledge: s.elapsed < LOCK_AT && !s.launched,
     proposeHint: s.elapsed < PROPOSALS_CLOSE ? `Proposals close in ${clock(PROPOSALS_CLOSE - s.elapsed)}` : "Proposals closed at 00:30",
   };
+}
+
+const ORDINAL = ["1st", "2nd", "3rd"];
+const ordinal = (n) => ORDINAL[n - 1] ?? `${n}th`;
+
+/**
+ * The last five minutes before the lock (00:50 to 00:55): who leads, by how much, and how long is left. `urgent` in
+ * the last minute. `nudge`: when the person's pick is out of the top two, the offer to move it to the leader in one
+ * gesture (unless they set it aside for this pledge). Null outside the finale.
+ */
+export function finale(s, ideas) {
+  if (s.launched || s.elapsed < FINALE_AT || s.elapsed >= LOCK_AT || ideas.length < 2) return null;
+  const [lead, next] = ideas;
+  const gap = lead.total - next.total;
+  const left = LOCK_AT - s.elapsed;
+  const tied = Math.round(gap * 10) === 0;
+  const text = tied ? `$${lead.ticker} and $${next.ticker} are tied` : `$${lead.ticker} leads $${next.ticker} by ${sol(gap)}`;
+  const mine = s.pledge && ideas.find((d) => d.ticker === s.pledge.symbol);
+  const nudge = mine && mine.rank > 2 && s.nudgeOff !== s.pledge.symbol
+    ? { from: mine, to: lead, amount: s.pledge.amount, text: `$${mine.ticker} is ${ordinal(mine.rank)}. Move your ${sol(s.pledge.amount)} to $${lead.ticker}?` }
+    : null;
+  return { lead, next, gap, tied, text, left, lockIn: clock(left), urgent: left <= 60, leadShare: (lead.total / (lead.total + next.total || 1)) * 100, nudge };
 }
 
 // What the pledge dock shows for the selected idea.

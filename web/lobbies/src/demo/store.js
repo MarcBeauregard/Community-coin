@@ -20,6 +20,7 @@ export const PHASES = [
 ];
 export const PROPOSALS_CLOSE = 1800;
 export const LOCK_AT = 3300;
+export const FINALE_AT = 3000; // the last five minutes before the lock: the race tightens on screen
 export const START_ELAPSED = 1452; // the demo opens 24:12 into the hour
 export const PROPOSE_BOND = 0.05;
 
@@ -49,6 +50,7 @@ function initialState() {
     voice: { listening: false, hand: false, onStage: false, mic: true, invited: false },
     chat: seedLobbyChat(),
     draft: "",
+    nudgeOff: null, // the finale's "move your pledge" offer, set aside for this pledge
     filter: "all",
     query: "",
     reminders: { cat: true },
@@ -565,15 +567,18 @@ export function createStore({ scene, freeze } = {}) {
       set((s) => ({ balance: s.balance + p.amount, pledge: myPledge(s.chain), ideas: shownIdeas(s), sheet: null, receipt: r.receipt, receipts: [r.receipt, ...s.receipts] }));
       toast(`${sol(p.amount)} returned to your wallet`, "white");
     },
-    movePledge() {
+    movePledge(to) {
       const p = state.pledge;
-      const idea = selectedIdea();
+      const idea = (to && state.ideas.find((i) => i.id === to)) || selectedIdea();
+      if (!p || idea.ticker === p.symbol) return;
+      if (to) set({ selected: idea.id });
       if (practiceLive()) { pending = { op: "move", symbol: idea.ticker, amount: p.amount }; return link.practice("move", { from: p.symbol, to: idea.ticker }); }
       const r = act(state.chain, "move_pledge", { user: ME, from: p.symbol, to: idea.ticker }, state.elapsed);
       if (!r.ok) return toast(errorText(r.error), "error");
       set((s) => ({ pledge: myPledge(s.chain), ideas: shownIdeas(s), receipt: r.receipt, receipts: [r.receipt, ...s.receipts] }));
       toast(`Moved your ${sol(p.amount)} to $${idea.ticker}`);
     },
+    dismissNudge() { set((s) => ({ nudgeOff: s.pledge?.symbol ?? null })); },
     skipToLock() { set((s) => ({ elapsed: Math.max(s.elapsed, HOUR - 6), sheet: null })); set(settle(state)); },
     replay() {
       const chain = createDemoLobby();
@@ -674,6 +679,12 @@ export function createStore({ scene, freeze } = {}) {
     "lobby-stage": () => set({ route: { screen: "lobby" }, lobbyTab: "stage", voice: { listening: true, hand: false, onStage: true, mic: true } }),
     "lobby-chat": () => set({ route: { screen: "lobby" }, lobbyTab: "chat" }),
     "lobby-backed": () => { pledgeNow("WIF", 1); set({ route: { screen: "lobby" } }); },
+    "lobby-finale": () => { pledgeNow("BRETT", 2); set({ route: { screen: "lobby" }, elapsed: 3060 }); },
+    "lobby-finale-close": () => {
+      // $WIF ahead of $POPCAT by 3.2 SOL: one pledge can turn the race.
+      ["a", "b"].forEach((k) => state.chain.apply("pledge", { user: `crowd-close-${k}`, symbol: "POPCAT", amount: toLamports(24.7) }, 3000));
+      set((s) => ({ route: { screen: "lobby" }, elapsed: 3060, ideas: ideasFrom(s.chain, s.meta) }));
+    },
     "lobby-locked": () => { pledgeNow("WIF", 1); set({ route: { screen: "lobby" }, elapsed: 3420 }); set(settle(state)); },
     "sheet-pledge": () => set({ route: { screen: "lobby" }, sheet: "pledge" }),
     "sheet-receipt": () => { pledgeNow("WIF", 1); set({ route: { screen: "lobby" }, sheet: "receipt" }); },
