@@ -4,6 +4,7 @@ import { PHASES, PROPOSALS_CLOSE, LOCK_AT, FINALE_AT, phaseAt, pledgedOn } from 
 import { FEATURED, LOBBIES, CHANNELS, FOUNDERS, ME } from "./data.js";
 import { HOUR, clock, sol } from "../format.js";
 import { seriesOf, standingsAt } from "../race/curve.js";
+import { nextOpening, dayOf } from "../remind/remind.js";
 
 export const PHASE_LABEL = { gather: "Gathering", floor: "Proposing & pledging", pledge: "Pledging", lock: "Locked", done: "Launched" };
 
@@ -89,7 +90,7 @@ export function lobbyCards(s) {
     .map((l) => {
       if (l.opens) {
         const on = !!s.reminders[l.id];
-        return { ...l, live: false, tone: l.mine ? "sky" : "neutral", phase: l.mine ? "Hosted by you" : `Opens ${l.opens}`, when: l.opens, progress: 0,
+        return { ...l, live: false, tone: l.mine ? "sky" : "neutral", phase: l.mine ? "Hosted by you" : `Opens ${l.opens}`, when: dayOf(nextOpening(l.opens)) === "today" ? "Today" : "Tomorrow", progress: 0,
           meta: `${l.waiting + (on ? 1 : 0)} waiting`, meta2: l.clan ? `$${s.clans.find((c) => c.id === l.clan)?.ticker ?? ""} clan · you host` : l.mine ? "you host" : `@${l.host}`, reminder: on };
       }
       const e = (((s.elapsed + l.offset) % HOUR) + HOUR) % HOUR;
@@ -181,6 +182,10 @@ export function trend(s, ticker) {
   const now = s.curve[s.curve.length - 1].t;
   const then = standingsAt(s.curve, now - 600).find((x) => x.ticker === ticker)?.sol ?? 0;
   const gained = points[points.length - 1][1] - then;
+  // Words only when a sample sits within two minutes of ten minutes ago: a gap (the server joined late) is not a
+  // gain, and is never filled with a guess.
+  const known = s.curve.some((p) => Math.abs(p.t - (now - 600)) <= 120);
+  if (!known) return { points, gained: null, text: null };
   return { points, gained, text: gained >= 0.05 ? `up ${sol(gained)} in the last 10 minutes` : "no new SOL in the last 10 minutes" };
 }
 

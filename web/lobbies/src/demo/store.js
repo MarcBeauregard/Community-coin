@@ -11,7 +11,7 @@ import { connectLobby, connectClan, voiceToken, walletSession, guestSession } fr
 import { createAudio } from "../voice/audio.js";
 import { detectWallets, connectWallet, signText, disconnectWallet, lastWallet, watchWallet, walletError, shortAddress, readBalance } from "../wallet/wallets.js";
 import { addSample, totalsOf } from "../race/curve.js";
-import { nextOpening, askToNotify, notifyPermission, loadReminders, saveReminders, armReminders, notify } from "../remind/remind.js";
+import { nextOpening, hhmm, dayOf, askToNotify, notifyPermission, loadReminders, saveReminders, armReminders, notify } from "../remind/remind.js";
 import { createDemoLobby, ideasFrom, ideaMeta, myPledge, act, crank, launchSummary, lockedOf, liveLaunch, founderAllocation, toLamports, toSol, errorText, receiptFor } from "./lobby.js";
 
 export const PHASES = [
@@ -199,8 +199,11 @@ export function createStore({ scene, freeze, live = false } = {}) {
   const setNet = (patch) => set((s) => ({ net: { ...s.net, ...patch } }));
   let downTimer = null;
   let backTimer = null;
+  let lostAt = 0;
+  let quietUntil = 0; // round trips measured across an outage say nothing about the lobby's speed
   function linkLost() {
     if (state.net.server !== "ok") return;
+    lostAt = Date.now();
     setNet({ server: "reconnecting", back: false });
     clearTimeout(downTimer);
     downTimer = setTimeout(() => { if (state.net.server === "reconnecting") setNet({ server: "down" }); }, 15000);
@@ -208,6 +211,9 @@ export function createStore({ scene, freeze, live = false } = {}) {
   function linkBack() {
     clearTimeout(downTimer);
     if (state.net.server === "ok") return;
+    quietUntil = Date.now() + 5000;
+    // A blink under 1.5 s (a reconnection nobody noticed) is not worth a "Back online".
+    if (Date.now() - lostAt < 1500 && state.net.server === "reconnecting") return setNet({ server: "ok", slow: false });
     setNet({ server: "ok", slow: false, back: true });
     clearTimeout(backTimer);
     backTimer = setTimeout(() => setNet({ back: false }), 3000);
@@ -322,13 +328,17 @@ export function createStore({ scene, freeze, live = false } = {}) {
         const ideas = raceIdeas(m.race, s.meta);
         const gone = !ideas.some((d) => d.id === s.selected);
         set({ live: { ...s.live, race: m.race }, ideas, ...(gone ? { selected: ideas[0]?.id ?? null } : {}), ...(s.sheet === "remove" || s.sheet === "report" ? { sheet: null } : {}) });
-        toast(m.by === s.live.you ? `$${m.symbol} is out of the race. Everyone on it is refunded.` : `The host removed $${m.symbol} from the race. Pledges on it are refunded.`, "white");
+        set({ chat: chatLine({ sys: true, kind: "propose", text: `The host removed $${m.symbol} from the race. Pledges on it were refunded.` }) });
+        // Whoever had SOL or a bond on it hears their own amount instead (the "refunded" message).
+        const concerned = s.pledge?.symbol === m.symbol || s.ideas.some((d) => d.ticker === m.symbol && d.by === s.live.you);
+        if (m.by === s.live.you) toast(`$${m.symbol} is out of the race. Everyone on it is refunded.`, "white");
+        else if (!concerned) toast(`The host removed $${m.symbol} from the race. Pledges on it are refunded.`, "white");
         break;
       }
       case "refunded": {
         const amount = toSol(BigInt(m.amount)), bond = toSol(BigInt(m.bond));
         set({ pledge: liveMine(m), balance: toSol(BigInt(m.balance ?? "0")) });
-        later(() => toast([amount ? `${sol(amount)} back from $${m.symbol}` : "", bond ? `your ${sol(bond)} bond is back` : ""].filter(Boolean).join(", and ").replace(/^./, (c) => c.toUpperCase()), "white"), 2900);
+        toast(`The host removed $${m.symbol}: ${[amount ? `your ${sol(amount)} is back` : "", bond ? `your ${sol(bond)} bond is back` : ""].filter(Boolean).join(", and ")}.`, "white");
         break;
       }
       case "cheers": flyCheers(Math.max(0, m.fire | 0), Math.max(0, m.skull | 0)); break;
@@ -346,6 +356,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
       case "closed": if (s.live) set({ live: { ...s.live, connected: false } }); linkLost(); break;
       case "pong": {
         const rtt = Date.now() - (m.echo ?? Date.now());
+        if (state.net.offline || m.echo < quietUntil - 5000 || Date.now() < quietUntil) break;
         if (rtt > 1500 && !state.net.slow) setNet({ slow: true });
         else if (rtt < 800 && state.net.slow) setNet({ slow: false });
         break;
@@ -589,7 +600,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
       const at = nextOpening(lobby.opens);
       setReminders({ ...state.reminders, [lobby.id]: { id: lobby.id, at, name: lobby.name, theme: lobby.theme, notify: true } });
       set({ remindError: null });
-      toast(`You’ll get a notification at ${new Date(at - 5 * 60_000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}, 5 minutes before ${lobby.name} opens`, "sky");
+      toast(`Notification set for ${hhmm(at - 5 * 60_000)}`, "sky");
     },
     stopReminder(id) {
       const { [id]: _, ...rest } = state.reminders;
@@ -600,7 +611,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
     hostLobby({ name, theme, opens, clan = null }) {
       const id = `h${Date.now()}`;
       set((s) => ({ hosted: [{ id, name, theme, host: "you", opens, waiting: 0, mine: true, clan }, ...s.hosted], sheet: null, filter: "all", query: "" }));
-      toast(`${name} opens at ${opens}. You’re the host.`, "sky");
+      toast(`${name} opens ${dayOf(nextOpening(opens))} at ${opens}. You’re the host.`, "sky");
       return id;
     },
     // A clan's next coin: a lobby its founders open for a little sibling, pinned in the clan, open to anyone.
@@ -906,14 +917,14 @@ export function createStore({ scene, freeze, live = false } = {}) {
       if (!freeze && !interval) interval = setInterval(tick, 1000);
       // Every 10 s: the lobby server's round trip, and the wallet's balance on the cluster (?rpc=).
       if (!pulse) pulse = setInterval(() => {
-        if (link && state.live?.connected) link.ping();
+        if (link && state.live?.connected && !state.net.offline) link.ping();
         if (rpc && state.wallet.address) readSolana(state.wallet.address);
       }, globalThis.__netEveryMs ?? 10000);
       if (typeof window !== "undefined" && !onlineWatch) {
         onlineWatch = () => {
           const was = state.net.offline;
           setNet({ offline: !navigator.onLine, ...(was && navigator.onLine ? { back: true } : {}) });
-          if (was && navigator.onLine) { clearTimeout(backTimer); backTimer = setTimeout(() => setNet({ back: false }), 3000); }
+          if (was && navigator.onLine) { quietUntil = Date.now() + 5000; clearTimeout(backTimer); backTimer = setTimeout(() => setNet({ back: false }), 3000); }
         };
         addEventListener("online", onlineWatch);
         addEventListener("offline", onlineWatch);

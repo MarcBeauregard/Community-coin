@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { html, Button, Segmented, Coin, Sheet, Avatar, Chip } from "../ui.js";
 import * as I from "../icons.js";
 import { coin, FEATURED, LOBBIES } from "../demo/data.js";
-import { nextOpening, icsFor, googleCalendarUrl, calendarFileName, LEAD_MS } from "../remind/remind.js";
+import { nextOpening, icsFor, googleCalendarUrl, calendarFileName, LEAD_MS, hhmm, dayOf, notifyPermission } from "../remind/remind.js";
 import { prepareReplay, playReplay, recordReplay, drawFrame, replayStory, videoType, replayFileName, SIZE as REPLAY_SIZE, LENGTH_MS } from "../race/replay.js";
 import { addressPerson, shortAddress, WALLET_TINT, isAddress, txUrl } from "../wallet/wallets.js";
 import { drawBirthCard, cardCaption, cardFileName, cardText, FORMATS } from "../card/birthcard.js";
@@ -18,6 +18,8 @@ const SLOTS = ["21:00", "22:00", "23:00"];
 
 function PledgeSheet({ s, a }) {
   const d = dock(s, race(s));
+  // Live, a pledge goes to the lobby's server: not while it can't be reached.
+  const unreachable = !!s.live && (s.net.offline || s.net.server !== "ok");
   return html`<div style="display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;padding-top:8px">
       <${Coin} coin=${coin(d.sel)} size=${84} big />
       <h2 id="pledge-title" style="font-size:16px;font-weight:600">Back ${ticker(d.sel.ticker)} · ${d.sel.name}</h2>
@@ -34,7 +36,8 @@ function PledgeSheet({ s, a }) {
       <button type="button" class="link" onClick=${() => a.openSheet("terms")}>Risks and terms</button></span>
     <div class="sheet-actions">
       <${Button} size="lg" disabled=${s.signing} onClick=${a.closeSheet}>Cancel</${Button}>
-      <${Button} variant="prim" size="lg" style="flex:1.4" disabled=${s.signing} onClick=${a.confirmPledge}>
+      ${unreachable && html`<span class="remind-error" role="alert" style="flex-basis:100%"><${I.Alert} size=${14} />${s.net.offline ? "You’re offline. Confirm when you’re back online." : "The lobby server can’t be reached. Confirm when it’s back."}</span>`}
+      <${Button} variant="prim" size="lg" style="flex:1.4" disabled=${s.signing || unreachable} onClick=${a.confirmPledge}>
         ${s.signing ? html`<span class="spin" aria-hidden="true" />Confirming` : "Confirm practice pledge"}
       </${Button}>
     </div>`;
@@ -311,7 +314,7 @@ function ReplaySheet({ s, a }) {
       ${video
         ? html`<${Button} size="lg" onClick=${save}>Save video</${Button}>
             ${canShare && html`<${Button} variant="prim" size="lg" style="flex:1.4" onClick=${share}><${I.Share} size=${17} />Share…</${Button}>`}`
-        : html`<${Button} size="lg" disabled=${!r || recording} onClick=${toggle}>${playing ? html`Pause` : html`<${I.Play} size=${15} />${progress > 0 && progress < 1 ? "Resume" : "Play"}`}</${Button}>
+        : html`${!recording && html`<${Button} size="lg" disabled=${!r} onClick=${toggle}>`}${playing ? html`Pause` : html`<${I.Play} size=${15} />${progress > 0 && progress < 1 ? "Resume" : "Play"}`}</${Button}>`}
             ${canRecord && html`<${Button} variant="prim" size="lg" style="flex:1.4" disabled=${!r || recording} onClick=${record}>${recording ? `Recording… ${left} s` : "Make a video"}</${Button}>`}`}
     </div>`;
 }
@@ -324,8 +327,9 @@ function RemindSheet({ s, a }) {
   const r = s.reminders[lobby.id];
   const on = !!(r && r.notify);
   const at = on ? r.at : nextOpening(lobby.opens);
-  const time = (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const day = new Date(at).toDateString() === new Date().toDateString() ? "today" : "tomorrow";
+  const time = hhmm;
+  const day = dayOf(at);
+  const blocked = notifyPermission() === "denied";
   const url = `${location.origin}${location.pathname}`;
   const download = () => {
     const blob = new Blob([icsFor(lobby, at, url)], { type: "text/calendar" });
@@ -348,12 +352,12 @@ function RemindSheet({ s, a }) {
     <div class="remind-option">
       <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0">
         <span style="font-size:15px;font-weight:600">${on ? `Notification at ${time(at - LEAD_MS)}` : "Notify me 5 minutes before"}</span>
-        <span class="t2" style="font-size:13px;line-height:1.45">From this page: keep a tab of it open. Your browser asks you first.</span>
+        <span class="t2" style="font-size:13px;line-height:1.45">Sent by this page, so keep it open in a tab. For a reminder with the app closed, use your calendar.</span>
         <span role="alert" class="remind-error">${s.remindError ? html`<${I.Alert} size=${14} /> ${s.remindError}` : ""}</span>
       </div>
       ${on
         ? html`<${Button} size="sm" onClick=${() => a.stopReminder(lobby.id)}>Turn off</${Button}>`
-        : html`<${Button} size="sm" variant="prim" onClick=${() => a.notifyMe(lobby)}>Notify me</${Button}>`}
+        : html`<${Button} size="sm" variant="prim" disabled=${blocked && !!s.remindError} onClick=${() => a.notifyMe(lobby)}>Notify me</${Button}>`}
     </div>
     <div class="remind-option">
       <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0">
@@ -381,7 +385,7 @@ function ProfileSheet({ s, a }) {
       <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px">
         <span style="font-size:19px;font-weight:650" class="num">${who ? shortAddress(w.address) : "You"}</span>
         ${p.streak > 0
-          ? html`<span style="align-self:flex-start"><${Chip} tone="lime"><${I.Flame} size=${13} />${p.streak === 1 ? "1 lobby with a pledge" : `${p.streak} lobbies in a row`}</${Chip}></span>`
+          ? html`<span style="align-self:flex-start"><${Chip} tone="lime"><${I.Flame} size=${13} />${p.streak === 1 ? "Streak: 1 lobby" : `${p.streak} lobbies in a row`}</${Chip}></span>`
           : html`<span class="t2" style="font-size:13px">Pledge in a lobby to start a streak</span>`}
       </div>
     </div>

@@ -167,7 +167,7 @@ function IdeaCard({ d, s, a, phone }) {
   const barColor = selected ? "var(--lime)" : "rgba(235,235,245,.38)";
   const tr = trend(s, d.ticker);
   const sparkColor = selected ? "var(--lime)" : `hsl(${d.hue} 80% 68%)`;
-  const said = tr && html`<span class="sr">, ${tr.text}</span>`;
+  const said = tr?.text && html`<span class="sr">, ${tr.text}</span>`;
   if (phone) {
     return html`<button type="button" class="idea" aria-pressed=${String(selected)} onClick=${() => a.select(d.id)}>
       <${Coin} coin=${coin(d)} size=${48} />
@@ -225,8 +225,8 @@ function Dock({ s, a, ideas, phone }) {
   const host = manages(s) && s.live?.practice && t.canPledge;
   const reported = !!s.reported[d.sel.ticker];
   const flag = host
-    ? html`<${IconButton} label=${`Remove ${ticker(d.sel.ticker)} from the race`} tone="danger" size="sm" onClick=${() => a.askRemove(d.sel.id)}><${I.Close} size=${13} /></${IconButton}>`
-    : !d.sel.yours && t.canPledge && html`<${IconButton} label=${reported ? `${ticker(d.sel.ticker)} reported` : `Report ${ticker(d.sel.ticker)}`} size="sm" pressed=${reported} disabled=${reported} onClick=${() => a.askReport(d.sel.id)}><${I.Alert} size=${14} /></${IconButton}>`;
+    ? html`<${IconButton} label=${`Remove ${ticker(d.sel.ticker)} from the race`} tone="danger" size="sm" class="dock-flag" onClick=${() => a.askRemove(d.sel.id)}><${I.Close} size=${13} /></${IconButton}>`
+    : !d.sel.yours && t.canPledge && html`<${IconButton} label=${reported ? `${ticker(d.sel.ticker)} reported` : `Report ${ticker(d.sel.ticker)}`} size="sm" class="dock-flag" pressed=${reported} disabled=${reported} onClick=${() => a.askReport(d.sel.id)}><${I.Alert} size=${14} /></${IconButton}>`;
   return html`<section class="dock glass" aria-label="Your pledge">
     <div class="row" style="flex-wrap:nowrap;gap:12px;flex:1 1 260px;min-width:0">
       <${Coin} coin=${coin(d.sel)} size=${phone ? 40 : 48} />
@@ -269,6 +269,7 @@ function Finale({ f, a, phone }) {
       <span style=${{ width: `${f.leadShare}%`, background: `hsl(${f.lead.hue} 85% 62%)` }} />
       <span style=${{ width: `${100 - f.leadShare}%`, background: `hsl(${f.next.hue} 70% 55% / .55)` }} />
     </div>
+    <div class="row num t2" aria-hidden="true" style="justify-content:space-between;font-size:12px;margin-top:-4px"><span>$${f.lead.ticker} · ${sol(f.lead.total)}</span><span>$${f.next.ticker} · ${sol(f.next.total)}</span></div>
     ${f.nudge && html`<div class="finale-nudge">
       <span style="flex:1 1 200px;font-size:14px;line-height:1.4">${f.nudge.text}</span>
       <div class="row" style="flex-wrap:nowrap;gap:8px">
@@ -280,8 +281,8 @@ function Finale({ f, a, phone }) {
 }
 
 const INTRO = [
-  { icon: I.Wallet, title: "Your pledge is your vote", text: "Back the idea you want launched with SOL. The idea with the most SOL when pledges lock at 00:55 wins." },
-  { icon: I.Back, title: "Lost? Refunded at 00:55", text: "If your idea doesn’t win, your SOL comes back to your wallet at the lock. Nothing to claim." },
+  { icon: I.Wallet, title: "Your pledge is your vote", text: "Back the idea you want launched with SOL. Pledges lock 5 minutes before the launch; the idea with the most SOL then wins." },
+  { icon: I.Check, title: "Lost? Refunded at the lock", text: "If your idea doesn’t win, your SOL comes back to your wallet when pledges lock. Nothing to claim." },
   { icon: I.Flame, title: "Won? You’re a founder", text: "At 01:00 the coin launches. Your SOL buys its first tokens, and you get a founder number in its clan, for good." },
 ];
 
@@ -329,6 +330,19 @@ function useFinaleWords(f, locked) {
   return words;
 }
 
+// The lock, marked: who won, when it launches, and what it means for the person.
+function Locked({ s, t }) {
+  const k = s.locked;
+  const mine = s.pledge && k.winner && s.pledge.symbol === k.winner;
+  return html`<section class="finale locked glass" aria-label="Pledges locked">
+    <span class="finale-kicker">Pledges locked</span>
+    <p class="finale-gap num">${k.winner && !k.voided ? `$${k.winner} wins with ${sol(k.pot)}` : "No winner: every pledge is refunded"}</p>
+    <span class="t2 num" style="font-size:14px;line-height:1.45">${k.winner && !k.voided
+      ? `${mine ? `You’re on the winner: your ${sol(s.pledge.amount)} makes you a founder at the launch.` : "Losing pledges are back in their wallets."} Launch in ${t.launchIn}.`
+      : "Everyone’s SOL is back in their wallets."}</span>
+  </section>`;
+}
+
 function Ideas({ s, a, phone }) {
   const ideas = race(s);
   const t = lobbyClock(s);
@@ -338,6 +352,12 @@ function Ideas({ s, a, phone }) {
     <div class="list scroll">
       <span class="sr" role="status">${finaleWords}</span>
       ${f && html`<${Finale} f=${f} a=${a} phone=${phone} />`}
+      ${!f && s.locked && !s.launched && html`<${Locked} s=${s} t=${t} />`}
+      ${manages(s) && Object.keys(s.live.reports ?? {}).some((k) => s.live.reports[k] > 0 && ideas.some((d) => d.ticker === k)) && html`<div class="reported glass" role="group" aria-label="Reported ideas">
+        <span class="t2" style="font-size:13px;font-weight:600">Reported</span>
+        ${ideas.filter((d) => s.live.reports[d.ticker] > 0).map((d) => html`<button key=${d.id} type="button" class="chip amber" aria-pressed=${String(s.selected === d.id)} onClick=${() => a.select(d.id)}>$${d.ticker} · ${s.live.reports[d.ticker]}</button>`)}
+        <span class="t2" style="font-size:12px">Select one to remove it from the dock</span>
+      </div>`}
       ${s.intro !== null && html`<${Intro} step=${s.intro} a=${a} />`}
       ${phone
         ? html`<div class="row" style="justify-content:space-between;padding:0 4px 10px">

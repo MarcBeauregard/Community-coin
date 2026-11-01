@@ -499,3 +499,11 @@ button.profile-row:hover { background: rgba(255, 255, 255, 0.04); }
 .net.lime .dot { background: var(--lime); }
 .app.net-on .toast { top: calc(64px + env(safe-area-inset-top)); }
 .btn.fill.remind-on { background: rgba(100, 210, 255, 0.18); color: var(--sky); }
+.finale.locked { border-color: rgba(255, 159, 10, 0.35); }
+.finale.locked .finale-kicker { color: #ffb340; }
+.reported { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 16px; margin-bottom: 14px; border: 1px solid rgba(255, 159, 10, 0.3); }
+.reported .chip { cursor: pointer; min-height: 32px; }
+.reported .chip[aria-pressed="true"] { outline: 2px solid #ffb340; }
+.dock-flag { flex: none; }
+.app.phone:has(.lobby) .toast { top: calc(112px + env(safe-area-inset-top)); }
+.app.phone.net-on:has(.lobby) .toast { top: calc(160px + env(safe-area-inset-top)); }

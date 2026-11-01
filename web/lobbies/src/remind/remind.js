@@ -13,6 +13,11 @@ export function nextOpening(hhmm, now = Date.now()) {
   return d.getTime();
 }
 
+/** A time as the app writes every time: 24-hour, "20:55". */
+export const hhmm = (ms) => new Date(ms).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+/** "today" or "tomorrow" for a time within the next day. */
+export const dayOf = (ms, now = Date.now()) => (new Date(ms).toDateString() === new Date(now).toDateString() ? "today" : "tomorrow");
+
 const stamp = (ms) => new Date(ms).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 const esc = (t) => String(t).replace(/\\/g, "\\\\").replace(/[;,]/g, (c) => `\\${c}`).replace(/\n/g, "\\n");
 

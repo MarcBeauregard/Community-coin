@@ -43,8 +43,9 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const curve = [{ t: 0, v: { A: 0 } }, { t: 600, v: { A: 4 } }, { t: 1200, v: { A: 10 } }];
   const tr = trend({ curve }, "A");
   check(tr.points.length === 3 && tr.text === "up 6.0 SOL in the last 10 minutes", "an idea's curve, and what it gained in the last ten minutes, in words");
-  check(trend({ curve: [{ t: 0, v: { A: 1 } }, { t: 900, v: { A: 1, B: 2 } }] }, "A").text === "no new SOL in the last 10 minutes", "a still idea says so");
+  check(trend({ curve: [{ t: 0, v: { A: 1 } }, { t: 300, v: { A: 1, B: 1 } }, { t: 900, v: { A: 1, B: 2 } }] }, "A").text === "no new SOL in the last 10 minutes", "a still idea says so");
   check(trend({ curve: curve.slice(0, 1) }, "A") === null, "no curve before two samples");
+  check(trend({ curve: [{ t: 0, v: { A: 0 } }, { t: 1439, v: { A: 171 } }, { t: 3010, v: { A: 171.2 } }] }, "A").text === null, "a gap in the samples (the server joined late) is never put into words");
 }
 
 const here = dirname(fileURLToPath(import.meta.url));

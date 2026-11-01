@@ -44,7 +44,7 @@ const intro = (page) => page.getByRole("region", { name: "How a lobby works" });
   check(await intro(page).getByText("1 of 3").isVisible() && await intro(page).getByRole("heading", { name: "Your pledge is your vote" }).isVisible(), "card 1: your pledge is your vote");
   check(await page.getByRole("button", { name: /^Pledge/ }).first().isEnabled(), "the lobby stays usable around it");
   await intro(page).getByRole("button", { name: "Next" }).click();
-  check(await intro(page).getByRole("heading", { name: "Lost? Refunded at 00:55" }).isVisible(), "card 2: lost, refunded at 00:55");
+  check(await intro(page).getByRole("heading", { name: "Lost? Refunded at the lock" }).isVisible(), "card 2: lost, refunded at 00:55");
   await intro(page).getByRole("button", { name: "Next" }).click();
   check(await intro(page).getByRole("heading", { name: "Won? You’re a founder" }).isVisible() && await intro(page).getByRole("button", { name: "Skip" }).count() === 0, "card 3: won, a founder; no Skip on the last card");
   await intro(page).getByRole("button", { name: "Got it" }).click();
