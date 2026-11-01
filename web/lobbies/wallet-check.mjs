@@ -92,7 +92,7 @@ const pill = (page) => page.locator(".wallet-pill").first();
   await pill(page).click();
   await page.waitForTimeout(300);
   check(await page.getByRole("dialog", { name: "Connect a wallet" }).isVisible(), "it opens the wallet sheet");
-  check(await page.getByText("No wallet found in this browser").isVisible() && await page.getByRole("button", { name: /Phantom.*Get it/ }).isVisible(), "no wallet installed: it says so, and offers to get one");
+  check(await page.getByText("No wallet found in this browser").isVisible() && await page.getByRole("link", { name: /Phantom.*Get it/ }).isVisible(), "no wallet installed: it says so, and offers to get one");
   check(await page.getByText("Only your address is shared").isVisible(), "it says what connecting shares");
   await page.context().close();
 }
@@ -155,7 +155,7 @@ const live = `${app}?live=${encodeURIComponent(base)}#/lobby`;
   const page = await open(`${app}?freeze`, { wallet: false, context: ctx });
   await page.route(/phantom\.app/, (r) => r.abort()); // the request is the proof; nothing leaves this machine
   await page.getByRole("button", { name: "Connect" }).last().click();
-  const row = page.getByRole("button", { name: /Phantom.*Open in Phantom/ });
+  const row = page.getByRole("link", { name: /Phantom.*Open in Phantom/ });
   check(await row.isVisible() && await page.getByText("On a phone, your wallet is an app").isVisible(), "on an iPhone with no wallet seen, the sheet offers to open the page in Phantom");
   const [req] = await Promise.all([page.waitForRequest(/phantom\.app\/ul\/browse\//, { timeout: 3000 }).catch(() => null), row.click()]);
   check(!!req && decodeURIComponent(req.url()).includes("index.html"), "and Open in Phantom takes this page into Phantom's browser");

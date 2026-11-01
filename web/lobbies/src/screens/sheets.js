@@ -102,16 +102,21 @@ function ConnectSheet({ s, a }) {
         const mine = busy && w.id === x.id;
         const hint = !x.installed ? (x.browseUrl ? `Open in ${x.name}` : "Get it") : mine ? (w.status === "signing" ? `Sign the message in ${x.name}` : `Approve in ${x.name}`) : "Detected";
         return html`<li key=${x.id}>
-          <button type="button" class="wallet-row" disabled=${busy && !mine} aria-busy=${mine ? "true" : undefined} onClick=${() => a.connectWallet(x.id)}>
-            <span class="wallet-mark" style=${{ background: WALLET_TINT[x.id] ?? WALLET_TINT.injected }} aria-hidden="true">${x.name[0]}</span>
-            <span style="flex:1;text-align:left;font-size:16px;font-weight:600">${x.name}</span>
-            <span class=${x.installed ? "t2" : "wallet-get"} style="font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:8px">
-              ${mine && html`<span class="spin light" aria-hidden="true" />`}${hint}${!x.installed && html`<${I.Arrow} size=${13} /><span class="sr">${x.browseUrl ? " (opens this page in the app)" : " (opens its site in a new tab)"}</span>`}
-            </span>
-          </button>
+          ${x.installed
+            ? html`<button type="button" class="wallet-row" disabled=${busy && !mine} aria-busy=${mine ? "true" : undefined} onClick=${() => a.connectWallet(x.id)}>
+                <span class="wallet-mark" style=${{ background: WALLET_TINT[x.id] ?? WALLET_TINT.injected }} aria-hidden="true">${x.name[0]}</span>
+                <span style="flex:1;text-align:left;font-size:16px;font-weight:600">${x.name}</span>
+                <span class="t2" style="font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:8px">${mine && html`<span class="spin light" aria-hidden="true" />`}${hint}</span>
+              </button>`
+            : html`<a class="wallet-row" href=${x.browseUrl ?? x.url} target=${x.browseUrl ? undefined : "_blank"} rel="noopener">
+                <span class="wallet-mark" style=${{ background: WALLET_TINT[x.id] ?? WALLET_TINT.injected }} aria-hidden="true">${x.name[0]}</span>
+                <span style="flex:1;text-align:left;font-size:16px;font-weight:600">${x.name}</span>
+                <span class="wallet-get" style="font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:8px">${hint}<${I.Arrow} size=${13} /><span class="sr">${x.browseUrl ? " (opens this page in the app)" : " (opens its site in a new tab)"}</span></span>
+              </a>`}
         </li>`;
       })}
     </ul>
+    <span class="sr" role="status">${busy ? (w.status === "signing" ? `Sign the message in ${w.name}` : `Approve in ${w.name}`) : ""}</span>
     ${w.error && html`<p class="wallet-error" role="alert">${w.error}</p>`}
     ${none && (wallets.some((x) => x.browseUrl)
       ? html`<p class="t2" style="font-size:13px;line-height:1.5">On a phone, your wallet is an app. Open this page in it to connect: tap your wallet above. No wallet yet? Phantom is the easiest to start with.</p>`
@@ -258,10 +263,10 @@ const SHEETS = {
   pledge: { title: null, Body: PledgeSheet },
   propose: { title: "Propose an idea", Body: ProposeSheet },
   host: { title: "Host a lobby", Body: HostSheet },
-  wallet: { title: "Wallet", Body: WalletSheet },
+  wallet: { title: "Wallet", Body: WalletSheet, refocus: ".wallet-pill" },
   receipt: { title: null, Body: ReceiptSheet },
   terms: { title: "Risks and terms", Body: TermsSheet },
-  connect: { title: "Connect a wallet", Body: ConnectSheet },
+  connect: { title: "Connect a wallet", Body: ConnectSheet, refocus: ".wallet-pill" },
   card: { title: "Your birth card", Body: BirthCardSheet },
 };
 
@@ -269,6 +274,6 @@ export function Sheets({ s, a }) {
   const def = s.sheet && SHEETS[s.sheet];
   if (!def) return null;
   const id = `${s.sheet}-title`;
-  return html`<${Sheet} title=${def.title} labelledBy=${id} busy=${s.signing} onClose=${a.closeSheet}><${def.Body} s=${s} a=${a} /></${Sheet}>`;
+  return html`<${Sheet} title=${def.title} labelledBy=${id} busy=${s.signing} onClose=${a.closeSheet} refocus=${def.refocus}><${def.Body} s=${s} a=${a} /></${Sheet}>`;
 }
 

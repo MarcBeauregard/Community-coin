@@ -3,7 +3,7 @@
 // (screenshots and tests); see demo/store.js for the scenes. `?live=<server>` plays the lobby on the realtime server.
 
 import { render } from "preact";
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { html, IconButton, Avatar, Toast } from "./ui.js";
 import * as I from "./icons.js";
 import { phoneBreakpoint } from "./tokens.js";
@@ -85,6 +85,13 @@ function App() {
     store.start();
     return () => { off(); store.stop(); };
   }, []);
+  // A new screen takes the focus on its heading, so keyboard and screen-reader users start there (not on the page).
+  const firstScreen = useRef(true);
+  useEffect(() => {
+    if (firstScreen.current) { firstScreen.current = false; return; }
+    const h = document.querySelector(".screen h1, h1");
+    if (h) { h.setAttribute("tabindex", "-1"); h.focus({ preventScroll: true }); }
+  }, [s.route.screen, s.clanView]);
   // The address follows the screen, and the back button walks it.
   useEffect(() => {
     const want = `#/${s.route.screen}`;

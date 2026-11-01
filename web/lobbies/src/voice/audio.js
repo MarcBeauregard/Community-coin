@@ -101,7 +101,7 @@ export function createAudio({ onChange }) {
     setDeafened(on) {
       for (const el of players.values()) el.muted = on;
     },
-    /** Browsers play sound only after a tap: call from the "Tap to hear" button. */
+    /** Browsers play sound only after a tap: call from the "Turn on sound" button. */
     async startAudio() {
       if (!room) return;
       try { await room.startAudio(); } catch { /* still blocked: the button stays */ }

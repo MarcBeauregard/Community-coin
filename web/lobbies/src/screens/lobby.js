@@ -38,7 +38,7 @@ function StageControls({ s, a, vs, phone }) {
     return html`<${Button} variant="white" size=${lg} data-primary onClick=${a.toggleListen}><${I.Headphones} size=${17} />${v.onStage ? "Join the stage" : "Listen in"}</${Button}>`;
   }
   if (s.live && s.audio.error === "connect-failed") return html`<div class="row" style="gap:8px"><${Button} variant="white" size=${lg} style="flex:1" data-primary onClick=${a.retryVoice}>Try again</${Button}>${leave}</div>`;
-  if (vs.needsTap) return html`<div class="row" style="gap:8px"><${Button} variant="white" size=${lg} style="flex:1" data-primary onClick=${a.startAudio}><${I.Speaker} size=${16} />Tap to hear the stage</${Button}>${leave}</div>`;
+  if (vs.needsTap) return html`<div class="row" style="gap:8px"><${Button} variant="white" size=${lg} style="flex:1" data-primary onClick=${a.startAudio}><${I.Speaker} size=${16} />Turn on sound</${Button}>${leave}</div>`;
   if (v.onStage && v.invited) {
     return html`<div class="row" style="gap:8px">
       <${Button} variant="prim" size=${lg} style="flex:1" data-primary onClick=${a.acceptInvite}><${I.Mic} size=${16} />Speak now</${Button}>
@@ -88,14 +88,14 @@ function Stage({ s, a, phone }) {
       <span class="ellipsis" style=${{ fontSize: phone ? "13px" : "12px", fontWeight: 500, color: "rgba(235,235,245,.82)", maxWidth: "100%" }}>${p.me ? "you" : person(p.who).name}</span>
     </li>`)}</ul>
     <div class="panel" ref=${panel} style="padding:14px;display:flex;flex-direction:column;gap:12px">
-      ${v.listening || v.onStage
-        ? html`<span role="status" style="display:flex;flex-direction:column;gap:4px">
-            <span style=${{ fontSize: "13px", fontWeight: 600, color: TONE_COLOR[vs.tone] }}>${vs.text}</span>
-            ${vs.link && html`<span style=${{ fontSize: "12px", fontWeight: 600, color: TONE_COLOR[vs.link.tone] }}>${vs.link.text}</span>`}
-          </span>`
-        : html`<span class="t2" style="font-size:13px;line-height:1.45">Pitches happen out loud. Listen in, or raise your hand to pitch your idea on stage.</span>`}
-      ${v.onStage && v.invited && html`<span class="t2" style="font-size:13px;line-height:1.45">Your microphone stays off until you choose Speak now.</span>`}
-      ${help && html`<p class="wallet-error" style="font-size:13px">${help}</p>`}
+      ${!v.listening && !v.onStage && html`<span class="t2" style="font-size:13px;line-height:1.45">Pitches happen out loud. Listen in, or raise your hand to pitch your idea on stage.</span>`}
+      <span role="status" style="display:flex;flex-direction:column;gap:4px">
+        ${(v.listening || v.onStage) && html`<span style=${{ fontSize: "13px", fontWeight: 600, color: TONE_COLOR[vs.tone] }}>${vs.text}</span>`}
+        ${!v.listening && !v.onStage && html`<span class="sr">${vs.text}</span>`}
+        ${vs.link && html`<span style=${{ fontSize: "12px", fontWeight: 600, color: TONE_COLOR[vs.link.tone] }}>${vs.link.text}</span>`}
+        ${v.onStage && v.invited && html`<span class="t2" style="font-size:13px;line-height:1.45;font-weight:400">Your microphone stays off until you choose Speak now.</span>`}
+        ${help && html`<span class="wallet-error" style="font-size:13px;font-weight:400">${help}</span>`}
+      </span>
       <${StageControls} s=${s} a=${a} vs=${vs} phone=${phone} />
     </div>
     ${manages(s) && s.live.stage.speakers.length > 1 && html`<div class="panel" style="padding:14px;display:flex;flex-direction:column;gap:10px" role="region" aria-label="Speakers">
@@ -114,7 +114,7 @@ function Stage({ s, a, phone }) {
       </span>`)}
     </div>`}
     <div style="display:flex;flex-direction:column;gap:10px">
-      <span class="t2 num" style="font-size:13px;font-weight:600">${phone ? `In the room · ${listeners} listening` : "In the room"}</span>
+      <span class="t2 num" style="font-size:13px;font-weight:600">${phone && !s.live ? `In the room · ${listeners} listening` : "In the room"}</span>
       ${s.live
         ? html`<span class="t2 num" style="font-size:13px">${int(pres.inside)} ${pres.inside === 1 ? "person" : "people"} inside</span>`
         : html`<div class="row" style="gap:6px">
@@ -135,7 +135,7 @@ export function VoicePill({ s, a, onOpen }) {
   if (!v.listening) return null;
   const vs = voiceStatus(s);
   const action = v.onStage && v.invited ? html`<${Button} variant="prim" size="sm" onClick=${a.acceptInvite}>Speak now</${Button}>`
-    : vs.needsTap ? html`<${Button} variant="white" size="sm" onClick=${a.startAudio}>Tap to hear</${Button}>`
+    : vs.needsTap ? html`<${Button} variant="white" size="sm" onClick=${a.startAudio}>Turn on sound</${Button}>`
     : v.onStage && !vs.micBlocked ? html`<${Button} size="sm" onClick=${a.toggleMic}>${vs.micLive ? "Mute" : "Unmute"}</${Button}>`
     : null;
   return html`<div class="voice-pill glass" role="region" aria-label="Voice">
@@ -257,11 +257,13 @@ function ChatLine({ m, ideas }) {
 
 function Chat({ s, a, phone }) {
   const byId = Object.fromEntries(s.ideas.map((d) => [d.id, d]));
+  // The field's name holds what it shows (WCAG 2.5.3).
+  const hint = phone ? "Message" : presence(s).inside > 1 ? `Message ${int(presence(s).inside)} people` : "Message the lobby";
   return html`<aside class="chat" aria-label="Lobby chat">
     ${!phone && html`<div class="chat-head"><h2 style="font-size:15px;font-weight:600">Chat</h2><span class="t2" style="font-size:12px">Slow mode · 3 s</span></div>`}
     <ol class="feed scroll" aria-live="off">${s.chat.slice().reverse().map((m, i) => html`<${ChatLine} key=${s.chat.length - i} m=${m} ideas=${byId} />`)}
       ${s.chat.length === 0 && html`<li class="t2 chat-empty">No messages yet. Say gm: everyone in the lobby reads this chat.</li>`}</ol>
-    <${Composer} label="Message the lobby" value=${s.draft} placeholder=${phone ? "Message" : presence(s).inside > 1 ? `Message ${int(presence(s).inside)} people` : "Message the lobby"} maxLength=${200}
+    <${Composer} label=${hint === "Message" ? "Message the lobby" : hint} value=${s.draft} placeholder=${hint} maxLength=${200}
       onInput=${a.setDraft} onSend=${a.send}
       leading=${html`<${IconButton} label="Share the selected idea's art" onClick=${a.shareArt}><${I.Image} size=${17} /></${IconButton}>`} />
   </aside>`;

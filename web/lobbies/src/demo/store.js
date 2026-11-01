@@ -385,6 +385,7 @@ export function createStore({ scene, freeze } = {}) {
       } catch { setWallet({ status: "none" }); /* not trusted any more: stay disconnected, quietly */ }
     },
     async disconnect() {
+      unwatch(); unwatch = () => {}; // our own disconnect: the wallet's echo of it is not news
       await disconnectWallet(walletRef);
       set({ sheet: null });
       await signedOut("Wallet disconnected");

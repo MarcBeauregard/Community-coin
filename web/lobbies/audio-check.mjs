@@ -1,6 +1,6 @@
 // Checks the app's voice audio in Chromium: LiveKit loads only when someone joins the voice; a listener joins with a
 // listening token; brought on stage, their real (fake-device) microphone turns on; the faces of whoever the room
-// hears light up; a browser that blocks sound gets a "Tap to hear" button; a blocked microphone and a dropped
+// hears light up; a browser that blocks sound gets a "Turn on sound" button; a blocked microphone and a dropped
 // network are explained; leaving disconnects. LiveKit's Room is stood in for (no SFU runs here); its events are
 // LiveKit's own names, so the app's handling is the real one.
 // Usage: node web/lobbies/audio-check.mjs   (after npm run build:lobbies)
@@ -133,7 +133,7 @@ check(hostPage.errors.length === 0 && dave.errors.length === 0, "no script error
 {
   const page = await open("erin", { autoplay: false });
   await page.getByRole("button", { name: "Listen in" }).click();
-  const tap = page.getByRole("button", { name: "Tap to hear the stage" });
+  const tap = page.getByRole("button", { name: "Turn on sound" });
   check(await tap.waitFor({ timeout: 3000 }).then(() => true, () => false), "when the browser blocks sound, a button asks for the tap it needs");
   await tap.click();
   check(await until(async () => (await lk(page)).startAudio === 1 && !(await tap.isVisible())), "one tap and the sound plays; the button goes");

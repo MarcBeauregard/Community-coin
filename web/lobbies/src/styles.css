@@ -377,6 +377,7 @@ textarea.inp { height: 84px; padding: 12px 14px; resize: none; line-height: 1.45
 .wallet-row:hover:not(:disabled) { background: rgba(118, 118, 128, 0.26); }
 .wallet-row:active:not(:disabled) { transform: scale(0.985); }
 .wallet-row:disabled { opacity: 0.45; }
+a.wallet-row { text-decoration: none; }
 .wallet-mark { width: 36px; height: 36px; border-radius: 11px; display: flex; align-items: center; justify-content: center; color: #0b0b0d; font-size: 17px; font-weight: 700; flex: none; }
 .wallet-get { color: var(--sky); }
 .wallet-error { margin: 0; padding: 12px 14px; border-radius: 14px; background: rgba(255, 159, 10, 0.12); color: #ffd08a; font-size: 14px; line-height: 1.45; }
@@ -406,3 +407,4 @@ textarea.inp { height: 84px; padding: 12px 14px; resize: none; line-height: 1.45
 .chat-empty { margin: auto 0; padding: 24px 12px; text-align: center; font-size: 14px; line-height: 1.5; list-style: none; }
 .wallet-pill.placeholder { display: inline-block; width: 120px; border-radius: 999px; background: rgba(118, 118, 128, 0.16); }
 .wallet-pill.compact.placeholder { width: 44px; }
+h1[tabindex="-1"]:focus { outline: none; }

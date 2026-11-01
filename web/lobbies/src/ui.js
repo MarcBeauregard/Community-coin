@@ -35,7 +35,7 @@ export function Coin({ coin, size = 48, big, class: extra, alt = "" }) {
   const style = { width: `${size}px`, height: `${size}px`, fontSize: `${Math.round(size * 0.32)}px`, ...coinStyle(coin.hue, big) };
   // Decorative unless it has alt text: the coin's name is always said next to it.
   return html`<span class=${cx("coin", extra)} style=${style} aria-hidden=${alt ? undefined : "true"}>
-    ${coin.ticker.slice(0, 2)}
+    <span aria-hidden="true">${coin.ticker.slice(0, 2)}</span>
     ${coin.logo && html`<img src=${coin.logo} alt=${alt} loading="lazy" decoding="async" />`}
   </span>`;
 }
@@ -47,7 +47,7 @@ export function Avatar({ person, size = 36, speaking, muted, status, class: extr
     background: `linear-gradient(150deg, hsl(${person.hue} 75% 74%), hsl(${person.hue} 60% 48%))`, ...style };
   return html`<span class=${cx("av", speaking && "speaking", extra)} style=${base} title=${person.name}>
     <span aria-hidden="true">${(person.name || "?")[0].toUpperCase()}</span>
-    ${speaking && html`<span class="sr">${person.name} is speaking</span>`}
+    ${speaking && html`<span class="sr">speaking, </span>`}
     ${person.src && html`<img src=${person.src} alt="" loading="lazy" decoding="async" />`}
     ${muted && html`<span class="muted" role="img" aria-label="Muted"><${I.MicOff} size=${11} stroke=${2.6} /></span>`}
     ${status && html`<span class="status" style=${{ background: status }} />`}
@@ -84,7 +84,7 @@ export function Orbit({ people, radius = 47, base = 34, reverse, offset = 0 }) {
 }
 
 // A modal sheet: centered on desktop, from the bottom on a phone. Escape and the backdrop close it; focus moves in.
-export function Sheet({ title, labelledBy, onClose, busy, children }) {
+export function Sheet({ title, labelledBy, onClose, busy, refocus, children }) {
   const ref = useRef(null);
   useEffect(() => {
     const el = ref.current;
@@ -92,8 +92,13 @@ export function Sheet({ title, labelledBy, onClose, busy, children }) {
     // Forms start in their first field; other sheets take focus themselves, so no button is armed by accident.
     const field = el && el.querySelector("input, textarea");
     (field || el).focus();
-    // Closed, the sheet gives focus back to what opened it.
-    return () => { if (opener && opener.isConnected) opener.focus(); };
+    // Closed, the sheet gives focus back to what opened it; if that is gone (Connect became the wallet), to what
+    // replaced it, else to the screen's heading.
+    return () => setTimeout(() => {
+      if (opener && opener.isConnected) return opener.focus();
+      const next = (refocus && document.querySelector(refocus)) || document.querySelector(".screen h1, h1");
+      if (next) { if (!next.matches("button, a, input")) next.setAttribute("tabindex", "-1"); next.focus(); }
+    }, 0);
   }, []);
   const onKey = (e) => {
     if (e.key === "Escape" && !busy) return onClose();
