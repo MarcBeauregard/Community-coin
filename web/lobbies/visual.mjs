@@ -105,6 +105,8 @@ for (const [w, h] of [[1440, 900], [390, 844]]) {
   await click("Done");
   check(await page.getByText("Backing with 1.0 SOL").isVisible(), `@${w} the pledge is confirmed`);
   await click("Withdraw");
+  check(await page.getByRole("dialog", { name: "Withdraw your pledge?" }).isVisible(), `@${w} withdrawing asks first`);
+  await click("Withdraw 1.0 SOL");
   check(await page.getByRole("button", { name: phone ? "Pledge" : "Pledge 1.0 SOL", exact: true }).isVisible(), `@${w} withdrawing frees the pledge`);
   await click(phone ? "Pledge" : "Pledge 1.0 SOL");
   await click("Confirm practice pledge");

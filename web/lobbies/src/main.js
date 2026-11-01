@@ -22,6 +22,7 @@ const store = createStore({ scene: params.get("scene"), freeze: params.has("free
 {
   const screen = location.hash.replace("#/", "");
   if (screen === "lobby" || (screen === "launch" && store.get().launched)) store.actions.go({ screen });
+  else if (screen === "launch" && params.get("live")) { store.actions.go({ screen: "lobby" }); store.actions.wantScreen("launch"); }
   else if (screen === "clan") store.actions.openClan(store.get().clan);
 }
 // ?live=<server> joins the realtime server as a guest; connecting a wallet signs in with it (Sign-In With Solana).
@@ -92,6 +93,12 @@ function App() {
     const h = document.querySelector(".screen h1, h1");
     if (h) { h.setAttribute("tabindex", "-1"); h.focus({ preventScroll: true }); }
   }, [s.route.screen, s.clanView]);
+  // The tab's title says where the person is.
+  useEffect(() => {
+    const clan = s.clans.find((c) => c.id === s.clan);
+    const where = { discover: "Lobbies", lobby: FEATURED.name, launch: s.launched ? `$${s.launched.id.toUpperCase()} launched` : "Launch", clan: clan ? `$${clan.ticker} clan` : "Clans" }[s.route.screen];
+    document.title = `${where} · Community Coin`;
+  }, [s.route.screen, s.clan, !!s.launched]);
   // The address follows the screen, and the back button walks it.
   useEffect(() => {
     const want = `#/${s.route.screen}`;

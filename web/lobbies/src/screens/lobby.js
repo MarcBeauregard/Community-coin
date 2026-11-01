@@ -49,7 +49,7 @@ function StageControls({ s, a, vs, phone }) {
   if (v.onStage) {
     return html`${vs.micBlocked
         ? html`<${Button} variant="white" size=${lg} block data-primary onClick=${a.retryMic}><${I.Mic} size=${16} />Try again</${Button}>`
-        : html`<${Button} size=${lg} block data-primary onClick=${a.toggleMic}>${vs.micLive ? html`<${I.Mic} size=${16} />Mute` : html`<${I.MicOff} size=${16} />Unmute`}</${Button}>`}
+        : html`<${Button} size=${lg} block data-primary onClick=${a.toggleMic}>${vs.micLive || vs.starting ? html`<${I.Mic} size=${16} />Mute` : html`<${I.MicOff} size=${16} />Unmute`}</${Button}>`}
       ${below(back, leave)}`;
   }
   return html`<${Button} size=${lg} block data-primary aria-pressed=${String(v.hand)} onClick=${a.toggleHand}><${I.Hand} size=${16} />${v.hand ? "Hand raised" : "Raise hand to pitch"}</${Button}>
@@ -68,10 +68,14 @@ function Stage({ s, a, phone }) {
   const key = `${v.listening}|${v.onStage}|${v.invited}|${vs.needsTap}|${vs.micBlocked}|${v.hand}`;
   const first = useRef(true);
   useEffect(() => {
-    if (first.current) { first.current = false; return; }
-    const el = panel.current;
-    const at = document.activeElement;
-    if (el && (!at || at === document.body || el.contains(at))) el.querySelector("[data-primary]")?.focus();
+    if (first.current) { first.current = false; return undefined; }
+    // States often come in pairs (joining, then "sound blocked"): wait for them to settle, then move once.
+    const timer = setTimeout(() => {
+      const el = panel.current;
+      const at = document.activeElement;
+      if (el && (!at || at === document.body || el.contains(at))) el.querySelector("[data-primary]")?.focus();
+    }, 250);
+    return () => clearTimeout(timer);
   }, [key]);
   const help = s.live && s.audio.error && AUDIO_ERRORS[s.audio.error];
   return html`<section class=${phone ? "scroll" : "stage scroll"} style=${phone ? "padding:8px 16px 24px;display:flex;flex-direction:column;gap:20px" : ""} aria-label="Voice stage">
@@ -187,7 +191,7 @@ function Dock({ s, a, ideas, phone }) {
   } else if (d.mode === "backed") {
     action = html`<div class="row" style="flex-wrap:nowrap;gap:8px">
       <${Chip} tone="lime" class="dock-chip"><${I.Check} size=${14} />Backing with ${sol(d.mine)}</${Chip}>
-      <${Button} size="sm" onClick=${a.withdraw}>Withdraw</${Button}>
+      <${Button} size="sm" onClick=${() => a.openSheet("withdraw")}>Withdraw</${Button}>
     </div>`;
   } else if (d.mode === "move") {
     action = html`<${Button} variant="prim" onClick=${a.movePledge}>Move my ${sol(d.mine)} here</${Button}>`;

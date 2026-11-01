@@ -56,12 +56,12 @@ export function createAudio({ onChange }) {
         if (state.status === "live" && speak !== state.micOn) await micOn(speak);
         return;
       }
+      // A blocked microphone is still blocked after a reconnection: keep saying so (decided before leave() clears it).
+      const keep = rejoin && ["mic-denied", "no-mic", "mic-failed"].includes(state.error) ? state.error : null;
       await this.leave();
       last = { url, token, name };
       const id = ++attempt;
       wantSpeak = speak;
-      // A blocked microphone is still blocked after a reconnection: keep saying so.
-      const keep = rejoin && ["mic-denied", "no-mic", "mic-failed"].includes(state.error) ? state.error : null;
       emit({ status: "connecting", room: name, error: keep, speaking: [] });
       let lk;
       try { lk = await loadLiveKit(); } catch { emit({ status: "off", error: "connect-failed" }); return; }
@@ -125,7 +125,7 @@ export function createAudio({ onChange }) {
 
 // Where the microphone setting lives, on this device.
 const IOS = typeof navigator !== "undefined" && /iPhone|iPad|iPod/.test(navigator.userAgent);
-const MIC_HOW = IOS ? "On iPhone: tap aA in the address bar, then Website Settings, then Microphone: Allow." : "Click the icon at the left of the address bar, then Microphone: Allow.";
+const MIC_HOW = IOS ? "On iPhone: tap aA in the address bar, then Website Settings, then Microphone: Allow." : "Open this site’s settings (the icon at the left of the address bar), then Microphone: Allow.";
 
 /** What a voice error means, in words, with what to do. */
 export const AUDIO_ERRORS = {

@@ -42,12 +42,12 @@ export function Coin({ coin, size = 48, big, class: extra, alt = "" }) {
 
 // A person: their photo over a tinted circle with initials (seen while the photo loads or if it fails). Decorative
 // for screen readers (the name is always said next to it), except what it alone shows: speaking, muted.
-export function Avatar({ person, size = 36, speaking, muted, status, class: extra, style }) {
+export function Avatar({ person, size = 36, speaking, muted, status, alone, class: extra, style }) {
   const base = { width: `${size}px`, height: `${size}px`, fontSize: `${Math.round(size * 0.36)}px`,
     background: `linear-gradient(150deg, hsl(${person.hue} 75% 74%), hsl(${person.hue} 60% 48%))`, ...style };
   return html`<span class=${cx("av", speaking && "speaking", extra)} style=${base} title=${person.name}>
     <span aria-hidden="true">${person.glyph ?? (person.name || "?")[0].toUpperCase()}</span>
-    ${speaking && html`<span class="sr">speaking, </span>`}
+    ${speaking && html`<span class="sr">${alone ? `${person.name}, speaking` : "speaking, "}</span>`}
     ${person.src && html`<img src=${person.src} alt="" loading="lazy" decoding="async" />`}
     ${muted && html`<span class="muted" role="img" aria-label="Muted"><${I.MicOff} size=${11} stroke=${2.6} /></span>`}
     ${status && html`<span class="status" style=${{ background: status }} />`}
@@ -122,12 +122,13 @@ export function Sheet({ title, labelledBy, onClose, busy, refocus, children }) {
 
 // A toast: a check for what went right, an exclamation for what didn't ("error" tone), never the other way round.
 const TONE = { lime: "var(--lime)", sky: "var(--sky)", white: "var(--text)", error: "var(--amber)" };
+// The live regions are always in the page (a region born with its text is often not read); the toast appears in one.
 export function Toast({ toast }) {
-  if (!toast) return null;
-  const bad = toast.tone === "error";
-  return html`<div class="toast glass" role=${bad ? "alert" : "status"} aria-live=${bad ? "assertive" : "polite"}>
-    <span class="tick" style=${{ background: TONE[toast.tone] || TONE.lime }}>${bad ? html`<${I.Alert} size=${14} stroke=${3} />` : html`<${I.Check} size=${13} stroke=${3.2} />`}</span>${toast.text}
+  const bad = toast?.tone === "error";
+  const body = toast && html`<div class="toast glass" key=${toast.id}>
+    <span class="tick" style=${{ background: TONE[toast.tone] || TONE.lime }} aria-hidden="true">${bad ? html`<${I.Alert} size=${14} stroke=${3} />` : html`<${I.Check} size=${13} stroke=${3.2} />`}</span>${toast.text}
   </div>`;
+  return html`<div role="status" aria-live="polite">${!bad && body}</div><div role="alert" aria-live="assertive">${bad && body}</div>`;
 }
 
 // A composer: one field and a send button; Enter sends.

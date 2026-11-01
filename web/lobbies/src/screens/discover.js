@@ -79,7 +79,7 @@ function Hero({ s, a, phone }) {
         : html`<div class="row">${ideas.slice(0, 3).map((d) => html`<span key=${d.id} class="pill-coin">
             <${Coin} coin=${coin(d)} size=${32} /><strong style="font-weight:600">${ticker(d.ticker)}</strong><span class="num t2">${sol(d.total)}</span></span>`)}</div>`}
       <div class="row" style=${phone ? "flex-wrap:nowrap" : ""}>
-        <${Button} variant="white" size="lg" style=${phone ? "flex:1" : ""} onClick=${() => a.go({ screen: s.launched ? "launch" : "lobby" })}>Join the lobby</${Button}>
+        <${Button} variant="white" size="lg" style=${phone ? "flex:1" : ""} onClick=${() => a.go({ screen: s.launched ? "launch" : "lobby" })}>${s.launched ? "See the launch" : "Join the lobby"}</${Button}>
         ${phone
           ? html`<${IconButton} label="Listen to the stage" tone="sky" pressed=${s.voice.listening} style="width:54px;height:54px" onClick=${a.toggleListen}><${I.Headphones} size=${20} /></${IconButton}>`
           : html`<${Button} variant="fill" size="lg" aria-pressed=${String(s.voice.listening)} onClick=${a.toggleListen}>
@@ -116,7 +116,8 @@ function LobbyAction({ l, s, a, compact }) {
 }
 
 function ThisHour({ s, a, phone }) {
-  const cards = lobbyCards(s);
+  // Live, only the lobbies that exist on the server; the demo's others are for the demo.
+  const cards = s.live ? lobbyCards(s).filter((c) => c.id === FEATURED.id) : lobbyCards(s);
   const search = html`<label class="search" style=${phone ? "" : "width:240px;max-width:100%"}>
     <${I.Search} size=${15} /><span class="sr">Search lobbies</span>
     <input type="search" value=${s.query} placeholder="Search" onInput=${(e) => a.setQuery(e.currentTarget.value)} />

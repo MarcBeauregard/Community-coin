@@ -190,7 +190,7 @@ textarea.inp { height: 84px; padding: 12px 14px; resize: none; line-height: 1.45
 .rows > div + div { border-top: 1px solid rgba(255, 255, 255, 0.07); }
 .rows > div > :first-child { color: var(--text2); white-space: nowrap; }
 .rows > div > :last-child { text-align: right; font-weight: 500; }
-.toast { position: fixed; left: 50%; bottom: 28px; z-index: 60; transform: translateX(-50%); max-width: calc(100% - 32px); min-height: 48px; padding: 10px 20px 10px 12px; border-radius: 999px; display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; animation: toast-in 0.5s cubic-bezier(0.2, 0.9, 0.25, 1); }
+.toast { position: fixed; left: 50%; top: 14px; pointer-events: none; z-index: 60; transform: translateX(-50%); max-width: calc(100% - 32px); min-height: 48px; padding: 10px 20px 10px 12px; border-radius: 999px; display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; animation: toast-in 0.5s cubic-bezier(0.2, 0.9, 0.25, 1); }
 .toast .tick { width: 26px; height: 26px; border-radius: 50%; color: #000; display: flex; align-items: center; justify-content: center; flex: none; }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, -16px) scale(0.96); } }
 
@@ -340,7 +340,8 @@ textarea.inp { height: 84px; padding: 12px 14px; resize: none; line-height: 1.45
 .call-grid .screen-share { grid-column: span 2; grid-row: span 2; }
 .call-grid .tile { border-radius: 18px; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.06); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; position: relative; }
 .call-controls { display: flex; justify-content: center; gap: 10px; }
-.cfeed { flex: 1; min-height: 240px; padding: 12px 0; display: flex; flex-direction: column-reverse; gap: 2px; }
+.cfeed { flex: 1; min-height: 240px; padding: 12px 0; display: flex; flex-direction: column; gap: 2px; }
+.cfeed > .birth { margin-top: auto; }
 .cmsg { padding: 8px 20px; display: flex; gap: 14px; transition: background 0.15s; }
 .cmsg:hover { background: rgba(255, 255, 255, 0.025); }
 .media { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; max-width: 480px; }
@@ -403,7 +404,7 @@ a.wallet-row { text-decoration: none; }
 @media (prefers-reduced-motion: reduce) { .voice-pill .dot.onair { animation: none; } }
 
 /* On a phone, toasts drop from the top edge, clear of the lobby's tabs and the stage. */
-.app.phone .toast { top: calc(10px + env(safe-area-inset-top)); bottom: auto; }
+.app.phone .toast { top: calc(10px + env(safe-area-inset-top)); }
 .chat-empty { margin: auto 0; padding: 24px 12px; text-align: center; font-size: 14px; line-height: 1.5; list-style: none; }
 .wallet-pill.placeholder { display: inline-block; width: 120px; border-radius: 999px; background: rgba(118, 118, 128, 0.16); }
 .wallet-pill.compact.placeholder { width: 44px; }
@@ -411,3 +412,6 @@ h1[tabindex="-1"]:focus { outline: none; }
 /* Buttons are tapped, not read: a double click never selects their text. */
 button, .btn, .ibtn { -webkit-user-select: none; user-select: none; }
 .stage-exits { justify-content: space-between; gap: 8px; }
+/* Sheets are read and tapped, not selected: a double tap never highlights their text (fields still are). */
+.sheet { -webkit-user-select: none; user-select: none; }
+.sheet input, .sheet textarea { -webkit-user-select: text; user-select: text; }

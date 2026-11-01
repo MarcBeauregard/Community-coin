@@ -135,7 +135,7 @@ export function voiceStatus(s) {
   if (base.needsTap) return { ...base, text: "Sound is blocked by your browser", tone: "amber" };
   if (v.onStage && v.invited) return { ...base, text: "The host invited you to speak", tone: "lime" };
   if (v.onStage && micBlocked) return { ...base, text: "On stage · microphone blocked", tone: "amber" };
-  if (v.onStage && live && v.mic && !micLive) return { ...base, text: "Starting your microphone…", tone: "sky" };
+  if (v.onStage && live && v.mic && !micLive) return { ...base, starting: true, text: "Starting your microphone…", tone: "sky" };
   if (v.onStage) return { ...base, text: micLive ? "You’re on stage · mic live" : "You’re on stage · muted", tone: micLive ? "lime" : "sky" };
   if (v.hand) return { ...base, text: "Hand raised · the host will bring you up", tone: "sky" };
   if (joining) return { ...base, link: null, text: "Joining the stage…", tone: "sky" };

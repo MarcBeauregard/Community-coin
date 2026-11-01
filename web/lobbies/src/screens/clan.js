@@ -1,6 +1,7 @@
 // The clan: the forever room of a coin's founders. Desktop shows the clan rail, channels, the conversation and the
 // founders side by side; a phone goes two levels deep, clan then channel, with the Campfire call on top of the channel.
 
+import { useEffect, useRef } from "preact/hooks";
 import { html, Button, IconButton, Chip, Coin, Avatar, Composer } from "../ui.js";
 import * as I from "../icons.js";
 import { person, coin, CAMPFIRE, ROLES, ME } from "../demo/data.js";
@@ -116,6 +117,9 @@ function Message({ m, k, a, phone, mod }) {
 }
 
 function Conversation({ s, a, k, phone }) {
+  // Oldest first, as it reads (and as Tab walks it), kept scrolled to the newest.
+  const feed = useRef(null);
+  useEffect(() => { const el = feed.current; if (el) el.scrollTop = el.scrollHeight; }, [s.channel, (s.clanMessages[s.channel] || []).length]);
   const list = s.clanMessages[s.channel] || [];
   // Live, the clan is the server's: the plus button picks a real file to upload; in the demo it shares a meme.
   const live = k.id === "new" && !!s.liveClan;
@@ -125,22 +129,22 @@ function Conversation({ s, a, k, phone }) {
     <header class="clan-head">
       ${phone && html`<${IconButton} label="Back to channels" size="sm" onClick=${a.backToChannels}><${I.Back} size=${15} /></${IconButton}>`}
       ${phone
-        ? html`<div style="flex:1;min-width:0;display:flex;flex-direction:column"><h1 style="font-size:16px;font-weight:600"># ${chan.id}</h1><span class="t2 ellipsis" style="font-size:12px">${ticker(k.ticker)} clan · founders only</span></div>
+        ? html`<div style="flex:1;min-width:0;display:flex;flex-direction:column"><h1 style="font-size:16px;font-weight:600"><span class="sr">${k.name} clan, </span># ${chan.id}</h1><span class="t2 ellipsis" style="font-size:12px">${ticker(k.ticker)} clan · founders only</span></div>
             <${IconButton} label=${s.campfire.joined ? "In Campfire" : "Join Campfire voice"} tone="sky" size="sm" pressed=${s.campfire.joined} onClick=${() => a.joinCampfire()}><${I.Speaker} size=${16} /></${IconButton}>`
-        : html`<span class="t2" style="font-size:20px">#</span><h1 style="font-size:16px;font-weight:600">${chan.id}</h1>
+        : html`<span class="t2" style="font-size:20px">#</span><h1 style="font-size:16px;font-weight:600"><span class="sr">${k.name} clan, </span>${chan.id}</h1>
             <span class="t2 ellipsis" style="font-size:13px;flex:1;min-width:0">${chan.topic}</span>
             <span class="t2 row" style="font-size:12px;gap:6px"><${I.Lock} size=${14} />Founders only</span>
             <${Button} size="sm" aria-pressed=${String(s.campfire.joined)} onClick=${() => a.joinCampfire()}><${I.Speaker} size=${14} />${s.campfire.joined ? "In Campfire" : "Join Campfire"}</${Button}>
             <${IconButton} label=${s.showMembers ? "Hide founders" : "Show founders"} size="sm" pressed=${s.showMembers} onClick=${a.toggleMembers}><${I.People} size=${16} /></${IconButton}>`}
     </header>
     ${s.campfire.joined && html`<${Call} s=${s} a=${a} phone=${phone} />`}
-    <ol class="cfeed scroll">
-      ${list.slice().reverse().map((m) => html`<${Message} key=${m.id} m=${m} k=${k} a=${a} phone=${phone} mod=${live && (s.liveClan.role !== "founder")} />`)}
+    <ol class="cfeed scroll" ref=${feed}>
       <li class="birth">
         <${Coin} coin=${coin(k)} size=${48} />
         <span style="flex:1;display:flex;flex-direction:column;gap:3px"><span style="font-size:15px;font-weight:600">The beginning of #${chan.id}</span><span class="t2" style="font-size:13px;line-height:1.45">${birthLine(s, k)}</span></span>
         ${k.fresh && !phone && html`<${Button} size="sm" onClick=${() => a.go({ screen: "launch" })}>Replay the launch</${Button}>`}
       </li>
+      ${list.map((m) => html`<${Message} key=${m.id} m=${m} k=${k} a=${a} phone=${phone} mod=${live && (s.liveClan.role !== "founder")} />`)}
     </ol>
     <div style=${{ padding: phone ? "8px 10px 14px" : "0 20px 20px" }}>
       <${Composer} label=${`Message #${chan.id}`} value=${s.clanDraft} placeholder=${`Message #${chan.id}`} onInput=${a.setClanDraft} onSend=${a.sendClan}
@@ -202,7 +206,7 @@ function PhoneClanList({ s, a, k }) {
               ? html`<${Button} size="sm" style="color:var(--sky)" onClick=${() => a.openChannel(s.channel)}>Open call</${Button}>`
               : html`<${Button} variant="white" size="sm" onClick=${() => a.joinCampfire(true)}>Join</${Button}>`}
           </div>
-          <div class="row" style="gap:6px">${people.map((p) => html`<${Avatar} key=${p.who} person=${person(p.who)} size=${32} speaking=${p.speaking} />`)}</div>
+          <div class="row" style="gap:6px">${people.map((p) => html`<${Avatar} key=${p.who} person=${person(p.who)} size=${32} speaking=${p.speaking} alone />`)}</div>
         </div>
       </section>
       <section aria-labelledby="m-channels" style="display:flex;flex-direction:column;gap:8px">

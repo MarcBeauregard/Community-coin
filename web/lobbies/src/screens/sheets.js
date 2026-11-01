@@ -136,13 +136,16 @@ function WalletSheet({ s, a }) {
     <div class="row" style="flex-wrap:nowrap;gap:14px">
       <${Avatar} person=${addressPerson(w.address)} size=${52} />
       <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
-        <${Button} variant="ghost" size="sm" class="num" style="align-self:flex-start;margin-left:-10px;padding:0 10px;font-size:17px" aria-label="Copy your address" onClick=${a.copyAddress}>${shortAddress(w.address)}<${I.Copy} size=${14} /></${Button}>
+        <${Button} variant="ghost" size="sm" class="num" style="align-self:flex-start;margin-left:-10px;padding:0 10px;font-size:17px" aria-label=${`Copy address ${shortAddress(w.address)}`} onClick=${a.copyAddress}>${shortAddress(w.address)}<${I.Copy} size=${14} /></${Button}>
         <span class="t2" style="font-size:13px">${w.name}${w.signedIn ? " · signed in" : ""}</span>
       </div>
     </div>
     <div style="display:flex;flex-direction:column;gap:2px">
-      <span class="display num" style="font-size:44px">${sol(real ? w.balance : s.balance)}</span>
-      <span class="t2" style="font-size:13px">${real ? "Balance on Solana" : "Practice SOL: pledges here are a rehearsal, not your wallet’s SOL, until this lobby runs on Solana"}</span>
+      ${real
+        ? html`<span class="display num" style="font-size:44px">${sol(w.balance)}</span><span class="t2" style="font-size:13px">Balance on Solana</span>`
+        : html`<${Chip} tone="amber">Practice SOL</${Chip}>
+            <span class="display num" style="font-size:28px">${sol(s.balance)}</span>
+            <span class="t2" style="font-size:13px;line-height:1.45">For pledging in practice lobbies. Not your wallet’s SOL: none of yours moves until a lobby runs on Solana.</span>`}
     </div>
     <div style="display:flex;flex-direction:column;gap:10px">
       <span class="t2" style="font-size:13px;font-weight:600">Open pledge</span>
@@ -150,7 +153,7 @@ function WalletSheet({ s, a }) {
         ? html`<div class="row" style="flex-wrap:nowrap;gap:12px;padding:12px;border-radius:16px;background:rgba(0,0,0,.3)">
             <${Coin} coin=${coin(mine)} size=${38} />
             <span style="flex:1;display:flex;flex-direction:column"><span style="font-size:14px;font-weight:600">${sol(s.pledge.amount)} on ${ticker(mine.ticker)}</span><span class="t2 num" style="font-size:12px">Friday Night Degens · locks in ${t.lockIn}</span></span>
-            <${Button} size="sm" disabled=${!t.canPledge} onClick=${a.withdraw}>Withdraw</${Button}>
+            <${Button} size="sm" disabled=${!t.canPledge} onClick=${() => a.openSheet("withdraw")}>Withdraw</${Button}>
           </div>`
         : html`<span class="t2" style="font-size:14px">No open pledge. Back an idea in a live lobby.</span>`}
     </div>
@@ -177,6 +180,8 @@ function BirthCardSheet({ s, a }) {
   const l = s.launched;
   const win = l && s.ideas.find((d) => d.id === l.id);
   const [format, setFormat] = useState("post");
+  const [mounted, setMounted] = useState(false); // the status region exists empty first, so its words are read
+  useEffect(() => { setMounted(true); }, []);
   const [card, setCard] = useState(null); // { url, file, facts, format }
   useEffect(() => {
     if (!l || !win) return undefined;
@@ -219,7 +224,7 @@ function BirthCardSheet({ s, a }) {
       ${ready ? html`<img src=${ready.url} alt=${cardText(ready.facts)} width=${width} height=${height} />`
         : html`<span class="t2" style="font-size:14px">Drawing your card…</span>`}
     </div>
-    <span class="sr" role="status">${ready ? `${FORMATS[format].label} card ready` : "Drawing your card"}</span>
+    <span class="sr" role="status">${ready ? `${FORMATS[format].label} card ready` : mounted ? "Drawing your card" : ""}</span>
     <p class="t2" style="font-size:14px;line-height:1.5">Made on this device from the launch. Only what you share leaves it.</p>
     <div class="sheet-actions">
       ${canShare
@@ -227,6 +232,18 @@ function BirthCardSheet({ s, a }) {
             <${Button} variant="prim" size="lg" style="flex:1.4" disabled=${!ready} onClick=${share}><${I.Share} size=${17} />Share…</${Button}>`
         : html`<${Button} size="lg" disabled=${!ready} onClick=${copy}>Copy caption</${Button}>
             <${Button} variant="prim" size="lg" style="flex:1.4" disabled=${!ready} onClick=${save}>Save image</${Button}>`}
+    </div>`;
+}
+
+// Taking a pledge back: said plainly, asked once. A double tap can't withdraw twice.
+function WithdrawSheet({ s, a }) {
+  const p = s.pledge;
+  if (!p) return null;
+  return html`
+    <p class="t2" style="font-size:15px;line-height:1.5">${sol(p.amount)} comes back from ${ticker(p.symbol)} to your ${s.live ? "practice SOL" : "balance"}. You can pledge again until the lock at 00:55; if you’re not backing the winner then, you won’t be one of its founders.</p>
+    <div class="sheet-actions">
+      <${Button} size="lg" onClick=${a.closeSheet}>Keep my pledge</${Button}>
+      <${Button} variant="danger" size="lg" data-primary disabled=${s.signing} onClick=${a.withdraw}>Withdraw ${sol(p.amount)}</${Button}>
     </div>`;
 }
 
@@ -269,6 +286,7 @@ const SHEETS = {
   receipt: { title: null, Body: ReceiptSheet },
   terms: { title: "Risks and terms", Body: TermsSheet },
   connect: { title: "Connect a wallet", Body: ConnectSheet, refocus: ".wallet-pill" },
+  withdraw: { title: "Withdraw your pledge?", Body: WithdrawSheet },
   card: { title: "Your birth card", Body: BirthCardSheet },
 };
 

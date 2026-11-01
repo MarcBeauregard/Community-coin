@@ -16,7 +16,13 @@ export function Launch({ s, a, phone }) {
   const win = s.ideas.find((d) => d.id === l.id);
   const backed = l.myId && s.ideas.find((d) => d.id === l.myId);
   const bg = `radial-gradient(55% 55% at ${phone ? "50% 20%" : "28% 45%"}, hsla(${win.hue},90%,55%,.28), transparent 70%), radial-gradient(40% 50% at 100% 0%, hsla(${(win.hue + 150) % 360},80%,55%,.12), transparent 70%), #000`;
-  const recap = [
+  // Live, the recap says only what the lobby recorded; the demo's story (the crowd, the pitch) is the demo's.
+  const recap = s.live ? [
+    { t: "00:00", c: "var(--text)", text: "Lobby opens" },
+    { t: "00:30", c: "var(--sky)", text: `Proposals close · ${s.ideas.length} ideas` },
+    { t: "00:55", c: "var(--amber)", text: `Lock · ${sol(l.total)} pledged · ${ticker(win.ticker)} leads` },
+    { t: "01:00", c: "var(--lime)", text: `${ticker(win.ticker)} launched · ${int(l.backers)} founders · the clan opens` },
+  ] : [
     { t: "00:00", c: "var(--text)", text: `Lobby opens · ${int(FEATURED.inside)} join` },
     { t: "00:07", c: "var(--sky)", text: `${win.by === "you" ? "You pitch" : win.by ? `@${person(win.by).name} pitches` : "The winner is pitched"} ${ticker(win.ticker)} on stage` },
     { t: "00:30", c: "var(--sky)", text: `Proposals close · ${s.ideas.length} ideas` },

@@ -157,7 +157,9 @@ export function createStore({ scene, freeze } = {}) {
         toast("The winning ticker was taken elsewhere. No launch tonight: every pledge is refunded.", "white");
         break;
       case "launch":
-        set({ launched: liveLaunch(m, s.locked?.total ?? 0), route: s.route.screen === "lobby" ? { screen: "launch" } : s.route, sheet: null });
+        // The launch screen opens if the person was in the lobby, or had it open before a reload.
+        set({ launched: liveLaunch(m, s.locked?.total ?? 0), route: s.route.screen === "lobby" || wantScreen === "launch" ? { screen: "launch" } : s.route, sheet: null });
+        wantScreen = null;
         break;
       case "settled": {
         const amount = toSol(BigInt(m.amount));
@@ -331,6 +333,7 @@ export function createStore({ scene, freeze } = {}) {
   const practiceLive = () => !!(link && state.live?.practice);
   const signedLive = () => !!(state.live && (!state.live.guest || state.wallet.signedIn));
   let pending = null; // the practice operation waiting for the server's answer
+  let wantScreen = null; // a screen the address asked for that needs the server first (#/launch after a reload)
   const liveMine = (m) => (m.mine ? { id: m.mine.symbol.toLowerCase(), symbol: m.mine.symbol, amount: toSol(BigInt(m.mine.amount)), lamports: BigInt(m.mine.amount) } : null);
   const liveReceipt = (title, rows) => ({ title, lines: rows, practice: true });
   const liveClanOn = () => !!(clanLink && state.liveClan?.connected && state.clan === "new");
@@ -338,6 +341,7 @@ export function createStore({ scene, freeze } = {}) {
   const selectedIdea = () => state.ideas.find((i) => i.id === state.selected) || state.ideas[0];
 
   const actions = {
+    wantScreen(screen) { wantScreen = screen; },
     goLive({ base, lobby, token }) {
       server = { base, token, lobby };
       if (link) link.close();
@@ -374,7 +378,11 @@ export function createStore({ scene, freeze } = {}) {
         toast(`Connected · ${shortAddress(address)}`);
         actions.resume();
       } catch (e) {
-        setWallet({ status: "none", id: null, name: null, address: null, signedIn: false, error: walletError(e, w.name) });
+        // Refused at the signature: the address was shared, but nothing else, and nobody is signed in.
+        const atSign = state.wallet.status === "signing";
+        const msg = walletError(e, w.name);
+        setWallet({ status: "none", id: null, name: null, address: null, signedIn: false,
+          error: atSign && /cancelled/.test(msg) ? `You cancelled the signature in ${w.name}. You’re not signed in; nothing else was shared.` : msg });
       }
     },
     /** What the person was doing when asked to connect, done now that they are: their message, their hand. */
@@ -541,8 +549,8 @@ export function createStore({ scene, freeze } = {}) {
     },
     withdraw() {
       const p = state.pledge;
-      if (!p) return;
-      if (practiceLive()) { pending = { op: "withdraw", amount: p.amount }; return link.practice("withdraw", { symbol: p.symbol, amount: String(p.lamports) }); }
+      if (!p || state.signing) return;
+      if (practiceLive()) { set({ signing: true }); pending = { op: "withdraw", amount: p.amount }; return link.practice("withdraw", { symbol: p.symbol, amount: String(p.lamports) }); }
       const r = act(state.chain, "withdraw", { user: ME, symbol: p.symbol, amount: p.lamports }, state.elapsed);
       if (!r.ok) return toast(errorText(r.error), "error");
       set((s) => ({ balance: s.balance + p.amount, pledge: myPledge(s.chain), ideas: shownIdeas(s), sheet: null, receipt: r.receipt, receipts: [r.receipt, ...s.receipts] }));
