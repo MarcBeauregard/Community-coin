@@ -403,10 +403,11 @@ a.wallet-row { text-decoration: none; }
 @media (prefers-reduced-motion: reduce) { .voice-pill .dot.onair { animation: none; } }
 
 /* On a phone, toasts drop from the top edge, clear of the lobby's tabs and the stage. */
-.app.phone .toast { top: calc(10px + env(safe-area-inset-top)); }
+.app.phone .toast { top: calc(10px + env(safe-area-inset-top)); bottom: auto; }
 .chat-empty { margin: auto 0; padding: 24px 12px; text-align: center; font-size: 14px; line-height: 1.5; list-style: none; }
 .wallet-pill.placeholder { display: inline-block; width: 120px; border-radius: 999px; background: rgba(118, 118, 128, 0.16); }
 .wallet-pill.compact.placeholder { width: 44px; }
 h1[tabindex="-1"]:focus { outline: none; }
 /* Buttons are tapped, not read: a double click never selects their text. */
 button, .btn, .ibtn { -webkit-user-select: none; user-select: none; }
+.stage-exits { justify-content: space-between; gap: 8px; }

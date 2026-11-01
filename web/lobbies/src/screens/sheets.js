@@ -183,7 +183,7 @@ function BirthCardSheet({ s, a }) {
     let url = null;
     let live = true;
     setCard(null);
-    const facts = { ticker: win.ticker, name: win.name, hue: win.hue, logo: coin(win).logo, rank: l.rank, pot: l.sol, founders: l.backers, lobby: "#0412", date: new Date(), mint: isAddress(l.mint) ? l.mint : null };
+    const facts = { ticker: win.ticker, name: win.name, hue: win.hue, logo: coin(win).logo, rank: l.rank, pot: l.sol, founders: l.backers, lobby: "#0412", date: new Date(), mint: isAddress(l.mint) ? l.mint : null, practice: !isAddress(l.mint) };
     drawBirthCard(facts, format).then((blob) => {
       if (!live || !blob) return;
       url = URL.createObjectURL(blob);
@@ -214,7 +214,7 @@ function BirthCardSheet({ s, a }) {
   };
   const copy = () => navigator.clipboard?.writeText(caption).then(() => a.cardDone("Caption copied"), () => a.cardDone(caption));
   return html`
-    <${Segmented} label="Card shape" options=${Object.entries(FORMATS).map(([id, f]) => ({ id, label: f.label }))} value=${format} onChange=${setFormat} />
+    <${Segmented} label="Card shape" full options=${Object.entries(FORMATS).map(([id, f]) => ({ id, label: f.label }))} value=${format} onChange=${setFormat} />
     <div class=${`card-preview ${format}`} style=${{ aspectRatio: `${width} / ${height}` }}>
       ${ready ? html`<img src=${ready.url} alt=${cardText(ready.facts)} width=${width} height=${height} />`
         : html`<span class="t2" style="font-size:14px">Drawing your card…</span>`}
@@ -234,6 +234,7 @@ function BirthCardSheet({ s, a }) {
 function TermsSheet({ a }) {
   const item = (title, text) => html`<div style="display:flex;flex-direction:column;gap:4px"><h3 style="font-size:15px;font-weight:600">${title}</h3><p class="t2" style="font-size:14px;line-height:1.5">${text}</p></div>`;
   return html`<div class="scroll" style="display:flex;flex-direction:column;gap:16px;max-height:60vh;padding-right:4px">
+      ${item("Practice lobbies, for now", "Until a lobby runs on Solana, pledges use practice SOL: none of yours moves, nothing is on chain, and a launch is a rehearsal. What follows is how lobbies work on Solana.")}
       ${item("What a pledge is", "A pledge moves SOL from your wallet into the lobby’s program account, which nobody controls. It is a vote with money: the idea with the most SOL at 00:55 launches.")}
       ${item("Your SOL until 00:55", "You can withdraw or move your pledge at any time before the lock at 00:55. After that it is locked by the program.")}
       ${item("If your idea doesn’t win", "Your pledge is refunded in full at the lock, automatically; anyone can send the refund, and it can only go to your wallet. If nothing is pledged, or the winner can’t launch, everyone is refunded.")}

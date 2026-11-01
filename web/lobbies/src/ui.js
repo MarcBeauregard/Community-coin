@@ -46,7 +46,7 @@ export function Avatar({ person, size = 36, speaking, muted, status, class: extr
   const base = { width: `${size}px`, height: `${size}px`, fontSize: `${Math.round(size * 0.36)}px`,
     background: `linear-gradient(150deg, hsl(${person.hue} 75% 74%), hsl(${person.hue} 60% 48%))`, ...style };
   return html`<span class=${cx("av", speaking && "speaking", extra)} style=${base} title=${person.name}>
-    <span aria-hidden="true">${(person.name || "?")[0].toUpperCase()}</span>
+    <span aria-hidden="true">${person.glyph ?? (person.name || "?")[0].toUpperCase()}</span>
     ${speaking && html`<span class="sr">speaking, </span>`}
     ${person.src && html`<img src=${person.src} alt="" loading="lazy" decoding="async" />`}
     ${muted && html`<span class="muted" role="img" aria-label="Muted"><${I.MicOff} size=${11} stroke=${2.6} /></span>`}

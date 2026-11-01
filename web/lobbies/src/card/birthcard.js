@@ -133,7 +133,7 @@ export async function drawBirthCard(c, format = "post") {
 
   // Signature: the mark and the name, small.
   g.font = `600 ${size.mark}px ${FONT}`;
-  const sig = "Community Coin";
+  const sig = c.practice ? "Community Coin · practice lobby" : "Community Coin";
   const sigW = g.measureText(sig).width;
   const mr = Math.round(size.mark * 0.6);
   const mx = center ? x - (sigW + mr * 2 + 12) / 2 + mr : x + 14;

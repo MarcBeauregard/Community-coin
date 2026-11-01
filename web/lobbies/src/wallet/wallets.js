@@ -98,7 +98,9 @@ export async function readBalance(rpc, address) {
 export function addressPerson(address) {
   let h = 0;
   for (const c of address ?? "") h = (h * 31 + c.charCodeAt(0)) % 360;
-  return { id: address, name: shortAddress(address), hue: h, src: null };
+  // Its first letter (an address may start with a digit, which would read like a badge count).
+  const glyph = (address?.match(/[A-Za-z]/)?.[0] ?? "◎").toUpperCase();
+  return { id: address, name: shortAddress(address), hue: h, src: null, glyph };
 }
 
 /** Each wallet's mark: its initial on its own color (their logos are theirs to use). */

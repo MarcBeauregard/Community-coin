@@ -33,31 +33,27 @@ const TONE_COLOR = { lime: "var(--lime)", sky: "var(--sky)", amber: "#ffb340" };
 function StageControls({ s, a, vs, phone }) {
   const v = s.voice;
   const lg = phone ? "lg" : undefined;
-  const leave = html`<${Button} variant="ghost" size=${lg} class="leave" onClick=${a.toggleListen}><${I.Close} size=${14} />Leave audio</${Button}>`;
+  // Always the same shape: the one thing to do now on top, full width; ways out underneath, same place every time.
+  const below = (...items) => html`<div class="row stage-exits">${items}</div>`;
+  const leave = html`<${Button} variant="ghost" size="sm" class="leave" onClick=${a.toggleListen}><${I.Close} size=${14} />Leave audio</${Button}>`;
+  const back = html`<${Button} size="sm" onClick=${a.stepDown}>Back to audience</${Button}>`;
   if (!v.listening) {
-    return html`<${Button} variant="white" size=${lg} data-primary onClick=${a.toggleListen}><${I.Headphones} size=${17} />${v.onStage ? "Join the stage" : "Listen in"}</${Button}>`;
+    return html`<${Button} variant="white" size=${lg} block data-primary onClick=${a.toggleListen}><${I.Headphones} size=${17} />${v.onStage ? "Join the stage" : "Listen in"}</${Button}>`;
   }
-  if (s.live && s.audio.error === "connect-failed") return html`<div class="row" style="gap:8px"><${Button} variant="white" size=${lg} style="flex:1" data-primary onClick=${a.retryVoice}>Try again</${Button}>${leave}</div>`;
-  if (vs.needsTap) return html`<div class="row" style="gap:8px"><${Button} variant="white" size=${lg} style="flex:1" data-primary onClick=${a.startAudio}><${I.Speaker} size=${16} />Turn on sound</${Button}>${leave}</div>`;
+  if (s.live && s.audio.error === "connect-failed") return html`<${Button} variant="white" size=${lg} block data-primary onClick=${a.retryVoice}>Try again</${Button}>${below(leave)}`;
+  if (vs.needsTap) return html`<${Button} variant="white" size=${lg} block data-primary onClick=${a.startAudio}><${I.Speaker} size=${16} />Turn on sound</${Button}>${below(leave)}`;
   if (v.onStage && v.invited) {
-    return html`<div class="row" style="gap:8px">
-      <${Button} variant="prim" size=${lg} style="flex:1" data-primary onClick=${a.acceptInvite}><${I.Mic} size=${16} />Speak now</${Button}>
-      <${Button} size=${lg} onClick=${a.declineInvite}>Not now</${Button}>
-    </div>`;
+    return html`<${Button} variant="prim" size=${lg} block data-primary onClick=${a.acceptInvite}><${I.Mic} size=${16} />Speak now</${Button}>
+      ${below(html`<${Button} size="sm" onClick=${a.declineInvite}>Not now</${Button}>`)}`;
   }
   if (v.onStage) {
-    return html`<div class="row" style="gap:8px">
-      ${vs.micBlocked
-        ? html`<${Button} variant="white" size=${lg} style="flex:1" data-primary onClick=${a.retryMic}><${I.Mic} size=${16} />Try again</${Button}>`
-        : html`<${Button} size=${lg} style="flex:1" data-primary onClick=${a.toggleMic}>${vs.micLive ? html`<${I.Mic} size=${16} />Mute` : html`<${I.MicOff} size=${16} />Unmute`}</${Button}>`}
-      <${Button} variant="ghost" size=${phone ? "lg" : "sm"} onClick=${a.stepDown}>Back to audience</${Button}>
-      ${leave}
-    </div>`;
+    return html`${vs.micBlocked
+        ? html`<${Button} variant="white" size=${lg} block data-primary onClick=${a.retryMic}><${I.Mic} size=${16} />Try again</${Button}>`
+        : html`<${Button} size=${lg} block data-primary onClick=${a.toggleMic}>${vs.micLive ? html`<${I.Mic} size=${16} />Mute` : html`<${I.MicOff} size=${16} />Unmute`}</${Button}>`}
+      ${below(back, leave)}`;
   }
-  return html`<div class="row" style="gap:8px">
-    <${Button} style="flex:1" size=${lg} data-primary aria-pressed=${String(v.hand)} onClick=${a.toggleHand}><${I.Hand} size=${16} />${v.hand ? "Hand raised" : "Raise hand to pitch"}</${Button}>
-    ${leave}
-  </div>`;
+  return html`<${Button} size=${lg} block data-primary aria-pressed=${String(v.hand)} onClick=${a.toggleHand}><${I.Hand} size=${16} />${v.hand ? "Hand raised" : "Raise hand to pitch"}</${Button}>
+    ${below(leave)}`;
 }
 
 function Stage({ s, a, phone }) {

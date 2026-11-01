@@ -40,7 +40,7 @@ export function Launch({ s, a, phone }) {
           </div>
         </div>
         <div class="launch-copy">
-          <${Chip} tone="lime" live>Just launched</${Chip}>
+          <span class="row" style="gap:8px"><${Chip} tone="lime" live>Just launched</${Chip}><${Chip} tone="amber">Practice launch</${Chip}></span>
           <h1 class="display">${ticker(win.ticker)}<br />is alive.</h1>
           <p class="t2" style=${{ fontSize: phone ? "15px" : "18px", lineHeight: 1.5, maxWidth: "500px" }}>
             ${win.name} won ${s.ideas.length} ideas and one hour of pitches. Its ${int(l.backers)} founders now share a clan that never closes.

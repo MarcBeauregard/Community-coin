@@ -188,14 +188,22 @@ function ClanCard({ k, a, phone }) {
 }
 
 function YourClans({ s, a, phone }) {
+  // Live, only clans this wallet founded; the demo's are for the demo.
+  const clans = s.live ? s.clans.filter((k) => k.id === "new") : s.clans;
+  if (s.live && !clans.length) {
+    return html`<section class="section" aria-labelledby="clans-title" style=${phone ? "padding:0 20px" : ""}>
+      <h2 id="clans-title" class="display" style=${phone ? "font-size:22px" : ""}>Your clans</h2>
+      <p class="t2" style="font-size:15px;line-height:1.5">No clan yet. Back the idea that wins a lobby and you become one of its founders, with a room that never closes.</p>
+    </section>`;
+  }
   return html`<section class=${phone ? "section hscroll-wrap" : "section"} style=${phone ? "gap:14px" : ""} aria-labelledby="clans-title">
     <div class="section-head" style=${phone ? "padding:0 20px" : ""}>
       <h2 id="clans-title" class="display" style=${phone ? "font-size:22px" : ""}>Your clans</h2>
       ${!phone && html`<span class="t2" style="font-size:14px">Everyone you launched a coin with. The room never closes.</span>`}
     </div>
     ${phone
-      ? html`<div class="hscroll" style="gap:10px;padding:0 16px 4px">${s.clans.map((k) => html`<${ClanCard} key=${k.id} k=${k} a=${a} phone />`)}</div>`
-      : html`<div class="clan-grid">${s.clans.map((k) => html`<${ClanCard} key=${k.id} k=${k} a=${a} />`)}</div>`}
+      ? html`<div class="hscroll" style="gap:10px;padding:0 16px 4px">${clans.map((k) => html`<${ClanCard} key=${k.id} k=${k} a=${a} phone />`)}</div>`
+      : html`<div class="clan-grid">${clans.map((k) => html`<${ClanCard} key=${k.id} k=${k} a=${a} />`)}</div>`}
   </section>`;
 }
 
