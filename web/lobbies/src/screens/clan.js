@@ -21,6 +21,11 @@ function birthLine(s, k) {
 }
 
 function campfirePeople(s) {
+  // Live, the Campfire is who the clan room says is in it, lit by who the voice room hears.
+  if (s.liveClan && s.clan === "new") {
+    const you = s.liveClan.you;
+    return (s.liveClan.campfire ?? []).map((id) => ({ who: id === you ? ME : id, speaking: s.audio.speaking.includes(id), muted: id === you && s.campfire.muted, live: false }));
+  }
   const list = s.campfire.joined ? [...CAMPFIRE, ME] : CAMPFIRE;
   const speaking = s.beat % 3;
   return list.map((who, i) => ({ who, speaking: i === speaking && !s.campfire.deafened && who !== ME, muted: who === "remi" || (who === ME && s.campfire.muted), live: who === "kai" || (who === ME && s.campfire.sharing) }));

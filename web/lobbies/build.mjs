@@ -1,8 +1,9 @@
-// Builds the lobbies app into web/dist/lobbies: index.html (styles inlined), app.js (one script) and assets/.
+// Builds the lobbies app into web/dist/lobbies: index.html (styles inlined), app.js, the chunks loaded only when
+// needed (voice: LiveKit) and assets/.
 // Usage: node web/lobbies/build.mjs
 
 import { build } from "esbuild";
-import { cpSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -10,14 +11,18 @@ const here = dirname(fileURLToPath(import.meta.url));
 const dist = process.env.OUTDIR ?? join(here, "..", "dist", "lobbies");
 
 mkdirSync(dist, { recursive: true });
+rmSync(join(dist, "chunks"), { recursive: true, force: true }); // no stale chunks from earlier builds
 await build({
   entryPoints: [join(here, "src/main.js")],
   bundle: true,
-  format: "iife",
+  format: "esm",
+  splitting: true,
+  chunkNames: "chunks/[name]-[hash]",
   platform: "browser",
   target: "es2022",
   minify: process.env.MINIFY !== "0",
-  outfile: join(dist, "app.js"),
+  outdir: dist,
+  entryNames: "app",
   define: { "process.env.NODE_ENV": '"production"' },
   legalComments: "none",
   logLevel: "warning",
@@ -40,7 +45,7 @@ ${css}</style>
 </head>
 <body>
 <div id="app"></div>
-<script src="app.js"></script>
+<script type="module" src="app.js"></script>
 </body>
 </html>
 `);

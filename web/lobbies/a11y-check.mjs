@@ -13,7 +13,7 @@ const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 const dist = join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "lobbies");
 const SCENES = ["discover", "listening", "lobby", "lobby-stage", "lobby-chat", "lobby-backed", "lobby-locked", "sheet-pledge", "sheet-propose",
-  "sheet-host", "sheet-wallet", "sheet-receipt", "sheet-terms", "launch-founder", "launch-refund", "clan", "clan-voice"];
+  "sheet-host", "sheet-wallet", "sheet-receipt", "sheet-terms", "sheet-connect", "sheet-card", "launch-founder", "launch-refund", "clan", "clan-voice"];
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".png": "image/png", ".jpg": "image/jpeg" };
 
 let failures = 0;

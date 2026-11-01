@@ -4,6 +4,7 @@
 
 import { createHmac, createPublicKey, randomBytes, timingSafeEqual, verify } from "node:crypto";
 import { PublicKey } from "@solana/web3.js";
+import { signInMessage } from "../src/realtime/siws.js";
 
 const NONCE_TTL = 5 * 60 * 1000;
 const SESSION_TTL = 24 * 3600 * 1000;
@@ -11,10 +12,7 @@ const MAX_NONCES = 100_000;
 // DER prefix of an Ed25519 SubjectPublicKeyInfo; the 32 raw key bytes follow it.
 const ED25519_SPKI = Buffer.from("302a300506032b6570032100", "hex");
 
-/** The exact text a wallet signs. Readable, bound to the domain and the nonce. */
-export function signInMessage(domain, address, nonce, issuedAt) {
-  return `${domain} wants you to sign in with your Solana account:\n${address}\n\nSign in to Community Coin lobbies.\n\nNonce: ${nonce}\nIssued At: ${new Date(issuedAt).toISOString()}`;
-}
+export { signInMessage };
 
 export function createAuth({ secret = randomBytes(32), domain = "lobbies.communitycoin", now = () => Date.now() } = {}) {
   const nonces = new Map(); // nonce -> issuedAt

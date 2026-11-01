@@ -198,6 +198,7 @@ textarea.inp { height: 84px; padding: 12px 14px; resize: none; line-height: 1.45
 .topbar { position: sticky; top: 12px; z-index: 20; margin: 12px auto 0; width: min(1200px, calc(100% - 24px)); height: 60px; border-radius: 20px; padding: 0 10px 0 18px; display: flex; align-items: center; gap: 16px; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 16px; }
 .wallet-pill { height: 40px; padding: 0 14px 0 7px; }
+.wallet-pill.compact { width: 44px; height: 44px; padding: 0; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex: none; }
 .tabbar { position: fixed; z-index: 25; left: 0; right: 0; bottom: 0; height: 86px; border-radius: 0; border-width: 1px 0 0; padding: 8px 12px 0; display: flex; align-items: flex-start; justify-content: space-around; }
 .tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10px; font-weight: 600; color: rgba(235, 235, 245, 0.55); padding-top: 2px; transition: color 0.2s; }
 .tab[aria-current="page"] { color: var(--lime); }
@@ -365,3 +366,18 @@ textarea.inp { height: 84px; padding: 12px 14px; resize: none; line-height: 1.45
 
 /* An inline text link: underlined, a full-height target. */
 .link { display: inline-flex; align-items: center; min-height: 28px; padding: 0 2px; color: var(--text); font: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; background: none; }
+
+/* Wallets: one row per wallet, a full-width 60 px target. */
+.wallets { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.wallet-row { width: 100%; min-height: 60px; padding: 0 16px 0 12px; border-radius: 18px; display: flex; align-items: center; gap: 14px; background: rgba(118, 118, 128, 0.16); color: var(--text); transition: background 0.2s, transform 0.2s; }
+.wallet-row:hover:not(:disabled) { background: rgba(118, 118, 128, 0.26); }
+.wallet-row:active:not(:disabled) { transform: scale(0.985); }
+.wallet-row:disabled { opacity: 0.45; }
+.wallet-mark { width: 36px; height: 36px; border-radius: 11px; display: flex; align-items: center; justify-content: center; color: #0b0b0d; font-size: 17px; font-weight: 700; flex: none; }
+.wallet-get { color: var(--sky); }
+.wallet-error { margin: 0; padding: 12px 14px; border-radius: 14px; background: rgba(255, 159, 10, 0.12); color: #ffd08a; font-size: 14px; line-height: 1.45; }
+.spin.light { border-color: rgba(255, 255, 255, 0.2); border-top-color: var(--text); }
+
+/* The birth card preview: the image at the sheet's width, its own corners. */
+.card-preview { width: 100%; border-radius: 18px; overflow: hidden; background: #0b0b0d; border: 1px solid rgba(255, 255, 255, 0.08); display: flex; align-items: center; justify-content: center; }
+.card-preview img { width: 100%; height: 100%; display: block; }

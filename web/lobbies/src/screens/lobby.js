@@ -6,6 +6,8 @@ import * as I from "../icons.js";
 import { person, coin, FEATURED, SPEAKERS, MUTED_SPEAKERS, CROWD, PEOPLE, ME } from "../demo/data.js";
 import { race, timeline, lobbyClock, dock, presence } from "../demo/select.js";
 import { sol, int, ticker } from "../format.js";
+import { WalletPill } from "./discover.js";
+import { AUDIO_ERRORS } from "../voice/audio.js";
 
 const AMOUNTS = [0.5, 1, 2, 5];
 const TABS = [{ id: "ideas", label: "Ideas" }, { id: "stage", label: "Stage" }, { id: "chat", label: "Chat" }];
@@ -13,7 +15,7 @@ const TABS = [{ id: "ideas", label: "Ideas" }, { id: "stage", label: "Stage" }, 
 function speakers(s) {
   // Live, the stage is the server's: who speaks is its list (the talking light needs the SFU's audio levels).
   const st = s.live?.stage;
-  if (st) return st.speakers.map((who) => ({ who: who === s.live.you ? ME : who, speaking: false, muted: who === s.live.you && !s.voice.mic }));
+  if (st) return st.speakers.map((who) => ({ who: who === s.live.you ? ME : who, speaking: s.audio.speaking.includes(who), muted: who === s.live.you && !s.voice.mic }));
   const spk = s.beat % 4 === 3 ? 2 : s.beat % 4 === 2 ? 0 : 1;
   const list = SPEAKERS.map((who, i) => ({ who, speaking: i === spk, muted: MUTED_SPEAKERS.includes(who) }));
   if (s.voice.onStage) list.push({ who: ME, speaking: s.voice.mic && s.beat % 5 === 0, muted: !s.voice.mic });
@@ -27,7 +29,11 @@ function Stage({ s, a, phone }) {
   const v = s.voice;
   const pres = presence(s);
   const listeners = int(pres.listening);
-  const status = v.onStage ? (v.mic ? "You’re on stage · mic live" : "You’re on stage · muted") : v.hand ? "Hand raised · the host will bring you up" : "Listening · you can raise your hand";
+  // Live, the voice room's own state comes first: connecting, reconnecting, waiting for a tap to play sound.
+  const au = s.audio;
+  const status = s.live && au.status === "connecting" ? "Connecting to the stage…"
+    : s.live && au.status === "reconnecting" ? "Reconnecting to the stage…"
+    : v.onStage ? (v.mic ? "You’re on stage · mic live" : "You’re on stage · muted") : v.hand ? "Hand raised · the host will bring you up" : "Listening · you can raise your hand";
   const size = phone ? 76 : 58;
   return html`<section class=${phone ? "scroll" : "stage scroll"} style=${phone ? "padding:8px 16px 24px;display:flex;flex-direction:column;gap:20px" : ""} aria-label="Voice stage">
     ${!phone && html`<div class="row" style="justify-content:space-between">
@@ -40,9 +46,11 @@ function Stage({ s, a, phone }) {
     </div>`)}</div>
     <div class="panel" style="padding:14px;display:flex;flex-direction:column;gap:12px">
       ${!v.listening
-        ? html`<span class="t2" style="font-size:13px;line-height:1.45">Pitches happen out loud. Listen in, or raise your hand to pitch your idea on stage.</span>
-            <${Button} variant="white" size=${phone ? "lg" : undefined} onClick=${a.toggleListen}><${I.Headphones} size=${17} />Listen in</${Button}>`
+        ? html`<span class="t2" style="font-size:13px;line-height:1.45">${v.onStage ? "You’re on stage. Join to speak: your microphone turns on when you do." : "Pitches happen out loud. Listen in, or raise your hand to pitch your idea on stage."}</span>
+            <${Button} variant="white" size=${phone ? "lg" : undefined} onClick=${a.toggleListen}><${I.Headphones} size=${17} />${v.onStage ? "Join the stage" : "Listen in"}</${Button}>`
         : html`<span style=${{ fontSize: "13px", fontWeight: 600, color: v.onStage ? "var(--lime)" : "var(--sky)" }} aria-live="polite">${status}</span>
+            ${s.live && au.error && html`<p class="wallet-error" role="alert" style="font-size:13px">${AUDIO_ERRORS[au.error]}</p>`}
+            ${au.needsTap && html`<${Button} variant="white" size=${phone ? "lg" : undefined} onClick=${a.startAudio}><${I.Speaker} size=${16} />Tap to hear the stage</${Button}>`}
             <div class="row" style="flex-wrap:nowrap;gap:8px">
               ${!v.onStage
                 ? html`<${Button} style="flex:1" size=${phone ? "lg" : undefined} aria-pressed=${String(v.hand)} onClick=${a.toggleHand}><${I.Hand} size=${16} />${v.hand ? "Hand raised" : "Raise hand to pitch"}</${Button}>`
@@ -205,6 +213,7 @@ export function Lobby({ s, a, phone }) {
         <span class="t2" style="font-size:12px;font-weight:600">${t.phase === "lock" ? "Locked · launching in" : "Launch in"}</span>
         <span class="value display num" style=${{ color: t.phase === "lock" ? "#ffb340" : "var(--text)" }} role="timer" aria-label=${`Launch in ${t.launchIn}`}>${t.launchIn}</span>
       </div>
+      <${WalletPill} s=${s} a=${a} compact=${phone} />
     </div>
   </header>`;
   const glow = `radial-gradient(50% 40% at 50% 0%, hsla(${sel.hue},90%,55%,.13), transparent 70%)`;

@@ -1,10 +1,12 @@
 // Sheets: confirm a pledge, propose an idea, host a lobby, the wallet. Money sheets say what happens if the idea
 // wins, if it loses, and what it costs, before anything is signed.
 
-import { useState } from "preact/hooks";
-import { html, Button, Segmented, Coin, Sheet } from "../ui.js";
+import { useEffect, useState } from "preact/hooks";
+import { html, Button, Segmented, Coin, Sheet, Avatar } from "../ui.js";
 import * as I from "../icons.js";
 import { coin } from "../demo/data.js";
+import { addressPerson, shortAddress, WALLET_TINT } from "../wallet/wallets.js";
+import { drawBirthCard, cardCaption, cardFileName, CARD } from "../card/birthcard.js";
 import { race, dock, lobbyClock } from "../demo/select.js";
 import { PROPOSE_BOND } from "../demo/store.js";
 import { sol, ticker, initials } from "../format.js";
@@ -79,13 +81,56 @@ function HostSheet({ a }) {
     </div>`;
 }
 
+const WHY = {
+  chat: "Connect a wallet to chat.",
+  speak: "Connect a wallet to speak on stage.",
+  clan: "Connect the wallet you pledged with to enter your clan.",
+};
+
+// Connect: the installed wallets first, each one tap. Only the address is shared; on a live server the wallet then
+// signs a one-time message to prove it (free, no transaction). Every state says what to do next.
+function ConnectSheet({ s, a }) {
+  const w = s.wallet;
+  const wallets = a.wallets().sort((x, y) => Number(y.installed) - Number(x.installed));
+  const none = !wallets.some((x) => x.installed);
+  const busy = w.status === "connecting" || w.status === "signing";
+  return html`
+    <p class="t2" style="font-size:15px;line-height:1.5">${WHY[s.connectFor] ? html`<strong style="color:var(--text);font-weight:600">${WHY[s.connectFor]}</strong> ` : ""}Only your address is shared. Signing in is free: no transaction, no SOL moves.</p>
+    <ul class="wallets" role="list">
+      ${wallets.map((x) => {
+        const mine = busy && w.id === x.id;
+        const hint = !x.installed ? "Get it" : mine ? (w.status === "signing" ? `Sign the message in ${x.name}` : `Approve in ${x.name}`) : "Detected";
+        return html`<li key=${x.id}>
+          <button type="button" class="wallet-row" disabled=${busy && !mine} aria-busy=${mine ? "true" : undefined} onClick=${() => a.connectWallet(x.id)}>
+            <span class="wallet-mark" style=${{ background: WALLET_TINT[x.id] ?? WALLET_TINT.injected }} aria-hidden="true">${x.name[0]}</span>
+            <span style="flex:1;text-align:left;font-size:16px;font-weight:600">${x.name}</span>
+            <span class=${x.installed ? "t2" : "wallet-get"} style="font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:8px">
+              ${mine && html`<span class="spin light" aria-hidden="true" />`}${hint}${!x.installed && html`<${I.Arrow} size=${13} />`}
+            </span>
+          </button>
+        </li>`;
+      })}
+    </ul>
+    ${w.error && html`<p class="wallet-error" role="alert">${w.error}</p>`}
+    ${none && html`<p class="t2" style="font-size:13px;line-height:1.5">No wallet found in this browser. Phantom is the easiest to start with: install it, come back, and it shows up here.</p>`}`;
+}
+
 function WalletSheet({ s, a }) {
   const mine = s.pledge && s.ideas.find((d) => d.id === s.pledge.id);
   const t = lobbyClock(s);
+  const w = s.wallet;
+  const real = w.balance !== null && w.balance !== undefined;
   return html`
-    <div style="display:flex;flex-direction:column;gap:4px">
-      <span class="display num" style="font-size:44px">${sol(s.balance)}</span>
-      <${Button} variant="ghost" size="sm" class="num" style="align-self:flex-start;margin-left:-10px;padding:0 10px" onClick=${a.copyAddress}>7Hq4…k2Pf<${I.Copy} size=${13} /></${Button}>
+    <div class="row" style="flex-wrap:nowrap;gap:14px">
+      <${Avatar} person=${addressPerson(w.address)} size=${52} />
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+        <${Button} variant="ghost" size="sm" class="num" style="align-self:flex-start;margin-left:-10px;padding:0 10px;font-size:17px" aria-label="Copy your address" onClick=${a.copyAddress}>${shortAddress(w.address)}<${I.Copy} size=${14} /></${Button}>
+        <span class="t2" style="font-size:13px">${w.name}${w.signedIn ? " · signed in" : ""}</span>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:2px">
+      <span class="display num" style="font-size:44px">${sol(real ? w.balance : s.balance)}</span>
+      <span class="t2" style="font-size:13px">${real ? "Balance on Solana" : "Practice balance: the demo lobby’s SOL, not your wallet’s"}</span>
     </div>
     <div style="display:flex;flex-direction:column;gap:10px">
       <span class="t2" style="font-size:13px;font-weight:600">Open pledge</span>
@@ -101,12 +146,66 @@ function WalletSheet({ s, a }) {
       <span class="t2" style="font-size:13px;font-weight:600">Founder of</span>
       <div class="row" style="gap:8px">${s.clans.map((k) => html`<${Button} key=${k.id} size="sm" style="padding:0 12px 0 4px;height:36px" onClick=${() => a.openClan(k.id)}><${Coin} coin=${coin(k)} size=${28} />${ticker(k.ticker)}</${Button}>`)}</div>
     </div>
-    <${Button} variant="ghost" size="sm" style="align-self:flex-start;margin-left:-10px;padding:0 10px" onClick=${() => a.openSheet("terms")}>Risks and terms</${Button}>
+    <div class="row" style="gap:8px">
+      <${Button} variant="ghost" size="sm" style="margin-left:-10px;padding:0 10px" onClick=${() => a.openSheet("terms")}>Risks and terms</${Button}>
+      <${Button} variant="ghost" size="sm" style="padding:0 10px;color:#ff6961" onClick=${a.disconnect}>Disconnect</${Button}>
+    </div>
     ${s.receipts.length > 0 && html`<div style="display:flex;flex-direction:column;gap:10px">
       <span class="t2" style="font-size:13px;font-weight:600">Activity</span>
       <ol class="rows">${s.receipts.slice(0, 5).map((r, i) => html`<li key=${i} style="display:flex;justify-content:space-between;gap:12px;padding:12px 0;font-size:14px;border-top:${i ? "1px solid rgba(255,255,255,.07)" : "0"}">
         <button type="button" style="text-align:left;flex:1;min-height:44px" onClick=${() => a.showReceipt(r)}>${r.title}</button><span class="t2"><${I.Chevron} size=${14} /></span></li>`)}</ol>
     </div>`}`;
+}
+
+// The birth card: drawn once when the sheet opens, then shared the way this device shares (the share sheet with the
+// image where there is one), saved, or its words copied.
+function BirthCardSheet({ s, a }) {
+  const l = s.launched;
+  const win = l && s.ideas.find((d) => d.id === l.id);
+  const [card, setCard] = useState(null); // { blob, url, file }
+  useEffect(() => {
+    if (!l || !win) return undefined;
+    let url = null;
+    let live = true;
+    const facts = { ticker: win.ticker, name: win.name, hue: win.hue, logo: coin(win).logo, rank: l.rank, pot: l.sol, founders: l.backers, lobby: "#0412", date: new Date() };
+    drawBirthCard(facts).then((blob) => {
+      if (!live || !blob) return;
+      url = URL.createObjectURL(blob);
+      setCard({ blob, url, facts, file: new File([blob], cardFileName(facts), { type: "image/png" }) });
+    });
+    return () => { live = false; if (url) URL.revokeObjectURL(url); };
+  }, [l && l.id, l && l.rank]);
+  if (!l || !win) return null;
+  const canShare = !!(card && navigator.canShare?.({ files: [card.file] }));
+  const save = () => {
+    const link = document.createElement("a");
+    link.href = card.url;
+    link.download = card.file.name;
+    link.click();
+    a.cardDone("Image saved");
+  };
+  const share = async () => {
+    try {
+      await navigator.share({ files: [card.file], text: cardCaption(card.facts), title: `Founder #${card.facts.rank} of $${card.facts.ticker}` });
+      a.cardDone("Shared");
+    } catch (e) {
+      if (e?.name !== "AbortError") save(); // a share sheet that fails still leaves the image
+    }
+  };
+  const copy = () => navigator.clipboard?.writeText(cardCaption(card.facts)).then(() => a.cardDone("Caption copied"), () => a.cardDone(cardCaption(card.facts)));
+  return html`
+    <div class="card-preview" style=${{ aspectRatio: `${CARD.width} / ${CARD.height}` }}>
+      ${card ? html`<img src=${card.url} alt=${`Birth card: Founder #${l.rank} of $${win.ticker}`} width=${CARD.width} height=${CARD.height} />`
+        : html`<span class="t2" role="status" style="font-size:14px">Drawing your card…</span>`}
+    </div>
+    <p class="t2" style="font-size:14px;line-height:1.5">Made on this device from the launch on Solana. Only what you share leaves it.</p>
+    <div class="sheet-actions">
+      ${canShare
+        ? html`<${Button} size="lg" disabled=${!card} onClick=${save}>Save image</${Button}>
+            <${Button} variant="prim" size="lg" style="flex:1.4" disabled=${!card} onClick=${share}><${I.Arrow} size=${16} />Share…</${Button}>`
+        : html`<${Button} size="lg" disabled=${!card} onClick=${copy}>Copy caption</${Button}>
+            <${Button} variant="prim" size="lg" style="flex:1.4" disabled=${!card} onClick=${save}>Save image</${Button}>`}
+    </div>`;
 }
 
 // Risks and terms in plain words. A draft: counsel reviews it before launch (LEGAL.md).
@@ -146,6 +245,8 @@ const SHEETS = {
   wallet: { title: "Wallet", Body: WalletSheet },
   receipt: { title: null, Body: ReceiptSheet },
   terms: { title: "Risks and terms", Body: TermsSheet },
+  connect: { title: "Connect a wallet", Body: ConnectSheet },
+  card: { title: "Your birth card", Body: BirthCardSheet },
 };
 
 export function Sheets({ s, a }) {

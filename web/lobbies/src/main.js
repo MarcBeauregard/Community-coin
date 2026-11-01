@@ -24,11 +24,20 @@ const store = createStore({ scene: params.get("scene"), freeze: params.has("free
   if (screen === "lobby" || (screen === "launch" && store.get().launched)) store.actions.go({ screen });
   else if (screen === "clan") store.actions.openClan(store.get().clan);
 }
-// ?live=<server> joins the realtime server (as a guest until wallet sign-in is wired to a deployment).
+// ?live=<server> joins the realtime server as a guest; connecting a wallet signs in with it (Sign-In With Solana).
+// `?rpc=<url>` reads the connected wallet's real balance from that cluster.
+if (params.get("rpc")) store.actions.setRpc(params.get("rpc"));
 if (params.get("live")) {
   const base = params.get("live");
   // `&as=<name>` signs in as that wallet on a server started with --dev-sessions (tests, local development).
-  (params.get("as") ? devSession(base, params.get("as")) : guestSession(base)).then((token) => store.actions.goLive({ base, lobby: FEATURED.id === "fnd" ? 412 : FEATURED.id, token })).catch((e) => console.error(e.message));
+  (params.get("as") ? devSession(base, params.get("as")) : guestSession(base))
+    .then((token) => {
+      store.actions.goLive({ base, lobby: FEATURED.id === "fnd" ? 412 : FEATURED.id, token });
+      if (!params.get("as")) store.actions.restoreWallet();
+    })
+    .catch((e) => console.error(e.message));
+} else {
+  store.actions.restoreWallet();
 }
 const SCREENS = ["discover", "lobby", "launch", "clan"];
 
@@ -63,7 +72,7 @@ function TabBar({ s, a }) {
   return html`<nav class="tabbar glass" aria-label="Tabs">
     ${tab("discover", "Lobbies", html`<${I.Logo} size=${24} />`, () => a.go({ screen: "discover" }), s.route.screen === "discover")}
     ${tab("clan", "Clans", html`<${I.Chat} size=${24} />`, () => a.openClan(s.clan), s.route.screen === "clan")}
-    ${tab("wallet", "Wallet", html`<${I.Wallet} size=${24} />`, () => a.openSheet("wallet"), false)}
+    ${tab("wallet", s.wallet.status === "connected" ? "Wallet" : "Connect", html`<${I.Wallet} size=${24} />`, () => (s.wallet.status === "connected" ? a.openSheet("wallet") : a.openConnect()), false)}
   </nav>`;
 }
 

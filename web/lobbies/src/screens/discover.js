@@ -5,6 +5,7 @@ import * as I from "../icons.js";
 import { ambient } from "../tokens.js";
 import { person, coin, PEOPLE, FEATURED } from "../demo/data.js";
 import { race, timeline, lobbyClock, lobbyCards, presence } from "../demo/select.js";
+import { addressPerson, shortAddress } from "../wallet/wallets.js";
 import { sol, int, signedPct, ticker } from "../format.js";
 
 const STEPS = [
@@ -16,9 +17,23 @@ const STEPS = [
 const FILTERS = [{ id: "all", label: "All" }, { id: "live", label: "Live" }, { id: "soon", label: "Soon" }];
 const ROOM = Object.keys(PEOPLE).slice(0, 12).map(person);
 
-export function WalletPill({ s, a }) {
-  return html`<${Button} variant="fill" class="wallet-pill" onClick=${() => a.openSheet("wallet")}>
-    <${Avatar} person=${person("you")} size=${26} /><span class="num">${sol(s.balance)}</span>
+// The wallet in the corner: "Connect" until a wallet is connected, then its address (the sheet holds the rest).
+export function WalletPill({ s, a, compact }) {
+  const w = s.wallet;
+  if (compact) {
+    // Where room is short (a phone's lobby header): one round button, the address's color once connected.
+    return w.status === "connected"
+      ? html`<button type="button" class="wallet-pill compact" aria-label=${`Wallet ${shortAddress(w.address)}`} onClick=${() => a.openSheet("wallet")}><${Avatar} person=${addressPerson(w.address)} size=${32} /></button>`
+      : html`<${IconButton} label="Connect a wallet" class="wallet-pill compact" onClick=${() => a.openConnect()}><${I.Wallet} size=${17} /></${IconButton}>`;
+  }
+  if (w.status !== "connected") {
+    const busy = w.status === "connecting" || w.status === "signing";
+    return html`<${Button} variant="white" class="wallet-pill" aria-busy=${busy ? "true" : undefined} onClick=${() => a.openConnect()}>
+      ${busy ? html`<span class="spin" aria-hidden="true" />` : html`<${I.Wallet} size=${17} />`}${busy ? "Connecting" : "Connect"}
+    </${Button}>`;
+  }
+  return html`<${Button} variant="fill" class="wallet-pill" aria-label=${`Wallet ${shortAddress(w.address)}`} onClick=${() => a.openSheet("wallet")}>
+    <${Avatar} person=${addressPerson(w.address)} size=${26} /><span class="num">${shortAddress(w.address)}</span>
   </${Button}>`;
 }
 
