@@ -105,7 +105,7 @@ function ConnectSheet({ s, a }) {
         const hint = !x.installed ? (x.browseUrl ? `Open in ${x.name}` : "Get it") : mine ? (w.status === "signing" ? `Sign the message in ${x.name}` : `Approve in ${x.name}`) : "Detected";
         return html`<li key=${x.id}>
           ${x.installed
-            ? html`<button type="button" class="wallet-row" disabled=${busy && !mine} aria-busy=${mine ? "true" : undefined} onClick=${() => a.connectWallet(x.id)}>
+            ? html`<button type="button" class="wallet-row" aria-label=${mine ? x.name : `${x.name}, detected`} disabled=${busy && !mine} aria-busy=${mine ? "true" : undefined} onClick=${() => a.connectWallet(x.id)}>
                 <span class="wallet-mark" style=${{ background: WALLET_TINT[x.id] ?? WALLET_TINT.injected }} aria-hidden="true">${x.name[0]}</span>
                 <span style="flex:1;text-align:left;font-size:16px;font-weight:600">${x.name}</span>
                 <span class="t2" style="font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:8px">${mine && html`<span class="spin light" aria-hidden="true" />`}${hint}</span>
@@ -284,7 +284,7 @@ const SHEETS = {
   propose: { title: "Propose an idea", Body: ProposeSheet },
   host: { title: "Host a lobby", Body: HostSheet },
   wallet: { title: "Wallet", Body: WalletSheet, refocus: ".wallet-pill" },
-  receipt: { title: null, Body: ReceiptSheet },
+  receipt: { title: null, Body: ReceiptSheet, refocus: ".dock button" }, // back to the pledge it records
   terms: { title: "Risks and terms", Body: TermsSheet },
   connect: { title: "Connect a wallet", Body: ConnectSheet, refocus: ".wallet-pill" },
   withdraw: { title: "Withdraw your pledge?", Body: WithdrawSheet },

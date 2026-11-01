@@ -11,7 +11,7 @@ import { int, sol, signedPct, ticker } from "../format.js";
 const ROLE_TONE = { host: "sky", creator: "pink", mod: "sky", founder: "lime" };
 
 function change(k) {
-  if (k.change === null) return html`<span class="num" style="font-size:13px;font-weight:600;color:var(--sky)">New</span>`;
+  if (k.change === null) return html`<span class="num" style="font-size:13px;font-weight:600;color:var(--sky)"><span class="sr">Price: </span>New</span>`;
   return html`<span class="num" style=${{ fontSize: "13px", fontWeight: 600, color: k.change >= 0 ? "var(--lime)" : "var(--amber)" }}>${signedPct(k.change)}</span>`;
 }
 
@@ -135,7 +135,7 @@ function Conversation({ s, a, k, phone }) {
             <span class="t2 ellipsis" style="font-size:13px;flex:1;min-width:0">${chan.topic}</span>
             <span class="t2 row" style="font-size:12px;gap:6px"><${I.Lock} size=${14} />Founders only</span>
             <${Button} size="sm" aria-pressed=${String(s.campfire.joined)} onClick=${() => a.joinCampfire()}><${I.Speaker} size=${14} />${s.campfire.joined ? "In Campfire" : "Join Campfire"}</${Button}>
-            <${IconButton} label=${s.showMembers ? "Hide founders" : "Show founders"} size="sm" pressed=${s.showMembers} onClick=${a.toggleMembers}><${I.People} size=${16} /></${IconButton}>`}
+            <${IconButton} label="Founders list" size="sm" pressed=${s.showMembers} onClick=${a.toggleMembers}><${I.People} size=${16} /></${IconButton}>`}
     </header>
     ${s.campfire.joined && html`<${Call} s=${s} a=${a} phone=${phone} />`}
     <ol class="cfeed scroll" ref=${feed}>
@@ -180,7 +180,7 @@ function FounderRow({ f }) {
 function PhoneClanList({ s, a, k }) {
   const people = campfirePeople(s);
   return html`<div class="clan-list scroll screen" style=${{ background: `radial-gradient(60% 35% at 50% 0%, hsla(${k.hue},90%,55%,.09), transparent 70%), #000` }}>
-    <h1 class="display large-title" style="margin:20px 20px 14px">Clans</h1>
+    <h1 class="display large-title" style="margin:20px 20px 14px">Clans<span class="sr">: ${k.name} clan</span></h1>
     <div class="hscroll" style="gap:12px;padding:4px 20px 14px" role="group" aria-label="Your clans">
       ${(s.live ? s.clans.filter((c) => c.id === "new") : s.clans).map((c) => html`<button type="button" key=${c.id} class="rail-btn" aria-label=${`${ticker(c.ticker)} clan`} aria-current=${c.id === k.id ? "page" : undefined}
         style=${{ width: "56px", height: "56px", flex: "none", borderRadius: c.id === k.id ? "16px" : "50%", boxShadow: c.id === k.id ? "0 0 0 2px #000, 0 0 0 4px #f5f5f7" : "none", overflow: "hidden" }} onClick=${() => a.openClan(c.id)}>
@@ -272,7 +272,7 @@ export function Clan({ s, a, phone }) {
     </aside>
     <${Conversation} s=${s} a=${a} k=${k} />
     ${s.showMembers && html`<aside class="members scroll" aria-label="Founders">
-      <span class="t2 num" style="font-size:12px;font-weight:600;padding:0 10px 8px">Founders · ${int(k.members)}</span>
+      <h2 class="t2 num" style="font-size:12px;font-weight:600;padding:0 10px 8px">Founders · ${int(k.members)}</h2>
       <ul class="founder-list" role="list">${founders(s, k).map((f) => html`<${FounderRow} key=${f.who} f=${f} />`)}</ul>
     </aside>`}
   </div>`;

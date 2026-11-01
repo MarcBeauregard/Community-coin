@@ -107,7 +107,7 @@ const pill = (page) => page.locator(".wallet-pill").first();
 {
   const page = await open(`${app}?freeze`);
   await pill(page).click();
-  check(await page.getByRole("button", { name: /Phantom.*Detected/ }).isVisible(), "an installed wallet shows as detected, first");
+  check(await page.getByRole("button", { name: /Phantom.*detected/i }).isVisible(), "an installed wallet shows as detected, first");
   await page.getByRole("button", { name: /Phantom/ }).click();
   check(await page.getByText("Approve in Phantom").first().waitFor({ timeout: 1500 }).then(() => true, () => false), "while the wallet asks, the row says where to look");
   const short = `${keys[0].address.slice(0, 4)}…${keys[0].address.slice(-4)}`;

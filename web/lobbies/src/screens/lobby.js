@@ -52,7 +52,7 @@ function StageControls({ s, a, vs, phone }) {
         : html`<${Button} key="mute" size=${lg} block data-primary onClick=${a.toggleMic}>${vs.micLive || vs.starting ? html`<${I.Mic} size=${16} />Mute` : html`<${I.MicOff} size=${16} />Unmute`}</${Button}>`}
       ${below(back, leave)}`;
   }
-  return html`<${Button} key="hand" size=${lg} block data-primary aria-pressed=${String(v.hand)} onClick=${a.toggleHand}><${I.Hand} size=${16} />${v.hand ? "Hand raised" : "Raise hand to pitch"}</${Button}>
+  return html`<${Button} key="hand" size=${lg} block data-primary onClick=${a.toggleHand}><${I.Hand} size=${16} />${v.hand ? "Hand raised" : "Raise hand to pitch"}</${Button}>
     ${below(leave)}`;
 }
 
@@ -65,7 +65,8 @@ function Stage({ s, a, phone }) {
   // When the voice changes state, its new main control takes the focus if the focus was in this panel or lost (the
   // pressed button just went away): keyboard and screen-reader users keep their place.
   const panel = useRef(null);
-  const settling = s.live && v.listening && s.audio.status === "connecting"; // the voice room is still answering
+  // The voice room is still answering (asking for a token, connecting): focus waits for its answer.
+  const settling = s.live && v.listening && !["live", "reconnecting"].includes(s.audio.status) && !s.audio.error;
   const key = `${v.listening}|${v.onStage}|${v.invited}|${vs.needsTap}|${vs.micBlocked}|${v.hand}|${settling}`;
   const first = useRef(true);
   const [mounted, setMounted] = useState(false); // the status region is in the page empty first, so its words are read

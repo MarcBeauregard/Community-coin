@@ -146,6 +146,14 @@ console.log(`  --  targets between 24 and 44 px (fine for WCAG AA, below Apple's
   await page.waitForTimeout(300);
   check((await page.locator("[role=dialog]").count()) === 0, "Escape closes it");
   check(await page.evaluate(() => /Pledge/.test(document.activeElement?.textContent ?? "")), "and focus returns to the button that opened it");
+  // Pledge → receipt → Done: the receipt takes the focus, and gives it back to the pledge it records.
+  await page.getByRole("button", { name: /^Pledge/ }).first().click();
+  await page.getByRole("button", { name: "Confirm practice pledge" }).click();
+  await page.waitForTimeout(1800);
+  check(await page.evaluate(() => !!document.activeElement?.closest("[role=dialog]")), "the receipt takes the focus when it replaces the pledge sheet");
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  check(await page.evaluate(() => document.activeElement && document.activeElement !== document.body && !!document.activeElement.closest(".dock")), "closing the receipt puts the focus on the pledge it records");
   await page.close();
 }
 

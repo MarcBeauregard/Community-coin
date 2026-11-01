@@ -408,7 +408,8 @@ a.wallet-row { text-decoration: none; }
 .chat-empty { margin: auto 0; padding: 24px 12px; text-align: center; font-size: 14px; line-height: 1.5; list-style: none; }
 .wallet-pill.placeholder { display: inline-block; width: 120px; border-radius: 999px; background: rgba(118, 118, 128, 0.16); }
 .wallet-pill.compact.placeholder { width: 44px; }
-h1[tabindex="-1"]:focus { outline: none; }
+h1[tabindex="-1"]:focus:not(:focus-visible) { outline: none; }
+h1[tabindex="-1"]:focus-visible { outline: 2px solid var(--sky); outline-offset: 4px; border-radius: 6px; }
 /* Buttons are tapped, not read: a double click never selects their text. */
 button, .btn, .ibtn { -webkit-user-select: none; user-select: none; }
 .stage-exits { justify-content: space-between; gap: 8px; }
