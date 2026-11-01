@@ -2,6 +2,8 @@
 // account founded. The coins are real memecoins with their real stories; amounts, members and price moves are made up
 // for the demo and never shown outside it.
 
+import { addressPerson } from "../wallet/wallets.js";
+
 export const ASSETS = "assets";
 
 // People and the hue of their fallback avatar (shown while the photo loads, or if it fails).
@@ -127,6 +129,8 @@ export function seedLobbyChat() {
 
 // View shapes for the components: a person and a coin, with their asset paths.
 export function person(who) {
+  // A wallet (a live user): its own color and its short address; never someone else's face.
+  if (!PEOPLE[who] && who && who.length > 24) return addressPerson(who);
   const p = PEOPLE[who] || { hue: (who.length * 47) % 360 };
   return { id: who, name: p.name || who, hue: p.hue, src: p.photo ? `${ASSETS}/people/${p.photo}.jpg` : null };
 }

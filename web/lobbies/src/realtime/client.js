@@ -15,8 +15,8 @@ export async function guestSession(base) {
  * Resolves to a session token for `address`.
  */
 export async function walletSession(base, address, sign) {
-  const { nonce, issuedAt, domain } = await (await fetch(`${base}/auth/nonce`)).json();
-  const signature = await sign(signInMessage(domain, address, nonce, issuedAt));
+  const { nonce, issuedAt, domain, uri, chain } = await (await fetch(`${base}/auth/nonce`)).json();
+  const signature = await sign(signInMessage(domain, address, nonce, issuedAt, { uri, chain }));
   const sig = btoa(String.fromCharCode(...signature));
   const r = await fetch(`${base}/auth/verify`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ address, nonce, signature: sig }) });
   if (!r.ok) throw new Error((await r.json()).error);

@@ -20,12 +20,14 @@ const ROOM = Object.keys(PEOPLE).slice(0, 12).map(person);
 // The wallet in the corner: "Connect" until a wallet is connected, then its address (the sheet holds the rest).
 export function WalletPill({ s, a, compact }) {
   const w = s.wallet;
+  if (compact && w.status === "restoring") return html`<span class="wallet-pill compact placeholder" aria-hidden="true" />`;
   if (compact) {
     // Where room is short (a phone's lobby header): one round button, the address's color once connected.
     return w.status === "connected"
       ? html`<button type="button" class="wallet-pill compact" aria-label=${`Wallet ${shortAddress(w.address)}`} onClick=${() => a.openSheet("wallet")}><${Avatar} person=${addressPerson(w.address)} size=${32} /></button>`
-      : html`<${IconButton} label="Connect a wallet" class="wallet-pill compact" onClick=${() => a.openConnect()}><${I.Wallet} size=${17} /></${IconButton}>`;
+      : html`<${Button} variant="white" size="sm" class="wallet-pill connect-sm" onClick=${() => a.openConnect()}>Connect</${Button}>`;
   }
+  if (w.status === "restoring") return html`<span class="wallet-pill placeholder" aria-hidden="true" />`;
   if (w.status !== "connected") {
     const busy = w.status === "connecting" || w.status === "signing";
     return html`<${Button} variant="white" class="wallet-pill" aria-busy=${busy ? "true" : undefined} onClick=${() => a.openConnect()}>

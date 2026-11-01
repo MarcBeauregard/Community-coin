@@ -113,7 +113,7 @@ export function createServer({ port = 0, guests = false, devSessions = false, da
     if (tooMany(ipOf(req))) return json(res, 429, { error: "Too many requests" });
     const url = new URL(req.url, "http://x");
     if (req.method === "GET" && url.pathname === "/auth/nonce") {
-      try { return json(res, 200, { ...auth.nonce(), domain: auth.domain }); } catch (e) { return json(res, 429, { error: e.message }); }
+      try { return json(res, 200, { ...auth.nonce(), domain: auth.domain, uri: auth.uri, chain: auth.chain }); } catch (e) { return json(res, 429, { error: e.message }); }
     }
     if (req.method === "POST" && url.pathname === "/auth/verify") {
       try { return json(res, 200, { token: auth.verify(await readBody(req)) }); } catch (e) { return json(res, 401, { error: e.message }); }

@@ -61,11 +61,15 @@ async function open(query, { share = false, width = 1440 } = {}) {
   const bytes = readFileSync(path);
   check(/^founder-\d+-wif\.png$/.test(download.suggestedFilename()) && bytes.subarray(1, 4).toString() === "PNG", `Save image gives a PNG named for the founder (${download.suggestedFilename()})`);
   check(await page.getByText("Image saved").isVisible(), "and says it is saved");
-  await page.getByRole("button", { name: "Share birth card" }).click();
-  await img.waitFor();
   await page.getByRole("button", { name: "Copy caption" }).click();
   const clip = await page.evaluate(() => navigator.clipboard.readText());
-  check(/^I’m Founder #\d+ of \$WIF\. \d+ of us picked it together in one hour on Community Coin\.$/.test(clip), "without a share sheet, the caption can be copied");
+  check(/^I’m Founder #\d+ of \$WIF\. \d+ of us picked it together in one hour on Community Coin\. http:\/\/localhost:\d+\/index\.html$/.test(clip), "without a share sheet, the caption (with the way to the app) can be copied");
+  check(await page.getByRole("dialog").isVisible(), "the sheet stays open after saving and copying");
+  await page.getByRole("button", { name: "Story" }).click();
+  await page.getByText("Story card ready").waitFor({ state: "attached", timeout: 5000 });
+  const story = await page.getByRole("img", { name: /Birth card/ }).evaluate(async (el) => { await el.decode().catch(() => {}); return [el.naturalWidth, el.naturalHeight]; });
+  check(story[0] === 1080 && story[1] === 1920, "Story draws the card at 1080 × 1920 for stories");
+  check((await page.getByRole("img", { name: /Birth card/ }).getAttribute("alt")).includes("raised"), "the alt text says everything the card says");
   check(page.errors.length === 0, "no script errors");
   await page.context().close();
 }

@@ -93,3 +93,7 @@ export function addressPerson(address) {
 
 /** Each wallet's mark: its initial on its own color (their logos are theirs to use). */
 export const WALLET_TINT = { phantom: "#ab9ff2", solflare: "#fc7227", backpack: "#e33e3f", injected: "#8e8e93" };
+
+/** Whether a string is a Solana address (base58, 32 to 44 characters): the only kind we link to an explorer. */
+export const isAddress = (a) => typeof a === "string" && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a);
+export const explorerUrl = (mint) => `https://solscan.io/token/${mint}`;

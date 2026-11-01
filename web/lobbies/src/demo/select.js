@@ -37,7 +37,7 @@ export function lobbyClock(s) {
     lockIn: clock(LOCK_AT - s.elapsed),
     canPropose: s.elapsed < PROPOSALS_CLOSE && !s.launched,
     canPledge: s.elapsed < LOCK_AT && !s.launched,
-    proposeHint: s.elapsed < PROPOSALS_CLOSE ? `Closes in ${clock(PROPOSALS_CLOSE - s.elapsed)}` : "Proposals closed at 00:30",
+    proposeHint: s.elapsed < PROPOSALS_CLOSE ? `Proposals close in ${clock(PROPOSALS_CLOSE - s.elapsed)}` : "Proposals closed at 00:30",
   };
 }
 
@@ -110,4 +110,30 @@ export function allocation(l) {
 export function presence(s) {
   if (s.live && s.live.connected) return { inside: s.live.inside, listening: s.live.listening };
   return { inside: FEATURED.inside, listening: FEATURED.listeners + (s.voice.listening ? 1 : 0) };
+}
+
+/**
+ * The voice, in one line, the same in the stage panel and the voice pill: what is happening, its tone, and the
+ * flags the controls need. Live, the voice room's real state wins (sound blocked, microphone blocked).
+ */
+export function voiceStatus(s) {
+  const v = s.voice;
+  const au = s.audio;
+  const live = !!s.live;
+  const micLive = live ? au.micOn : v.mic;
+  const micBlocked = live && ["mic-denied", "no-mic", "mic-failed"].includes(au.error);
+  // The voice room's connection, said on its own line so the person's place on the stage never disappears.
+  const link = !live || !v.listening ? null
+    : au.status === "connecting" ? { text: "Connecting to the stage…", tone: "sky" }
+    : au.status === "reconnecting" ? { text: "Reconnecting to the stage…", tone: "amber" }
+    : au.error === "connect-failed" ? { text: "Voice couldn’t connect", tone: "amber" }
+    : null;
+  const base = { micLive, micBlocked, invited: !!v.invited, needsTap: live && au.needsTap, link };
+  if (!v.listening) return { ...base, text: v.onStage ? "You’re on stage. Join when you’re ready to speak." : "Not listening", tone: "sky" };
+  if (base.needsTap) return { ...base, text: "Sound is blocked by your browser", tone: "amber" };
+  if (v.onStage && v.invited) return { ...base, text: "The host invited you to speak", tone: "lime" };
+  if (v.onStage && micBlocked) return { ...base, text: "On stage · microphone blocked", tone: "amber" };
+  if (v.onStage) return { ...base, text: micLive ? "You’re on stage · mic live" : "You’re on stage · muted", tone: micLive ? "lime" : "sky" };
+  if (v.hand) return { ...base, text: "Hand raised · the host will bring you up", tone: "sky" };
+  return { ...base, text: "Listening · you can raise your hand", tone: "sky" };
 }

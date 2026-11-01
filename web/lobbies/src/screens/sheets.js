@@ -2,11 +2,11 @@
 // wins, if it loses, and what it costs, before anything is signed.
 
 import { useEffect, useState } from "preact/hooks";
-import { html, Button, Segmented, Coin, Sheet, Avatar } from "../ui.js";
+import { html, Button, Segmented, Coin, Sheet, Avatar, Chip } from "../ui.js";
 import * as I from "../icons.js";
 import { coin } from "../demo/data.js";
-import { addressPerson, shortAddress, WALLET_TINT } from "../wallet/wallets.js";
-import { drawBirthCard, cardCaption, cardFileName, CARD } from "../card/birthcard.js";
+import { addressPerson, shortAddress, WALLET_TINT, isAddress } from "../wallet/wallets.js";
+import { drawBirthCard, cardCaption, cardFileName, cardText, FORMATS } from "../card/birthcard.js";
 import { race, dock, lobbyClock } from "../demo/select.js";
 import { PROPOSE_BOND } from "../demo/store.js";
 import { sol, ticker, initials } from "../format.js";
@@ -20,19 +20,20 @@ function PledgeSheet({ s, a }) {
       <${Coin} coin=${coin(d.sel)} size=${84} big />
       <h2 id="pledge-title" class="t2" style="font-size:15px;font-weight:600">Back ${ticker(d.sel.ticker)} · ${d.sel.name}</h2>
       <span class="display num" style="font-size:56px;line-height:1">${sol(s.amount)}</span>
+      <${Chip} tone="amber">Practice pledge</${Chip}>
     </div>
     <div class="rows">
-      <div><span>If it wins</span><span class="num">${d.shareIfWins.toFixed(2)}% of the pot, same price as everyone</span></div>
+      <div><span>If it wins</span><span class="num">${d.shareIfWins.toFixed(2)}% of its pot, at the same price as every backer</span></div>
       <div><span>If it loses</span><span>Full refund at 00:55</span></div>
       <div><span>Change your mind</span><span>Withdraw or move any time before 00:55</span></div>
-      <div><span>Network fee</span><span class="num">≈ 0.000005 SOL</span></div>
+      <div><span>Your wallet</span><span>No SOL leaves it: this lobby is a rehearsal until it runs on Solana</span></div>
     </div>
     <span class="t2" style="font-size:12px;line-height:1.5;text-align:center">Memecoins are speculative and can lose all their value. This is not an investment or advice.
       <button type="button" class="link" onClick=${() => a.openSheet("terms")}>Risks and terms</button></span>
     <div class="sheet-actions">
       <${Button} size="lg" disabled=${s.signing} onClick=${a.closeSheet}>Cancel</${Button}>
       <${Button} variant="prim" size="lg" style="flex:1.4" disabled=${s.signing} onClick=${a.confirmPledge}>
-        ${s.signing ? html`<span class="spin" aria-hidden="true" />Confirming` : "Confirm pledge"}
+        ${s.signing ? html`<span class="spin" aria-hidden="true" />Confirming` : "Confirm practice pledge"}
       </${Button}>
     </div>`;
 }
@@ -105,7 +106,7 @@ function ConnectSheet({ s, a }) {
             <span class="wallet-mark" style=${{ background: WALLET_TINT[x.id] ?? WALLET_TINT.injected }} aria-hidden="true">${x.name[0]}</span>
             <span style="flex:1;text-align:left;font-size:16px;font-weight:600">${x.name}</span>
             <span class=${x.installed ? "t2" : "wallet-get"} style="font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:8px">
-              ${mine && html`<span class="spin light" aria-hidden="true" />`}${hint}${!x.installed && html`<${I.Arrow} size=${13} />`}
+              ${mine && html`<span class="spin light" aria-hidden="true" />`}${hint}${!x.installed && html`<${I.Arrow} size=${13} /><span class="sr"> (opens its site in a new tab)</span>`}
             </span>
           </button>
         </li>`;
@@ -119,7 +120,10 @@ function WalletSheet({ s, a }) {
   const mine = s.pledge && s.ideas.find((d) => d.id === s.pledge.id);
   const t = lobbyClock(s);
   const w = s.wallet;
+  if (!w.address) return null; // just disconnected: the sheet is closing
   const real = w.balance !== null && w.balance !== undefined;
+  // Live, only what is this wallet's: the clans it founded here, not the demo's.
+  const clans = s.live ? s.clans.filter((k) => k.id === "new") : s.clans;
   return html`
     <div class="row" style="flex-wrap:nowrap;gap:14px">
       <${Avatar} person=${addressPerson(w.address)} size=${52} />
@@ -130,7 +134,7 @@ function WalletSheet({ s, a }) {
     </div>
     <div style="display:flex;flex-direction:column;gap:2px">
       <span class="display num" style="font-size:44px">${sol(real ? w.balance : s.balance)}</span>
-      <span class="t2" style="font-size:13px">${real ? "Balance on Solana" : "Practice balance: the demo lobby’s SOL, not your wallet’s"}</span>
+      <span class="t2" style="font-size:13px">${real ? "Balance on Solana" : "Practice SOL: pledges here are a rehearsal, not your wallet’s SOL, until this lobby runs on Solana"}</span>
     </div>
     <div style="display:flex;flex-direction:column;gap:10px">
       <span class="t2" style="font-size:13px;font-weight:600">Open pledge</span>
@@ -144,7 +148,8 @@ function WalletSheet({ s, a }) {
     </div>
     <div style="display:flex;flex-direction:column;gap:10px">
       <span class="t2" style="font-size:13px;font-weight:600">Founder of</span>
-      <div class="row" style="gap:8px">${s.clans.map((k) => html`<${Button} key=${k.id} size="sm" style="padding:0 12px 0 4px;height:36px" onClick=${() => a.openClan(k.id)}><${Coin} coin=${coin(k)} size=${28} />${ticker(k.ticker)}</${Button}>`)}</div>
+      ${clans.length === 0 && html`<span class="t2" style="font-size:14px">No clan yet. Back the winning idea in a lobby to become a founder.</span>`}
+      <div class="row" style="gap:8px">${clans.map((k) => html`<${Button} key=${k.id} size="sm" style="padding:0 12px 0 4px;height:36px" onClick=${() => a.openClan(k.id)}><${Coin} coin=${coin(k)} size=${28} />${ticker(k.ticker)}</${Button}>`)}</div>
     </div>
     <div class="row" style="gap:8px">
       <${Button} variant="ghost" size="sm" style="margin-left:-10px;padding:0 10px" onClick=${() => a.openSheet("terms")}>Risks and terms</${Button}>
@@ -157,54 +162,63 @@ function WalletSheet({ s, a }) {
     </div>`}`;
 }
 
-// The birth card: drawn once when the sheet opens, then shared the way this device shares (the share sheet with the
-// image where there is one), saved, or its words copied.
+// The birth card: drawn when the sheet opens (and again for the other shape), then shared the way this device
+// shares (the share sheet, with the image and its caption), saved, or its words copied. The sheet stays open, so
+// one can save it and copy the caption, or make both shapes.
 function BirthCardSheet({ s, a }) {
   const l = s.launched;
   const win = l && s.ideas.find((d) => d.id === l.id);
-  const [card, setCard] = useState(null); // { blob, url, file }
+  const [format, setFormat] = useState("post");
+  const [card, setCard] = useState(null); // { url, file, facts, format }
   useEffect(() => {
     if (!l || !win) return undefined;
     let url = null;
     let live = true;
-    const facts = { ticker: win.ticker, name: win.name, hue: win.hue, logo: coin(win).logo, rank: l.rank, pot: l.sol, founders: l.backers, lobby: "#0412", date: new Date() };
-    drawBirthCard(facts).then((blob) => {
+    setCard(null);
+    const facts = { ticker: win.ticker, name: win.name, hue: win.hue, logo: coin(win).logo, rank: l.rank, pot: l.sol, founders: l.backers, lobby: "#0412", date: new Date(), mint: isAddress(l.mint) ? l.mint : null };
+    drawBirthCard(facts, format).then((blob) => {
       if (!live || !blob) return;
       url = URL.createObjectURL(blob);
-      setCard({ blob, url, facts, file: new File([blob], cardFileName(facts), { type: "image/png" }) });
+      setCard({ url, facts, format, file: new File([blob], cardFileName(facts, format), { type: "image/png" }) });
     });
     return () => { live = false; if (url) URL.revokeObjectURL(url); };
-  }, [l && l.id, l && l.rank]);
+  }, [l && l.id, l && l.rank, format]);
   if (!l || !win) return null;
-  const canShare = !!(card && navigator.canShare?.({ files: [card.file] }));
+  const ready = card && card.format === format ? card : null; // never the other shape's image under this one's name
+  const { width, height } = FORMATS[format];
+  const link = `${location.origin}${location.pathname}`;
+  const caption = ready && cardCaption(ready.facts, link);
+  const canShare = !!(ready && navigator.canShare?.({ files: [ready.file] }));
   const save = () => {
-    const link = document.createElement("a");
-    link.href = card.url;
-    link.download = card.file.name;
-    link.click();
+    const anchor = document.createElement("a");
+    anchor.href = ready.url;
+    anchor.download = ready.file.name;
+    anchor.click();
     a.cardDone("Image saved");
   };
   const share = async () => {
     try {
-      await navigator.share({ files: [card.file], text: cardCaption(card.facts), title: `Founder #${card.facts.rank} of $${card.facts.ticker}` });
+      await navigator.share({ files: [ready.file], text: caption, title: `Founder #${ready.facts.rank} of $${ready.facts.ticker}` });
       a.cardDone("Shared");
     } catch (e) {
       if (e?.name !== "AbortError") save(); // a share sheet that fails still leaves the image
     }
   };
-  const copy = () => navigator.clipboard?.writeText(cardCaption(card.facts)).then(() => a.cardDone("Caption copied"), () => a.cardDone(cardCaption(card.facts)));
+  const copy = () => navigator.clipboard?.writeText(caption).then(() => a.cardDone("Caption copied"), () => a.cardDone(caption));
   return html`
-    <div class="card-preview" style=${{ aspectRatio: `${CARD.width} / ${CARD.height}` }}>
-      ${card ? html`<img src=${card.url} alt=${`Birth card: Founder #${l.rank} of $${win.ticker}`} width=${CARD.width} height=${CARD.height} />`
-        : html`<span class="t2" role="status" style="font-size:14px">Drawing your card…</span>`}
+    <${Segmented} label="Card shape" options=${Object.entries(FORMATS).map(([id, f]) => ({ id, label: f.label }))} value=${format} onChange=${setFormat} />
+    <div class=${`card-preview ${format}`} style=${{ aspectRatio: `${width} / ${height}` }}>
+      ${ready ? html`<img src=${ready.url} alt=${cardText(ready.facts)} width=${width} height=${height} />`
+        : html`<span class="t2" style="font-size:14px">Drawing your card…</span>`}
     </div>
+    <span class="sr" role="status">${ready ? `${FORMATS[format].label} card ready` : "Drawing your card"}</span>
     <p class="t2" style="font-size:14px;line-height:1.5">Made on this device from the launch on Solana. Only what you share leaves it.</p>
     <div class="sheet-actions">
       ${canShare
-        ? html`<${Button} size="lg" disabled=${!card} onClick=${save}>Save image</${Button}>
-            <${Button} variant="prim" size="lg" style="flex:1.4" disabled=${!card} onClick=${share}><${I.Arrow} size=${16} />Share…</${Button}>`
-        : html`<${Button} size="lg" disabled=${!card} onClick=${copy}>Copy caption</${Button}>
-            <${Button} variant="prim" size="lg" style="flex:1.4" disabled=${!card} onClick=${save}>Save image</${Button}>`}
+        ? html`<${Button} size="lg" disabled=${!ready} onClick=${save}>Save image</${Button}>
+            <${Button} variant="prim" size="lg" style="flex:1.4" disabled=${!ready} onClick=${share}><${I.Share} size=${17} />Share…</${Button}>`
+        : html`<${Button} size="lg" disabled=${!ready} onClick=${copy}>Copy caption</${Button}>
+            <${Button} variant="prim" size="lg" style="flex:1.4" disabled=${!ready} onClick=${save}>Save image</${Button}>`}
     </div>`;
 }
 
@@ -234,7 +248,7 @@ function ReceiptSheet({ s, a }) {
       <h2 id="receipt-title" class="display" style="font-size:24px">${r.title}</h2>
     </div>
     <div class="rows">${r.lines.map(([k, v]) => html`<div key=${k}><span>${k}</span><span class="num">${sol(v)}</span></div>`)}</div>
-    <span class="t2" style="font-size:12px;line-height:1.5;text-align:center">Read from the lobby program’s events. Pledges can be withdrawn or moved until 00:55; losing pledges are refunded at the lock.</span>
+    <span class="t2" style="font-size:12px;line-height:1.5;text-align:center">Practice: worked out by the lobby program’s own rules on this device; no SOL moved. Pledges can be withdrawn or moved until 00:55; losing pledges are refunded at the lock.</span>
     <${Button} variant="white" size="lg" onClick=${a.closeSheet}>Done</${Button}>`;
 }
 

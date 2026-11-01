@@ -24,7 +24,7 @@ function campfirePeople(s) {
   // Live, the Campfire is who the clan room says is in it, lit by who the voice room hears.
   if (s.liveClan && s.clan === "new") {
     const you = s.liveClan.you;
-    return (s.liveClan.campfire ?? []).map((id) => ({ who: id === you ? ME : id, speaking: s.audio.speaking.includes(id), muted: id === you && s.campfire.muted, live: false }));
+    return (s.liveClan.campfire ?? []).map((id) => ({ who: id, me: id === you, speaking: s.audio.speaking.includes(id), muted: id === you && s.campfire.muted, live: false }));
   }
   const list = s.campfire.joined ? [...CAMPFIRE, ME] : CAMPFIRE;
   const speaking = s.beat % 3;
@@ -57,7 +57,7 @@ function Call({ s, a, phone }) {
     return html`<section class="call" aria-label="Campfire call">
       <${ScreenShare} s=${s} height=${120} />
       <div class="call-strip">${people.map((p) => html`<span key=${p.who} style="flex:none;display:flex;flex-direction:column;align-items:center;gap:6px;width:54px">
-        <${Avatar} person=${person(p.who)} size=${48} speaking=${p.speaking} /><span style="font-size:11px;color:rgba(235,235,245,.8)">${p.who === ME ? "you" : p.who}</span></span>`)}</div>
+        <${Avatar} person=${person(p.who)} size=${48} speaking=${p.speaking} /><span style="font-size:11px;color:rgba(235,235,245,.8)">${p.me || p.who === ME ? "you" : person(p.who).name}</span></span>`)}</div>
       <${CallControls} s=${s} a=${a} size="lg" />
     </section>`;
   }
@@ -66,7 +66,7 @@ function Call({ s, a, phone }) {
       <${ScreenShare} s=${s} />
       ${people.map((p) => html`<div key=${p.who} class="tile">
         <${Avatar} person=${person(p.who)} size=${48} speaking=${p.speaking} muted=${p.muted} />
-        <span style="font-size:13px;font-weight:500">${p.who === ME ? "you" : p.who}</span>
+        <span style="font-size:13px;font-weight:500">${p.me || p.who === ME ? "you" : person(p.who).name}</span>
       </div>`)}
     </div>
     <${CallControls} s=${s} a=${a} size="lg" />
@@ -251,8 +251,8 @@ export function Clan({ s, a, phone }) {
           <span style="flex:1;display:flex;flex-direction:column"><span style="font-size:13px;font-weight:600;color:var(--sky)">Voice connected</span><span class="t2" style="font-size:12px">Campfire · ${k.ticker}</span></span>
           <${IconButton} label="Disconnect from voice" tone="danger" size="sm" onClick=${a.leaveCampfire}><${I.Close} size=${14} /></${IconButton}></div>`}
         <div class="me-strip">
-          <${Avatar} person=${person(ME)} size=${34} />
-          <span style="flex:1;min-width:0;display:flex;flex-direction:column"><span style="font-size:13px;font-weight:600">degen_marc</span><span style="font-size:12px;font-weight:600;color:var(--lime)">Founder #${myFounderRank(s, k)}</span></span>
+          <${Avatar} person=${person(s.liveClan?.you ?? ME)} size=${34} />
+          <span style="flex:1;min-width:0;display:flex;flex-direction:column"><span style="font-size:13px;font-weight:600">${s.liveClan ? person(s.liveClan.you).name : "degen_marc"}</span><span style="font-size:12px;font-weight:600;color:var(--lime)">Founder #${myFounderRank(s, k)}</span></span>
           <${IconButton} label=${s.campfire.muted ? "Unmute microphone" : "Mute microphone"} tone="warn" size="sm" pressed=${s.campfire.muted} onClick=${a.toggleMute}>${s.campfire.muted ? html`<${I.MicOff} size=${15} />` : html`<${I.Mic} size=${15} />`}</${IconButton}>
           <${IconButton} label=${s.campfire.deafened ? "Undeafen" : "Deafen"} tone="warn" size="sm" pressed=${s.campfire.deafened} onClick=${a.toggleDeafen}><${I.Headphones} size=${15} /></${IconButton}>
         </div>

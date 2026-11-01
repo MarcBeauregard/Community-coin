@@ -8,7 +8,7 @@
 import { CLANS, CROWD, CHATTER, ME, seedClanMessages, seedLobbyChat, message } from "./data.js";
 import { HOUR, sol } from "../format.js";
 import { connectLobby, connectClan, voiceToken, walletSession, guestSession } from "../realtime/client.js";
-import { createAudio, AUDIO_ERRORS } from "../voice/audio.js";
+import { createAudio } from "../voice/audio.js";
 import { detectWallets, connectWallet, signText, disconnectWallet, lastWallet, watchWallet, walletError, shortAddress, readBalance } from "../wallet/wallets.js";
 import { createDemoLobby, ideasFrom, ideaMeta, myPledge, act, crank, launchSummary, lockedOf, liveLaunch, founderAllocation, toLamports, toSol, errorText, receiptFor } from "./lobby.js";
 
@@ -46,7 +46,7 @@ function initialState() {
     balance: 14.2,
     locked: null, // { winner, pot, total, voided } once the lobby is finalized
     launched: null,
-    voice: { listening: false, hand: false, onStage: false, mic: true },
+    voice: { listening: false, hand: false, onStage: false, mic: true, invited: false },
     chat: seedLobbyChat(),
     draft: "",
     filter: "all",
@@ -124,7 +124,8 @@ export function createStore({ scene, freeze } = {}) {
   let link = null;
   const LIVE_ERRORS = { SlowMode: "Slow mode: one message every 3 seconds.", SignInToChat: "Connect a wallet to chat.", EmptyMessage: "Write something first.", LobbyNotOpen: "The lobby is not open yet." };
   const short = (who) => (who.length > 20 ? `${who.slice(0, 4)}…${who.slice(-4)}` : who);
-  const lineToChat = (line, you) => ({ who: line.from === you ? ME : short(line.from), text: line.text });
+  // Live, everyone is who the server says, the person included (their wallet), with `mine` to say "you".
+  const lineToChat = (line, you) => ({ who: line.from, mine: line.from === you, text: line.text });
   const raceIdeas = (rows, meta) => ideasFrom({ ideas: rows.map((r) => ({ ...r, pledged: BigInt(r.pledged), proposer: "" })) }, meta);
   function onLive(m) {
     const s = state;
@@ -174,10 +175,12 @@ export function createStore({ scene, freeze } = {}) {
         set({ live: { ...s.live, stage: { host: m.host, speakers: m.speakers, cohosts: m.cohosts, hands: m.hands } }, voice: { ...v, onStage, hand } });
         // The microphone follows the stage only for someone already in the audio (who asked to be): nobody's
         // microphone turns on because of a list they did not touch (a host lands on stage before choosing to speak).
+        // Brought up: an invitation, not an open microphone; the person says when they speak. Moved down: the
+        // microphone closes at once.
         if (onStage !== v.onStage && v.listening) {
-          toast(onStage ? "You’re on stage. Your mic is live." : "You’re back in the audience.", "sky");
-          if (audio.state.status === "live" && audio.state.room === `lobby-${s.live.lobby}`) audio.setMic(onStage);
-          else joinVoice({ lobby: s.live.lobby }, onStage);
+          set({ voice: { ...state.voice, invited: onStage } });
+          if (!onStage) audio.setMic(false);
+          else if (!(audio.state.room === `lobby-${s.live.lobby}`)) joinVoice({ lobby: s.live.lobby }, false);
         }
         break;
       }
@@ -186,7 +189,7 @@ export function createStore({ scene, freeze } = {}) {
       case "error":
         // A guest who tries to talk is offered the wallet, not just told.
         if (m.code === "SignInToChat" || m.code === "SignInToSpeak") actions.openConnect(m.code === "SignInToChat" ? "chat" : "speak");
-        else toast(LIVE_ERRORS[m.code] || m.code, "white");
+        else toast(LIVE_ERRORS[m.code] || m.code, "error");
         break;
       case "closed": if (s.live) set({ live: { ...s.live, connected: false } }); break;
       default:
@@ -223,7 +226,7 @@ export function createStore({ scene, freeze } = {}) {
   const hhmm = (at) => new Date(at).toTimeString().slice(0, 5);
   function lineToMessage(l, you) {
     const mine = new Set(l.mine);
-    return { id: l.id, who: l.from === you ? ME : short(l.from), from: l.from, role: l.role, t: hhmm(l.at), text: l.text, deleted: l.deleted, hidden: l.hidden,
+    return { id: l.id, who: l.from, from: l.from, role: l.role, t: hhmm(l.at), text: l.text, deleted: l.deleted, hidden: l.hidden,
       media: l.media.map((m) => ({ url: clanLink.mediaUrl(m.id), video: m.type.startsWith("video/") })),
       hearts: l.reactions.heart - (mine.has("heart") ? 1 : 0), fires: l.reactions.fire - (mine.has("fire") ? 1 : 0),
       heartOn: mine.has("heart"), fireOn: mine.has("fire"), yours: l.from === you, live: true };
@@ -250,7 +253,7 @@ export function createStore({ scene, freeze } = {}) {
       case "muted": if (m.user === you) { set({ liveClan: { ...s.liveClan, mutedUntil: m.until } }); if (m.until) toast(`A moderator muted you until ${hhmm(m.until)}`, "white"); } break;
       case "mods": set({ liveClan: { ...s.liveClan, mods: m.mods } }); break;
       case "campfire": set({ liveClan: { ...s.liveClan, campfire: m.people } }); break;
-      case "error": toast(CLAN_ERRORS[m.code] || m.code, "white"); break;
+      case "error": toast(CLAN_ERRORS[m.code] || m.code, "error"); break;
       case "closed": if (s.liveClan) set({ liveClan: { ...s.liveClan, connected: false } }); break;
       default:
     }
@@ -262,14 +265,8 @@ export function createStore({ scene, freeze } = {}) {
   // server without an SFU says so once.
   let voiceOffTold = false;
   // The voice room's audio; its state goes to the screens (who is speaking, the microphone, a tap to hear).
-  let audioError = null;
-  const audio = createAudio({
-    onChange: (a) => {
-      set({ audio: a });
-      if (a.error && a.error !== audioError) toast(AUDIO_ERRORS[a.error] ?? a.error, "white");
-      audioError = a.error;
-    },
-  });
+  // Its errors are shown where they matter (the stage panel, the voice pill), not as toasts.
+  const audio = createAudio({ onChange: (a) => set({ audio: a }) });
   function joinVoice(where, speak = false) {
     if (!server) return;
     voiceToken(server.base, server.token, where).then(
@@ -321,16 +318,17 @@ export function createStore({ scene, freeze } = {}) {
         set({ channel: "general" });
       }
     },
-    openSheet(sheet) { set({ sheet, signing: false }); },
+    openSheet(sheet) { set({ sheet, signing: false, sheetAt: Date.now() }); },
 
     // Wallet. Connecting shares only the address; on a live server the wallet also signs a one-time message so the
     // server knows it is really this address (free, no transaction).
     setRpc(url) { rpc = url; },
     wallets: () => detectWallets(),
-    openConnect(reason = null) { set({ sheet: "connect", connectFor: reason, wallet: { ...state.wallet, error: null } }); },
+    openConnect(reason = null) { set({ sheet: "connect", sheetAt: Date.now(), connectFor: reason, wallet: { ...state.wallet, error: null } }); },
     async connectWallet(id) {
       const w = detectWallets().find((x) => x.id === id);
       if (!w) return;
+      if (state.wallet.status === "connecting" || state.wallet.status === "signing") return; // one request at a time
       if (!w.installed) { window.open(w.url, "_blank", "noopener"); return; }
       setWallet({ status: "connecting", id: w.id, name: w.name, error: null });
       try {
@@ -338,9 +336,18 @@ export function createStore({ scene, freeze } = {}) {
         await actions.signIn(w, address);
         set({ sheet: null });
         toast(`Connected · ${shortAddress(address)}`);
+        actions.resume();
       } catch (e) {
         setWallet({ status: "none", id: null, name: null, address: null, signedIn: false, error: walletError(e, w.name) });
       }
+    },
+    /** What the person was doing when asked to connect, done now that they are: their message, their hand. */
+    resume() {
+      const why = state.connectFor;
+      set({ connectFor: null });
+      if (!link || state.wallet.status !== "connected") return;
+      if (why === "chat" && state.draft.trim()) actions.send();
+      if (why === "speak" && !state.voice.hand && !state.voice.onStage) actions.toggleHand();
     },
     /** After connecting: the server session (live), the balance, and following the wallet's own switches. */
     async signIn(w, address) {
@@ -365,24 +372,27 @@ export function createStore({ scene, freeze } = {}) {
     async restoreWallet() {
       const w = lastWallet();
       if (!w) return;
+      setWallet({ status: "restoring", id: w.id, name: w.name }); // the corner waits quietly instead of flashing Connect
       try {
         const address = await connectWallet(w, { silent: true });
         // Live, a new signature is asked only if the saved session is gone: never a prompt out of nowhere.
         if (server && !cached(address)) { setWallet({ status: "none", id: w.id, name: w.name, address: null }); return; }
         await actions.signIn(w, address);
-      } catch { /* not trusted any more: stay disconnected, quietly */ }
+      } catch { setWallet({ status: "none" }); /* not trusted any more: stay disconnected, quietly */ }
     },
     async disconnect() {
       await disconnectWallet(walletRef);
       set({ sheet: null });
       await signedOut("Wallet disconnected");
     },
+    copyText(text, done) { navigator.clipboard?.writeText(text).then(() => toast(done, "white"), () => toast(text, "white")); },
     copyAddress() {
       const a = state.wallet.address;
       if (!a) return;
       navigator.clipboard?.writeText(a).then(() => toast("Address copied", "white"), () => toast(a, "white"));
     },
-    closeSheet() { if (!state.signing) set({ sheet: null }); },
+    // A tap that lands on the backdrop right as a sheet opens is the second half of a double tap, not "close".
+    closeSheet(fromBackdrop = false) { if (!state.signing && !(fromBackdrop === true && Date.now() - (state.sheetAt ?? 0) < 450)) set({ sheet: null }); },
     setFilter(filter) { set({ filter }); },
     setQuery(query) { set({ query }); },
     toggleReminder(lobby) {
@@ -406,8 +416,8 @@ export function createStore({ scene, freeze } = {}) {
         // Leaving the audio leaves the stage too, except for the host, whose stage it is.
         if (!listening && state.voice.onStage && state.live?.stage?.host !== state.live?.you) link.down();
         if (!listening && state.voice.hand) link.hand(false);
-        set({ voice: { ...state.voice, listening, hand: false, mic: true } });
-        if (listening) toast(state.voice.onStage ? "You’re live on stage" : "Listening to the stage", "sky");
+        // The stage panel (and the voice pill elsewhere) says what is happening: no toast on top of it.
+        set({ voice: { ...state.voice, listening, hand: false, mic: state.voice.onStage, invited: false } });
         return;
       }
       set({ voice: { listening, hand: false, onStage: listening && state.voice.onStage, mic: true } });
@@ -415,7 +425,7 @@ export function createStore({ scene, freeze } = {}) {
     },
     toggleHand() {
       if (link && state.live) {
-        if (state.live.guest) return actions.openConnect("speak");
+        if (state.live.guest && !state.wallet.signedIn) return actions.openConnect("speak");
         if (!state.voice.listening) actions.toggleListen();
         return link.hand(!state.voice.hand); // the server's stage update sets it
       }
@@ -423,21 +433,33 @@ export function createStore({ scene, freeze } = {}) {
       set({ voice: { ...state.voice, listening: true, hand: true } });
       later(() => {
         if (!state.voice.hand) return;
-        set({ voice: { ...state.voice, hand: false, onStage: true, mic: true }, chat: chatLine({ sys: true, kind: "stage", text: "mira.sol brought degen_marc on stage" }) });
-        toast("You’re on stage. Your mic is live.", "sky");
+        set({ voice: { ...state.voice, hand: false, onStage: true, invited: true, mic: false }, chat: chatLine({ sys: true, kind: "stage", text: "mira.sol invited degen_marc to speak" }) });
       }, 3200);
     },
     toggleMic() {
-      const mic = !state.voice.mic;
-      if (audio.state.status === "live") audio.setMic(mic);
+      const mic = !(state.live ? state.audio.micOn : state.voice.mic);
+      if (state.live) audio.setMic(mic);
       set({ voice: { ...state.voice, mic } });
     },
+    /** Invited on stage: speak (the microphone opens now), or stay in the audience. */
+    acceptInvite() {
+      if (state.live) audio.setMic(true);
+      set({ voice: { ...state.voice, invited: false, mic: true } });
+    },
+    declineInvite() {
+      if (link && state.live) link.down();
+      set({ voice: { ...state.voice, invited: false, onStage: false, mic: false } });
+    },
+    retryMic() { audio.setMic(true); },
+    retryVoice() { audio.retry(); },
     startAudio() { audio.startAudio(); },
     stepDown() {
       if (link && state.live) return link.down();
       set({ voice: { ...state.voice, onStage: false } });
     },
     bringUp(user) { link?.bring(user); },
+    /** The host (or a co-host) moves a speaker back to the audience. */
+    moveDown(user) { link?.down(user); },
     setLobbyTab(lobbyTab) { set({ lobbyTab }); },
 
     // The race.
@@ -445,7 +467,7 @@ export function createStore({ scene, freeze } = {}) {
     setAmount(amount) { set({ amount }); },
     proposeIdea({ name, ticker, pitch, hue }) {
       const r = act(state.chain, "propose_idea", { proposer: ME, symbol: ticker, name }, state.elapsed);
-      if (!r.ok) return toast(errorText(r.error), "white");
+      if (!r.ok) return toast(errorText(r.error), "error");
       set((s) => {
         const meta = { ...s.meta, [ticker]: { id: ticker.toLowerCase(), hue, pitch } };
         return { meta, ideas: ideasFrom(s.chain, meta), selected: ticker.toLowerCase(), sheet: null, balance: s.balance - toSol(s.chain.lobby.bond),
@@ -460,7 +482,7 @@ export function createStore({ scene, freeze } = {}) {
         const r = act(state.chain, "pledge", { user: ME, symbol: idea.ticker, amount: toLamports(state.amount) }, state.elapsed);
         if (!r.ok) {
           set({ signing: false, sheet: null });
-          return toast(errorText(r.error), "white");
+          return toast(errorText(r.error), "error");
         }
         set((s) => ({ signing: false, sheet: "receipt", receipt: r.receipt, receipts: [r.receipt, ...s.receipts], pledge: myPledge(s.chain),
           ideas: ideasFrom(s.chain, s.meta), balance: s.balance - s.amount,
@@ -471,7 +493,7 @@ export function createStore({ scene, freeze } = {}) {
       const p = state.pledge;
       if (!p) return;
       const r = act(state.chain, "withdraw", { user: ME, symbol: p.symbol, amount: p.lamports }, state.elapsed);
-      if (!r.ok) return toast(errorText(r.error), "white");
+      if (!r.ok) return toast(errorText(r.error), "error");
       set((s) => ({ balance: s.balance + p.amount, pledge: myPledge(s.chain), ideas: ideasFrom(s.chain, s.meta), sheet: null, receipt: r.receipt, receipts: [r.receipt, ...s.receipts] }));
       toast(`${sol(p.amount)} returned to your wallet`, "white");
     },
@@ -479,7 +501,7 @@ export function createStore({ scene, freeze } = {}) {
       const p = state.pledge;
       const idea = selectedIdea();
       const r = act(state.chain, "move_pledge", { user: ME, from: p.symbol, to: idea.ticker }, state.elapsed);
-      if (!r.ok) return toast(errorText(r.error), "white");
+      if (!r.ok) return toast(errorText(r.error), "error");
       set((s) => ({ pledge: myPledge(s.chain), ideas: ideasFrom(s.chain, s.meta), receipt: r.receipt, receipts: [r.receipt, ...s.receipts] }));
       toast(`Moved your ${sol(p.amount)} to $${idea.ticker}`);
     },
@@ -496,6 +518,8 @@ export function createStore({ scene, freeze } = {}) {
     send() {
       const text = state.draft.trim();
       if (!text) return;
+      // A guest's message waits in the field while they connect, then goes out by itself.
+      if (link && state.live?.guest && !state.wallet.signedIn) return actions.openConnect("chat");
       if (link) return link.chat(text), set({ draft: "" });
       set({ draft: "", chat: chatLine({ who: ME, text }) });
     },
@@ -551,7 +575,7 @@ export function createStore({ scene, freeze } = {}) {
         const up = await clanLink.upload(file);
         clanLink.post(state.channel, "", [up.id]);
       } catch (e) {
-        toast(e.message, "white");
+        toast(e.message, "error");
       }
     },
     deleteMessage(id) {
@@ -571,8 +595,8 @@ export function createStore({ scene, freeze } = {}) {
       set((s) => ({ clanMessages: { ...s.clanMessages, [s.channel]: s.clanMessages[s.channel].map((m) => (m.id === id ? { ...m, [key]: !m[key] } : m)) } }));
     },
     showReceipt(receipt) { set({ sheet: "receipt", receipt }); },
-    shareBirthCard() { set({ sheet: "card" }); },
-    cardDone(text) { set({ sheet: null }); toast(text); },
+    shareBirthCard() { set({ sheet: "card", sheetAt: Date.now() }); },
+    cardDone(text) { toast(text); }, // the sheet stays: save and copy, or both shapes
   };
 
   // Deterministic scenes for screenshots and tests.

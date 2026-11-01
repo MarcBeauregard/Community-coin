@@ -106,7 +106,10 @@ for (const [w, h, label] of [[390, 844, "phone"], [1440, 900, "desktop"]]) {
   const found = { unnamed: [], noAlt: [], unlabelled: [], dupIds: [], lowContrast: [], tiny: [], landmarks: [] };
   for (const scene of SCENES) {
     await page.goto(`${base}?freeze&scene=${scene}`);
+    // Measured once things have settled: sheets rise and buttons fade in when they become available.
     await page.waitForTimeout(350);
+    await page.waitForFunction(() => document.getAnimations().every((x) => x.playState !== "running" || x.effect?.getComputedTiming().iterations === Infinity), null, { timeout: 3000 }).catch(() => {});
+    await page.waitForTimeout(250);
     const a = await page.evaluate(audit);
     for (const k of ["unnamed", "noAlt", "unlabelled", "dupIds", "lowContrast", "tiny"]) for (const x of a[k]) found[k].push(`${scene}: ${x}`);
     if (a.landmarks === 0) found.landmarks.push(scene);

@@ -33,18 +33,21 @@ export function Chip({ tone = "neutral", dot, live, children, class: extra }) {
 // A coin: its art when it has some, its ticker's first letters on a struck face otherwise.
 export function Coin({ coin, size = 48, big, class: extra, alt = "" }) {
   const style = { width: `${size}px`, height: `${size}px`, fontSize: `${Math.round(size * 0.32)}px`, ...coinStyle(coin.hue, big) };
-  return html`<span class=${cx("coin", extra)} style=${style}>
+  // Decorative unless it has alt text: the coin's name is always said next to it.
+  return html`<span class=${cx("coin", extra)} style=${style} aria-hidden=${alt ? undefined : "true"}>
     ${coin.ticker.slice(0, 2)}
     ${coin.logo && html`<img src=${coin.logo} alt=${alt} loading="lazy" decoding="async" />`}
   </span>`;
 }
 
-// A person: their photo over a tinted circle with initials (seen while the photo loads or if it fails).
+// A person: their photo over a tinted circle with initials (seen while the photo loads or if it fails). Decorative
+// for screen readers (the name is always said next to it), except what it alone shows: speaking, muted.
 export function Avatar({ person, size = 36, speaking, muted, status, class: extra, style }) {
   const base = { width: `${size}px`, height: `${size}px`, fontSize: `${Math.round(size * 0.36)}px`,
     background: `linear-gradient(150deg, hsl(${person.hue} 75% 74%), hsl(${person.hue} 60% 48%))`, ...style };
   return html`<span class=${cx("av", speaking && "speaking", extra)} style=${base} title=${person.name}>
-    ${person.name[0].toUpperCase()}
+    <span aria-hidden="true">${(person.name || "?")[0].toUpperCase()}</span>
+    ${speaking && html`<span class="sr">${person.name} is speaking</span>`}
     ${person.src && html`<img src=${person.src} alt="" loading="lazy" decoding="async" />`}
     ${muted && html`<span class="muted" role="img" aria-label="Muted"><${I.MicOff} size=${11} stroke=${2.6} /></span>`}
     ${status && html`<span class="status" style=${{ background: status }} />`}
@@ -103,7 +106,7 @@ export function Sheet({ title, labelledBy, onClose, busy, children }) {
     if (e.shiftKey && (at === first || at === ref.current)) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && at === last) { e.preventDefault(); first.focus(); }
   };
-  return html`<div class="sheet-bg" onClick=${() => !busy && onClose()}>
+  return html`<div class="sheet-bg" onClick=${() => !busy && onClose(true)}>
     <div ref=${ref} class="sheet glass" role="dialog" aria-modal="true" tabIndex="-1" aria-labelledby=${labelledBy} onClick=${(e) => e.stopPropagation()} onKeyDown=${onKey}>
       ${title && html`<div class="sheet-head"><h2 id=${labelledBy} class="display">${title}</h2>
         <${IconButton} label="Close" size="sm" onClick=${onClose}><${I.Close} size=${13} stroke=${2.6} /></${IconButton}></div>`}
@@ -112,11 +115,13 @@ export function Sheet({ title, labelledBy, onClose, busy, children }) {
   </div>`;
 }
 
-const TONE = { lime: "var(--lime)", sky: "var(--sky)", white: "var(--text)" };
+// A toast: a check for what went right, an exclamation for what didn't ("error" tone), never the other way round.
+const TONE = { lime: "var(--lime)", sky: "var(--sky)", white: "var(--text)", error: "var(--amber)" };
 export function Toast({ toast }) {
   if (!toast) return null;
-  return html`<div class="toast glass" role="status" aria-live="polite">
-    <span class="tick" style=${{ background: TONE[toast.tone] || TONE.lime }}><${I.Check} size=${13} stroke=${3.2} /></span>${toast.text}
+  const bad = toast.tone === "error";
+  return html`<div class="toast glass" role=${bad ? "alert" : "status"} aria-live=${bad ? "assertive" : "polite"}>
+    <span class="tick" style=${{ background: TONE[toast.tone] || TONE.lime }}>${bad ? html`<${I.Alert} size=${14} stroke=${3} />` : html`<${I.Check} size=${13} stroke=${3.2} />`}</span>${toast.text}
   </div>`;
 }
 
@@ -124,11 +129,10 @@ export function Toast({ toast }) {
 export function Composer({ label, value, placeholder, onInput, onSend, maxLength = 300, leading }) {
   return html`<div class="composer">
     ${leading}
-    <label class="box">
-      <span class="sr">${label}</span>
-      <input type="text" value=${value} placeholder=${placeholder} maxLength=${maxLength}
+    <div class="box">
+      <input type="text" aria-label=${label} value=${value} placeholder=${placeholder} maxLength=${maxLength}
         onInput=${(e) => onInput(e.currentTarget.value)} onKeyDown=${(e) => { if (e.key === "Enter") { e.preventDefault(); onSend(); } }} />
       <button type="button" class="send" aria-label="Send" disabled=${!value.trim()} onClick=${onSend}><${I.Up} size=${15} /></button>
-    </label>
+    </div>
   </div>`;
 }

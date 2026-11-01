@@ -161,11 +161,11 @@ if (existsSync(join(dist, "index.html")) && !process.env.NO_BROWSER) {
   await dave.getByRole("button", { name: "Raise hand to pitch" }).click();
   check(await dave.getByText("Hand raised · the host will bring you up").waitFor({ timeout: 3000 }).then(() => true, () => false), "a listener raises a hand from the app");
   check(await hostPage.getByRole("region", { name: "Raised hands" }).or(hostPage.getByLabel("Raised hands")).getByText("dave").waitFor({ timeout: 3000 }).then(() => true, () => false), "the host sees the raised hand");
-  await hostPage.getByRole("button", { name: "Bring up" }).click();
-  check(await dave.getByText("You’re on stage · mic live").waitFor({ timeout: 3000 }).then(() => true, () => false), "brought up, the listener is on stage in their app");
+  await hostPage.getByRole("button", { name: "Bring dave up" }).click();
+  check(await dave.getByText("The host invited you to speak").waitFor({ timeout: 3000 }).then(() => true, () => false), "brought up, the listener is invited to speak in their app");
   check(await until(() => calls.some((c) => c.identity === "dave" && c.permission.canPublish)), "and the SFU lets them publish");
-  await dave.getByRole("button", { name: "Step down" }).click();
-  check(await dave.getByText(/You’re back in the audience|Listening · you can raise your hand/).first().waitFor({ timeout: 3000 }).then(() => true, () => false), "they step down from the app");
+  await dave.getByRole("button", { name: "Not now" }).click();
+  check(await dave.getByText(/Listening · you can raise your hand/).first().waitFor({ timeout: 3000 }).then(() => true, () => false), "they step down from the app");
   check(hostPage.errors.length === 0 && dave.errors.length === 0, "no script errors");
   await browser.close();
   files.close();

@@ -6,6 +6,7 @@ import * as I from "../icons.js";
 import { person, coin, PEOPLE, FEATURED } from "../demo/data.js";
 import { allocation } from "../demo/select.js";
 import { sol, int, ticker } from "../format.js";
+import { isAddress, explorerUrl, shortAddress } from "../wallet/wallets.js";
 
 const ROOM = Object.keys(PEOPLE).map(person);
 
@@ -56,6 +57,10 @@ export function Launch({ s, a, phone }) {
                   <div><span>Your allocation</span><span class="num">${int(allocation(l))} ${win.ticker}</span></div>
                   <div><span>Price</span><span>Same for every founder</span></div>
                   <div><span>Unlocks</span><span>25% now · the rest over 3 days</span></div>
+                  ${isAddress(l.mint) && html`<div><span>Contract</span><span class="row" style="gap:8px;justify-content:flex-end">
+                    <button type="button" class="link num" aria-label=${`Copy the contract address ${l.mint}`} onClick=${() => a.copyText(l.mint, "Contract address copied")}>${shortAddress(l.mint)}</button>
+                    <a class="link" href=${explorerUrl(l.mint)} target="_blank" rel="noopener">Solscan<span class="sr"> (opens in a new tab)</span></a>
+                  </span></div>`}
                 </div>
               </div>
               <div class="row" style=${phone ? "flex-direction:column;align-items:stretch" : ""}>

@@ -11,7 +11,7 @@ import { createStore } from "./demo/store.js";
 import { guestSession, devSession } from "./realtime/client.js";
 import { person, SPEAKERS, FEATURED } from "./demo/data.js";
 import { Discover } from "./screens/discover.js";
-import { Lobby } from "./screens/lobby.js";
+import { Lobby, VoicePill } from "./screens/lobby.js";
 import { Launch } from "./screens/launch.js";
 import { Clan } from "./screens/clan.js";
 import { Sheets } from "./screens/sheets.js";
@@ -108,7 +108,8 @@ function App() {
     ${screen === "lobby" && html`<${Lobby} s=${s} a=${a} phone=${phone} />`}
     ${screen === "launch" && html`<${Launch} s=${s} a=${a} phone=${phone} />`}
     ${screen === "clan" && html`<${Clan} s=${s} a=${a} phone=${phone} />`}
-    ${s.voice.listening && screen === "discover" && html`<${MiniPlayer} s=${s} a=${a} />`}
+    ${s.voice.listening && screen === "discover" && !s.live && html`<${MiniPlayer} s=${s} a=${a} />`}
+    ${s.voice.listening && screen !== "lobby" && s.live && html`<${VoicePill} s=${s} a=${a} onOpen=${() => { a.go({ screen: "lobby" }); a.setLobbyTab("stage"); }} />`}
     ${showTabs && html`<${TabBar} s=${s} a=${a} />`}
     <${Sheets} s=${s} a=${a} />
     <${Toast} toast=${s.toast} />

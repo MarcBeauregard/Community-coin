@@ -98,7 +98,7 @@ for (const [w, h] of [[1440, 900], [390, 844]]) {
   await page.locator(".idea", { hasText: "dogwifhat" }).click();
   await click(phone ? "Pledge" : "Pledge 1.0 SOL");
   check(await page.getByText("Full refund at 00:55").isVisible(), `@${w} the pledge sheet says what happens if it loses`);
-  await click("Confirm pledge");
+  await click("Confirm practice pledge");
   await page.waitForTimeout(1500);
   check(await page.getByRole("heading", { name: "Pledged 1 SOL to $WIF" }).isVisible(), `@${w} the receipt reads the pledge from the program's events`);
   check(await page.locator(".rows", { hasText: "Your pledge" }).getByText("1.0 SOL").first().isVisible(), `@${w} the receipt shows the pledge total`);
@@ -107,7 +107,7 @@ for (const [w, h] of [[1440, 900], [390, 844]]) {
   await click("Withdraw");
   check(await page.getByRole("button", { name: phone ? "Pledge" : "Pledge 1.0 SOL", exact: true }).isVisible(), `@${w} withdrawing frees the pledge`);
   await click(phone ? "Pledge" : "Pledge 1.0 SOL");
-  await click("Confirm pledge");
+  await click("Confirm practice pledge");
   await page.waitForTimeout(1500);
   await click("Done");
 
@@ -141,7 +141,7 @@ for (const [w, h] of [[1440, 900], [390, 844]]) {
   await page.getByRole("button", { name: "Join the lobby" }).click();
   await page.locator(".idea", { hasText: "Floki" }).click();
   await page.getByRole("button", { name: "Pledge 1.0 SOL" }).click();
-  await page.getByRole("button", { name: "Confirm pledge" }).click();
+  await page.getByRole("button", { name: "Confirm practice pledge" }).click();
   await page.waitForTimeout(1500);
   await page.getByRole("button", { name: "Done" }).click();
   await page.getByRole("button", { name: "Demo · skip to lock" }).click();

@@ -14,12 +14,14 @@ const ED25519_SPKI = Buffer.from("302a300506032b6570032100", "hex");
 
 export { signInMessage };
 
-export function createAuth({ secret = randomBytes(32), domain = "lobbies.communitycoin", now = () => Date.now() } = {}) {
+export function createAuth({ secret = randomBytes(32), domain = "lobbies.communitycoin", uri = `https://${domain}`, chain = "solana:mainnet", now = () => Date.now() } = {}) {
   const nonces = new Map(); // nonce -> issuedAt
   const mac = (body) => createHmac("sha256", secret).update(body).digest("base64url");
 
   return {
     domain,
+    uri,
+    chain,
     nonce() {
       const n = randomBytes(16).toString("hex");
       const t = now();
@@ -37,7 +39,7 @@ export function createAuth({ secret = randomBytes(32), domain = "lobbies.communi
       let raw;
       try { raw = new PublicKey(address).toBytes(); } catch { throw new Error("Not a Solana address"); }
       const key = createPublicKey({ key: Buffer.concat([ED25519_SPKI, Buffer.from(raw)]), format: "der", type: "spki" });
-      const message = Buffer.from(signInMessage(domain, address, nonce, issuedAt));
+      const message = Buffer.from(signInMessage(domain, address, nonce, issuedAt, { uri, chain }));
       if (!verify(null, message, key, Buffer.from(signature, "base64"))) throw new Error("Bad signature");
       return this.issue(address);
     },
