@@ -137,6 +137,8 @@ export function createStore({ scene, freeze } = {}) {
           elapsed: Math.floor((m.now - m.opensAt) / 1000), ideas: raceIdeas(m.race, s.meta), chat: m.chat.map((l) => lineToChat(l, m.you)), voice: { ...s.voice, onStage: !!m.stage?.speakers.includes(m.you) } });
         // A practice lobby: this wallet's pledge and practice SOL, as the server keeps them (across reloads).
         if (m.practice) set({ live: { ...state.live, practice: true }, pledge: m.guest ? null : liveMine(m), balance: m.guest ? 10 : toSol(BigInt(m.balance ?? "0")) }); // a guest sees the allowance they get by signing in
+        // Reloaded on the clan before any launch: the Clans screen (empty until there is one), never the demo's.
+        if (wantScreen === "clan" && !m.launch) { wantScreen = null; set({ route: { screen: "clan" } }); }
         // A late joiner gets what the crank already announced.
         if (m.locked) onLive({ t: "locked", ...m.locked });
         if (m.launch) onLive({ t: "launch", ...m.launch });
@@ -159,7 +161,7 @@ export function createStore({ scene, freeze } = {}) {
       case "launch":
         // The launch screen opens if the person was in the lobby, or had it open before a reload.
         set({ launched: liveLaunch(m, s.locked?.total ?? 0), route: s.route.screen === "lobby" || wantScreen === "launch" ? { screen: "launch" } : s.route, sheet: null });
-        wantScreen = null;
+        if (wantScreen === "launch") wantScreen = null; // a wanted clan waits for this wallet's settlement
         break;
       case "settled": {
         const amount = toSol(BigInt(m.amount));
@@ -168,7 +170,9 @@ export function createStore({ scene, freeze } = {}) {
           set({ launched: { ...l, founder: true, rank: m.rank, myAmount: amount, myId: l.id, allocation: founderAllocation(l.pot, BigInt(m.amount)) },
             clans: [{ id: "new", name: m.name ?? s.ideas.find((d) => d.id === l.id)?.name ?? l.id, ticker: l.id.toUpperCase(), hue: s.ideas.find((d) => d.id === l.id)?.hue ?? 150,
               members: l.backers, born: "Born tonight", change: null, voice: 0, unread: 0, fresh: true, story: "" }, ...s.clans.filter((c) => c.id !== "new")] });
+          if (wantScreen === "clan") { wantScreen = null; actions.openClan("new"); } // reloaded on the clan: back in it
         } else if (m.kind === "refund") {
+          if (wantScreen === "clan") { wantScreen = null; set({ route: { screen: "clan" } }); }
           set({ launched: l && { ...l, refund: amount, myAmount: amount } });
           toast(`${sol(amount)} refunded to your wallet`, "white");
         }

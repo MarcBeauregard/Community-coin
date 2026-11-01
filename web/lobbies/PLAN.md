@@ -149,3 +149,31 @@ Sheets: propose (invalid, valid, ticker taken), pledge (idle, signing), host, wa
 - Deploy to devnet (`solana/DEPLOY.md`) and an external audit of the program before mainnet.
 - An SFU (LiveKit) for the audio; the app's audio transport against it.
 - Counsel's review of the terms in each launch market.
+
+# After launch: wallet, audio, birth card, tested by mystery users
+
+## Done
+- Wallet (`src/wallet/wallets.js`): Phantom, Solflare, Backpack or any injected wallet; on a phone, "Open in
+  Phantom / Solflare" reopens the page in the wallet's browser. Connecting shares only the address; on a live
+  server the wallet signs a one-time Sign-In With Solana message (`src/realtime/siws.js`, shared with the server;
+  the domain is the page's own when it is an allowed origin). Quiet reconnection with a saved session, account
+  switches and disconnects followed, every failure explained; a guest's message or raised hand goes through once
+  connected.
+- Practice lobbies: until a lobby runs on Solana, signed-in wallets pledge practice SOL (10 each) on the server's
+  lobby under the program's rules: counted for everyone, kept across reloads, settled at the launch (a winning
+  pledge makes its wallet a founder). Everything says practice: the pledge sheet, the receipt, the launch, the card.
+- Audio (`src/voice/audio.js`): LiveKit's client, loaded only when someone joins a voice room. Being brought up is
+  an invitation (the microphone stays off until Speak now); speaking lights from the room; Turn on sound when the
+  browser blocks it; a blocked microphone explained per device with Try again; rejoin after a drop; the host moves
+  speakers back; a voice pill wherever the stage is out of view.
+- Birth card (`src/card/birthcard.js`): drawn on the device, Post (1200×630) and Story (1080×1920), shared through
+  the share sheet with a caption (practice said, a link, the contract address when real), saved, or captioned.
+- Checks: `wallet-check.mjs`, `audio-check.mjs`, `card-check.mjs` (Chromium), plus the a11y and visual checks.
+- Mystery users: five rounds of three personas (a newcomer on an iPhone, a power user on desktop, a keyboard and
+  screen-reader user), each driving the built app; every finding fixed and covered by a check. Last scores: wallet
+  9 / 9 / 8.5, voice 8 / 8.5 / 8, card 9 / 9 / 8.5 (out of 10).
+
+## Left
+- Audio against a real SFU: the app is tested against a stand-in LiveKit room; a LiveKit server (or LiveKit Cloud
+  keys) is needed for an end-to-end test.
+- Real pledges on Solana (devnet first), which replaces the practice SOL.

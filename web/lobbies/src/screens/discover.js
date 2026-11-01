@@ -90,7 +90,7 @@ function Hero({ s, a, phone }) {
       ${phone && html`<span class="t2 num" style="font-size:12px;text-align:center;margin-top:-6px">${int(pres.inside)} inside · ${int(pres.listening)} listening</span>`}
     </div>
     <div class="hero-art">
-      <div class="ring"><${Orbit} people=${ROOM} base=${40} /></div>
+      <div class="ring"><${Orbit} people=${s.live ? [] : ROOM} base=${40} /></div>
       <${Coin} coin=${coin(lead)} size=${196} big class="glow" />
       <span class="leading glass">Leading · ${ticker(lead.ticker)} <span class="num t2">${sol(lead.total)}</span></span>
     </div>

@@ -103,7 +103,7 @@ export function Sheet({ title, labelledBy, onClose, busy, refocus, children }) {
     // replaced it, else to the screen's heading.
     return () => setTimeout(() => {
       if (document.querySelector("[role=dialog]")) return; // another sheet took over (pledge → receipt): it has the focus
-      if (opener && opener.isConnected) return opener.focus();
+      if (opener && opener !== document.body && opener.isConnected) return opener.focus(); // the page itself is no opener
       const next = (refocus && document.querySelector(refocus)) || document.querySelector(".screen h1, h1");
       if (next) { if (!next.matches("button, a, input")) next.setAttribute("tabindex", "-1"); next.focus(); }
     }, 0);

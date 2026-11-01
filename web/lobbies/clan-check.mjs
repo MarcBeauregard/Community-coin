@@ -212,6 +212,10 @@ if (existsSync(join(dist, "index.html")) && !process.env.NO_BROWSER) {
   await page.getByRole("button", { name: "Enter the clan" }).click();
   await page.waitForTimeout(800);
   check(await page.getByText("Founders only").first().isVisible(), "she enters the clan");
+  // Reloaded on the clan, she is back in her clan, not the demo's.
+  await page.reload();
+  await page.waitForTimeout(2500);
+  check(await page.getByText("Founders only").first().isVisible() && (await page.getByText("degen_marc").count()) === 0 && (await page.getByText("you", { exact: true }).count()) > 0, "reloading on the clan brings her clan back, nobody else in her place");
   const m2 = s2.clans.list()[0].mint;
   const peer = [];
   const bob = connectClan({ base: base2, mint: m2, token: s2.auth.issue("bob"), onMessage: (m) => peer.push(m) });

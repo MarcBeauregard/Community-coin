@@ -23,6 +23,8 @@ const store = createStore({ scene: params.get("scene"), freeze: params.has("free
   const screen = location.hash.replace("#/", "");
   if (screen === "lobby" || (screen === "launch" && store.get().launched)) store.actions.go({ screen });
   else if (screen === "launch" && params.get("live")) { store.actions.go({ screen: "lobby" }); store.actions.wantScreen("launch"); }
+  // Live, the clan is known only once the server has answered: it opens then (store.js), never the demo's first.
+  else if (screen === "clan" && params.get("live")) store.actions.wantScreen("clan");
   else if (screen === "clan") store.actions.openClan(store.get().clan);
 }
 // ?live=<server> joins the realtime server as a guest; connecting a wallet signs in with it (Sign-In With Solana).

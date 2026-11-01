@@ -64,3 +64,7 @@ the SFU's admin API at once. Start the server with `--sfu wss://…` and `LIVEKI
 
 Hardening: `npm run test:load` (5,000 people in one lobby), `npm run test:a11y` (WCAG 2.2 AA on every scene),
 `SECURITY.md` (the program and server review), `LEGAL.md` (the risks and terms copy, for counsel).
+
+After launch: the app connects wallets (`npm run test:lobby-wallet`), plays the voice rooms through LiveKit
+(`npm run test:audio`, against a stand-in room), and draws the founder's birth card (`npm run test:card`). Live
+lobbies are practice lobbies until they run on Solana: pledges use practice SOL on the server, and say so.

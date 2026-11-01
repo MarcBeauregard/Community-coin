@@ -26,7 +26,10 @@
     "test:clans": "node web/lobbies/clan-check.mjs",
     "test:voice": "node web/lobbies/voice-check.mjs",
     "test:a11y": "node web/lobbies/a11y-check.mjs",
-    "test:load": "node web/lobbies/load-check.mjs"
+    "test:load": "node web/lobbies/load-check.mjs",
+    "test:lobby-wallet": "node web/lobbies/wallet-check.mjs",
+    "test:audio": "node web/lobbies/audio-check.mjs",
+    "test:card": "node web/lobbies/card-check.mjs"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "2.1.2",
