@@ -152,7 +152,7 @@ const live = `${app}?live=${encodeURIComponent(base)}#/lobby`;
   check(signs === 1, "without signing again");
   check(await page.getByText(/Backing with 1\.0 SOL/).first().waitFor({ timeout: 4000 }).then(() => true, () => false), "and the pledge is still there");
   await page.evaluate(() => window.__wallet.switchTo(1));
-  check(await page.getByText("You switched accounts in Phantom").waitFor({ timeout: 3000 }).then(() => true, () => false), "switching accounts in the wallet signs out, and says why");
+  check(await page.getByText(/You switched accounts in your wallet/).first().waitFor({ timeout: 3000 }).then(() => true, () => false), "switching accounts in the wallet signs out, and says why");
   check(await until(async () => (await pill(page).textContent()).includes("Connect")), "back to Connect");
   check(page.errors.length === 0, `no script errors (live)${page.errors.length ? `: ${page.errors.join(" | ")}` : ""}`);
   await context.close();
