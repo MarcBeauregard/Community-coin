@@ -118,7 +118,7 @@ const pill = (page) => page.locator(".wallet-pill").first();
   check(await page.getByText("Practice balance").isVisible(), "the wallet sheet says the demo balance is not the wallet's");
   await page.getByRole("button", { name: "Disconnect" }).click();
   check(await until(async () => (await pill(page).textContent()).includes("Connect")), "disconnecting puts Connect back");
-  check(page.errors.length === 0, "no script errors (demo)");
+  check(page.errors.length === 0, `no script errors (demo)${page.errors.length ? `: ${page.errors.join(" | ")}` : ""}`);
   await page.context().close();
 }
 
@@ -147,7 +147,7 @@ const live = `${app}?live=${encodeURIComponent(base)}#/lobby`;
   await page.evaluate(() => window.__wallet.switchTo(1));
   check(await page.getByText("You switched accounts in Phantom").waitFor({ timeout: 3000 }).then(() => true, () => false), "switching accounts in the wallet signs out, and says why");
   check(await until(async () => (await pill(page).textContent()).includes("Connect")), "back to Connect");
-  check(page.errors.length === 0, "no script errors (live)");
+  check(page.errors.length === 0, `no script errors (live)${page.errors.length ? `: ${page.errors.join(" | ")}` : ""}`);
   await context.close();
 }
 {

@@ -81,7 +81,7 @@ for (const [w, h] of [[1440, 900], [390, 844]]) {
   const phone = w < 900;
   const { page, errors } = await open(w, h);
   const click = (name, opts = {}) => page.getByRole("button", { name, exact: true, ...opts }).first().click();
-  const balance = async () => Number((await page.locator(".wallet-pill .num").first().textContent()).replace(/[^0-9.]/g, ""));
+  const balance = async () => Number(await page.locator(".app").getAttribute("data-balance")); // the demo balance, as the store holds it
   const start = await balance();
   await click("Join the lobby");
   check(await page.locator(".lobby").isVisible(), `@${w} joining opens the lobby`);

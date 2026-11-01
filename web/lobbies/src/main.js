@@ -103,7 +103,7 @@ function App() {
 
   const screen = s.route.screen === "launch" && !s.launched ? "discover" : s.route.screen;
   const showTabs = phone && (screen === "discover" || (screen === "clan" && s.clanView === "list"));
-  return html`<div class=${phone ? "app phone" : "app"}>
+  return html`<div class=${phone ? "app phone" : "app"} data-balance=${s.balance}>
     ${screen === "discover" && html`<${Discover} s=${s} a=${a} phone=${phone} />`}
     ${screen === "lobby" && html`<${Lobby} s=${s} a=${a} phone=${phone} />`}
     ${screen === "launch" && html`<${Launch} s=${s} a=${a} phone=${phone} />`}
