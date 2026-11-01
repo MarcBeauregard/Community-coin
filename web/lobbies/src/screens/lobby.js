@@ -84,10 +84,18 @@ function Stage({ s, a, phone }) {
       <h2 style="font-size:15px;font-weight:600">Stage</h2>
       <span style="font-size:12px;font-weight:600;color:var(--sky);display:inline-flex;align-items:center;gap:6px"><${Equalizer} height=${10} />${listeners} listening</span>
     </div>`}
-    <ul class="speakers" role="list" aria-label="On stage">${speakers(s).map((p) => html`<li key=${p.who}>
-      <${Avatar} person=${person(p.who)} size=${size} speaking=${p.speaking} muted=${p.muted} />
-      <span class="ellipsis" style=${{ fontSize: phone ? "13px" : "12px", fontWeight: 500, color: "rgba(235,235,245,.82)", maxWidth: "100%" }}>${p.me ? "you" : person(p.who).name}</span>
-    </li>`)}</ul>
+    <div style="position:relative">
+      <ul class="speakers" role="list" aria-label="On stage">${speakers(s).map((p) => html`<li key=${p.who}>
+        <${Avatar} person=${person(p.who)} size=${size} speaking=${p.speaking} muted=${p.muted} />
+        <span class="ellipsis" style=${{ fontSize: phone ? "13px" : "12px", fontWeight: 500, color: "rgba(235,235,245,.82)", maxWidth: "100%" }}>${p.me ? "you" : person(p.who).name}</span>
+      </li>`)}</ul>
+      <div class="cheer-layer" aria-hidden="true">${s.cheers.map((c) => html`<span key=${c.id} class="cheer" style=${{ left: `${c.x}%`, animationDelay: `${c.delay}ms` }}>${c.kind === "fire" ? "🔥" : "💀"}</span>`)}</div>
+    </div>
+    <div class="row cheer-bar" role="group" aria-label="React to the pitch">
+      <button type="button" class="cheer-btn" aria-label="Fire: love this pitch" onClick=${() => a.cheer("fire")}><span aria-hidden="true">🔥</span><span class="num t2">${int(s.cheerCount.fire)}</span></button>
+      <button type="button" class="cheer-btn" aria-label="Skull: not this one" onClick=${() => a.cheer("skull")}><span aria-hidden="true">💀</span><span class="num t2">${int(s.cheerCount.skull)}</span></button>
+      <span class="t2" style="font-size:12px">Reactions fly over the stage</span>
+    </div>
     <div class="panel" ref=${panel} style="padding:14px;display:flex;flex-direction:column;gap:12px">
       ${!v.listening && !v.onStage && html`<span class="t2" style="font-size:13px;line-height:1.45">Pitches happen out loud. Listen in, or raise your hand to pitch your idea on stage.</span>`}
       <span role="status" style="display:flex;flex-direction:column;gap:4px">${mounted && html`

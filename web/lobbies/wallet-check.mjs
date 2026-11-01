@@ -139,7 +139,7 @@ const live = `${app}?live=${encodeURIComponent(base)}#/lobby`;
   check(await until(() => signs === 1), "live: the wallet signs the server's one-time message");
   check(await until(async () => (await pill(page).textContent()).includes(keys[0].address.slice(0, 4))), "and the app is signed in as that address");
   check(await until(() => peer.some((m) => m.t === "chat" && m.line.text === "gm from my wallet" && m.line.from === keys[0].address)), "the message typed before connecting goes out by itself, from the wallet's address");
-  check(await page.getByText("gm from my wallet").first().isVisible() && await page.locator(".msg", { hasText: "gm from my wallet" }).getByText("you", { exact: true }).isVisible(), "and shows as theirs: \"you\", not someone else");
+  check(await page.locator(".msg", { hasText: "gm from my wallet" }).getByText("you", { exact: true }).first().waitFor({ timeout: 3000 }).then(() => true, () => false), "and shows as theirs: \"you\", not someone else");
   // A practice pledge goes to the lobby's server: counted for everyone, kept across reloads.
   await page.locator(".idea", { hasText: "dogwifhat" }).first().click();
   await page.getByRole("button", { name: /^Pledge/ }).first().click();

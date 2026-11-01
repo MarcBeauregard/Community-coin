@@ -4,11 +4,12 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import { html, Button, Segmented, Coin, Sheet, Avatar, Chip } from "../ui.js";
 import * as I from "../icons.js";
-import { coin, FEATURED } from "../demo/data.js";
+import { coin, FEATURED, LOBBIES } from "../demo/data.js";
+import { nextOpening, icsFor, googleCalendarUrl, calendarFileName, LEAD_MS } from "../remind/remind.js";
 import { prepareReplay, playReplay, recordReplay, drawFrame, replayStory, videoType, replayFileName, SIZE as REPLAY_SIZE, LENGTH_MS } from "../race/replay.js";
 import { addressPerson, shortAddress, WALLET_TINT, isAddress } from "../wallet/wallets.js";
 import { drawBirthCard, cardCaption, cardFileName, cardText, FORMATS } from "../card/birthcard.js";
-import { race, dock, lobbyClock } from "../demo/select.js";
+import { race, dock, lobbyClock, profile } from "../demo/select.js";
 import { PROPOSE_BOND } from "../demo/store.js";
 import { sol, ticker, initials } from "../format.js";
 
@@ -165,7 +166,8 @@ function WalletSheet({ s, a }) {
       <div class="row" style="gap:8px">${clans.map((k) => html`<${Button} key=${k.id} size="sm" style="padding:0 12px 0 4px;height:36px" onClick=${() => a.openClan(k.id)}><${Coin} coin=${coin(k)} size=${28} />${ticker(k.ticker)}</${Button}>`)}</div>
     </div>
     <div class="row" style="gap:8px">
-      <${Button} variant="ghost" size="sm" style="margin-left:-10px;padding:0 10px" onClick=${() => a.openSheet("terms")}>Risks and terms</${Button}>
+      <${Button} variant="ghost" size="sm" style="margin-left:-10px;padding:0 10px;color:var(--sky)" onClick=${() => a.openSheet("profile")}>Founder profile</${Button}>
+      <${Button} variant="ghost" size="sm" style="padding:0 10px" onClick=${() => a.openSheet("terms")}>Risks and terms</${Button}>
       <${Button} variant="ghost" size="sm" style="padding:0 10px;color:#ff6961" onClick=${a.disconnect}>Disconnect</${Button}>
     </div>
     ${s.receipts.length > 0 && html`<div style="display:flex;flex-direction:column;gap:10px">
@@ -309,6 +311,128 @@ function ReplaySheet({ s, a }) {
     </div>`;
 }
 
+// A reminder for a lobby that hasn't opened: a notification 5 minutes before, said honestly (it comes from this page,
+// so a tab must be open), and the calendar, which always works.
+function RemindSheet({ s, a }) {
+  const lobby = [...s.hosted, ...LOBBIES].find((l) => l.id === s.remindFor);
+  if (!lobby) return null;
+  const r = s.reminders[lobby.id];
+  const on = !!(r && r.notify);
+  const at = on ? r.at : nextOpening(lobby.opens);
+  const time = (ms) => new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const day = new Date(at).toDateString() === new Date().toDateString() ? "today" : "tomorrow";
+  const url = `${location.origin}${location.pathname}`;
+  const download = () => {
+    const blob = new Blob([icsFor(lobby, at, url)], { type: "text/calendar" });
+    const href = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = href;
+    anchor.download = calendarFileName(lobby);
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(href), 1000);
+    a.remindDone("Calendar event saved: open it to add it");
+  };
+  return html`
+    <div class="row" style="gap:12px;flex-wrap:nowrap">
+      <span class="intro-icon" aria-hidden="true"><${I.Bell} size=${18} /></span>
+      <div style="display:flex;flex-direction:column;gap:2px;min-width:0">
+        <span style="font-size:16px;font-weight:600" class="ellipsis">${lobby.name}</span>
+        <span class="t2 num" style="font-size:13px">Opens ${day} at ${time(at)} · hosted by @${lobby.host}</span>
+      </div>
+    </div>
+    <div class="remind-option">
+      <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0">
+        <span style="font-size:15px;font-weight:600">${on ? `Notification at ${time(at - LEAD_MS)}` : "Notify me 5 minutes before"}</span>
+        <span class="t2" style="font-size:13px;line-height:1.45">From this page: keep a tab of it open. Your browser asks you first.</span>
+        <span role="alert" class="remind-error">${s.remindError ? html`<${I.Alert} size=${14} /> ${s.remindError}` : ""}</span>
+      </div>
+      ${on
+        ? html`<${Button} size="sm" onClick=${() => a.stopReminder(lobby.id)}>Turn off</${Button}>`
+        : html`<${Button} size="sm" variant="prim" onClick=${() => a.notifyMe(lobby)}>Notify me</${Button}>`}
+    </div>
+    <div class="remind-option">
+      <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0">
+        <span style="font-size:15px;font-weight:600">Add to your calendar</span>
+        <span class="t2" style="font-size:13px;line-height:1.45">Works with the app closed, with an alert 5 minutes before.</span>
+      </div>
+    </div>
+    <div class="sheet-actions">
+      <a class="btn fill lg" style="flex:1" href=${googleCalendarUrl(lobby, at, url)} target="_blank" rel="noopener">Google Calendar<span class="sr"> (opens in a new tab)</span></a>
+      <${Button} size="lg" variant="white" style="flex:1" onClick=${download}>Other calendars</${Button}>
+    </div>`;
+}
+
+// The founder profile: what this person has done here, from what the lobbies recorded. Nothing to edit: it is a
+// record, not a page about yourself.
+function ProfileSheet({ s, a }) {
+  const p = profile(s);
+  const w = s.wallet;
+  const who = w.address ? addressPerson(w.address) : null;
+  const head = (t) => html`<h3 class="t2" style="font-size:13px;font-weight:600">${t}</h3>`;
+  const row = (left, title, sub, right) => html`<li class="profile-row">${left}<span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span class="ellipsis" style="font-size:15px;font-weight:600">${title}</span><span class="t2 num ellipsis" style="font-size:13px">${sub}</span></span>${right}</li>`;
+  return html`
+    <div class="row" style="flex-wrap:nowrap;gap:14px">
+      ${who ? html`<${Avatar} person=${who} size=${52} />` : html`<span class="intro-icon" style="width:52px;height:52px;border-radius:50%" aria-hidden="true"><${I.People} size=${22} /></span>`}
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px">
+        <span style="font-size:19px;font-weight:650" class="num">${who ? shortAddress(w.address) : "You"}</span>
+        ${p.streak > 0
+          ? html`<span style="align-self:flex-start"><${Chip} tone="lime"><${I.Flame} size=${13} />${p.streak === 1 ? "1 lobby with a pledge" : `${p.streak} lobbies in a row`}</${Chip}></span>`
+          : html`<span class="t2" style="font-size:13px">Pledge in a lobby to start a streak</span>`}
+      </div>
+    </div>
+    <dl class="stats profile-stats">
+      <div><dt class="t2">Lobbies</dt><dd class="num">${p.lobbies.length}</dd></div>
+      <div><dt class="t2">Founder of</dt><dd class="num">${p.clans.length}</dd></div>
+      <div><dt class="t2">Ideas</dt><dd class="num">${p.proposed}</dd></div>
+    </dl>
+    <section style="display:flex;flex-direction:column;gap:8px" aria-label="Clans">
+      ${head("Clans")}
+      ${p.clans.length === 0
+        ? html`<p class="t2" style="font-size:14px;line-height:1.5">No clan yet. Back the idea that wins a lobby to become one of its founders.</p>`
+        : html`<ul class="profile-list">${p.clans.map((k) => html`<li key=${k.id}><button type="button" class="profile-row" onClick=${() => a.openClan(k.id)}>
+            <${Coin} coin=${coin(k)} size=${36} />
+            <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;text-align:left"><span style="font-size:15px;font-weight:600">${k.name} <span class="t2" style="font-weight:500">${ticker(k.ticker)}</span></span>
+              <span class="t2 num" style="font-size:13px">${k.rank ? `Founder #${k.rank.toLocaleString("en-US")} of ${k.members.toLocaleString("en-US")}` : `${k.members.toLocaleString("en-US")} founders`}</span></span>
+            <span class="t2"><${I.Chevron} size=${14} /></span>
+          </button></li>`)}</ul>`}
+    </section>
+    <section style="display:flex;flex-direction:column;gap:8px" aria-label="Ideas you proposed">
+      ${head("Ideas you proposed")}
+      ${p.ideas.length === 0
+        ? html`<p class="t2" style="font-size:14px;line-height:1.5">None yet. Before 00:30, Propose puts your idea in the race for a 0.05 SOL bond, returned at the lock.</p>`
+        : html`<ul class="profile-list">${p.ideas.map((d, i) => row(html`<${Coin} coin=${coin(d)} size=${36} />`, html`${ticker(d.ticker)} <span class="t2" style="font-weight:500">${d.name}</span>`, d.status, null))}</ul>`}
+    </section>
+    <section style="display:flex;flex-direction:column;gap:8px" aria-label="Lobbies">
+      ${head("Lobbies")}
+      ${p.lobbies.length === 0
+        ? html`<p class="t2" style="font-size:14px;line-height:1.5">${s.live && !w.address ? "Connect your wallet to see the lobbies you were in." : "Your lobbies will show here after their launch."}</p>`
+        : html`<ul class="profile-list">${p.lobbies.map((l) => row(html`<span class=${`profile-dot ${l.tone}`} aria-hidden="true" />`, l.name, l.text, html`<span class="t2 num" style="font-size:13px;flex:none">${l.when}</span>`))}</ul>`}
+    </section>
+    ${s.live && html`<p class="t2" style="font-size:12px;line-height:1.5">Your past lobbies are kept on this device.</p>`}`;
+}
+
+// A sibling lobby: the clan's founders open the next lobby, for a little sibling of their coin. It is an ordinary
+// lobby (anyone joins, pledges and pitches); the clan only gets it pinned.
+function SiblingSheet({ s, a }) {
+  const k = s.clans.find((c) => c.id === s.clan);
+  const [form, setForm] = useState(() => ({ name: k ? `${k.name} Family Hour`.slice(0, 32) : "", theme: k ? `A little sibling for $${k.ticker}` : "", slot: 1 }));
+  if (!k) return null;
+  const valid = form.name.trim().length >= 3 && form.theme.trim().length >= 3;
+  return html`
+    <div class="row" style="gap:12px;flex-wrap:nowrap">
+      <${Coin} coin=${coin(k)} size=${44} />
+      <span class="t2" style="font-size:14px;line-height:1.5">Open the next lobby for the ${k.name} clan. It is pinned in the clan for its ${k.members.toLocaleString("en-US")} founders; like any lobby, anyone can join, pitch and pledge.</span>
+    </div>
+    <label class="field"><span class="lbl">Lobby name</span><input class="inp" value=${form.name} maxLength=${32} onInput=${(e) => setForm({ ...form, name: e.currentTarget.value })} /></label>
+    <label class="field"><span class="lbl">Theme</span><input class="inp" value=${form.theme} maxLength=${60} onInput=${(e) => setForm({ ...form, theme: e.currentTarget.value })} /></label>
+    <div class="field"><span class="lbl">Opens at</span>
+      <${Segmented} label="Opening time" options=${SLOTS.map((t, i) => ({ id: i, label: t }))} value=${form.slot} onChange=${(slot) => setForm({ ...form, slot })} /></div>
+    <div class="sheet-actions">
+      <${Button} onClick=${a.closeSheet}>Cancel</${Button}>
+      <${Button} variant="white" disabled=${!valid} onClick=${() => a.openSibling({ name: form.name.trim(), theme: form.theme.trim(), opens: SLOTS[form.slot] })}>Open the lobby</${Button}>
+    </div>`;
+}
+
 // Taking a pledge back: said plainly, asked once. A double tap can't withdraw twice.
 function WithdrawSheet({ s, a }) {
   const p = s.pledge;
@@ -362,6 +486,9 @@ const SHEETS = {
   connect: { title: "Connect a wallet", Body: ConnectSheet, refocus: ".wallet-pill" },
   withdraw: { title: "Withdraw your pledge?", Body: WithdrawSheet },
   card: { title: "Your birth card", Body: BirthCardSheet },
+  remind: { title: "Remind me", Body: RemindSheet },
+  sibling: { title: "A sibling lobby", Body: SiblingSheet, refocus: ".sibling-open" },
+  profile: { title: "Founder profile", Body: ProfileSheet, refocus: ".profile-open" },
   replay: { title: "The hour in 30 seconds", Body: ReplaySheet, refocus: ".replay-open" },
 };
 

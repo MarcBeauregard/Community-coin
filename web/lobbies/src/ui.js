@@ -2,7 +2,7 @@
 // Sheet and Toast. Each one maps to a class family in styles.css and takes plain data, never the store.
 
 import { h } from "preact";
-import { useEffect, useRef } from "preact/hooks";
+import { useLayoutEffect, useRef } from "preact/hooks";
 import htm from "htm";
 import { coinStyle } from "./tokens.js";
 import * as I from "./icons.js";
@@ -106,24 +106,31 @@ export function Orbit({ people, radius = 47, base = 34, reverse, offset = 0 }) {
 // A modal sheet: centered on desktop, from the bottom on a phone. Escape and the backdrop close it; focus moves in.
 export function Sheet({ title, labelledBy, onClose, busy, refocus, children }) {
   const ref = useRef(null);
-  useEffect(() => {
+  const closeRef = useRef(null);
+  closeRef.current = () => { if (!busy) onClose(); };
+  useLayoutEffect(() => { // at once, so a key pressed right after the sheet appears already lands in it
     const el = ref.current;
     const opener = document.activeElement;
     // Forms start in their first field; other sheets take focus themselves, so no button is armed by accident.
     const field = el && el.querySelector("input, textarea");
     (field || el).focus();
+    // If the focus is still outside a frame later (a click's own focus landing after the sheet opened), take it back.
+    const settle = requestAnimationFrame(() => { if (el.isConnected && !el.contains(document.activeElement)) (field || el).focus(); });
+    // Escape closes the sheet wherever the focus is.
+    const esc = (e) => { if (e.key === "Escape" && !e.defaultPrevented && !el.contains(e.target)) { e.preventDefault(); closeRef.current(); } };
+    document.addEventListener("keydown", esc);
     // The second click of a double click lands behind the sheet: drop whatever it selected there.
     const clear = () => window.getSelection?.()?.removeAllRanges();
     clear();
     setTimeout(clear, 300);
     // Closed, the sheet gives focus back to what opened it; if that is gone (Connect became the wallet), to what
     // replaced it, else to the screen's heading.
-    return () => setTimeout(() => {
+    return () => { cancelAnimationFrame(settle); document.removeEventListener("keydown", esc); setTimeout(() => {
       if (document.querySelector("[role=dialog]")) return; // another sheet took over (pledge → receipt): it has the focus
       if (opener && opener !== document.body && opener.isConnected) return opener.focus(); // the page itself is no opener
       const next = (refocus && document.querySelector(refocus)) || document.querySelector(".screen h1, h1");
       if (next) { if (!next.matches("button, a, input")) next.setAttribute("tabindex", "-1"); next.focus(); }
-    }, 0);
+    }, 0); };
   }, []);
   const onKey = (e) => {
     if (e.key === "Escape" && !busy) return onClose();

@@ -47,6 +47,17 @@ const visible = (loc, ms = 4000) => loc.first().waitFor({ timeout: ms }).then(()
   const p = seen.filter((m) => m.t === "presence").pop();
   check(p?.inside === 4 && p.guests === 1, `each person counted once, two tabs or not; guests among them (${p?.inside} inside, ${p?.guests} guest)`);
   check(JSON.stringify(p.people) === '["ben","ana","watcher"]', "the faces: signed-in people only, newest first");
+  // Reactions: batched, a few a second at most each, and nobody gets their own back.
+  const got = { a: [], b: [] };
+  const ca = connectLobby({ base, lobby: 412, token: server.auth.issue("cheer-a"), onMessage: (m) => m.t === "cheers" && got.a.push(m) });
+  const cb = connectLobby({ base, lobby: 412, token: server.auth.issue("cheer-b"), onMessage: (m) => m.t === "cheers" && got.b.push(m) });
+  await wait(200);
+  ca.cheer("fire"); ca.cheer("fire"); ca.cheer("skull");
+  await wait(300);
+  const sum = (list, k) => list.reduce((n, m) => n + m[k], 0);
+  check(sum(got.b, "fire") === 1 && sum(got.b, "skull") === 0, `reactions reach the others, a burst counted once (${JSON.stringify(got.b)})`);
+  check(got.a.length === 0, "and never come back to whoever sent them");
+  ca.close(); cb.close();
   conns.forEach((c) => c.close());
   watcher.close();
   await server.close();
@@ -71,6 +82,14 @@ const visible = (loc, ms = 4000) => loc.first().waitFor({ timeout: ms }).then(()
   check(await visible(faces) && await faces.getByRole("listitem").count() === 4 && await faces.getByText("+1").isVisible(), "the stage shows the three faces inside, and +1 for the guest");
   check(await page.getByText("4 people inside").isVisible(), "and the count");
   check(!(await page.getByText("+1,269").count()), "never the demo's crowd");
+  // 🔥 on the stage: it flies at once for the person, and the others' come in.
+  const fire = page.getByRole("button", { name: "Fire: love this pitch" });
+  await fire.click();
+  check(await page.locator(".cheer").count() >= 1 && (await fire.textContent()).includes("1"), "a tap on 🔥 flies over the stage at once, and counts");
+  conns[0].cheer("fire");
+  check(await page.waitForFunction(() => document.querySelector('[aria-label="Fire: love this pitch"]')?.textContent.includes("2"), null, { timeout: 3000 }).then(() => true, () => false), "someone else's 🔥 comes in too");
+  await page.waitForTimeout(2600);
+  check(await page.locator(".cheer").count() === 0, "and they go after a moment");
   await welcome.getByRole("button", { name: "Hide the welcome" }).click();
   check(await welcome.count() === 0, "the welcome can be hidden");
   check(errors.length === 0, `no script errors${errors.length ? `: ${errors.join(" | ")}` : ""}`);

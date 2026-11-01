@@ -28,6 +28,7 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
   let outcome = { locked: null, launch: null }; // what the crank announced, for late joiners
   const settled = new Map(); // user -> their settled message, for when they come back
   let seq = 0;
+  const cheers = { fire: 0, skull: 0 }; // reactions since the last batch
   // Practice SOL: what each signed-in wallet may play with in a practice lobby, minus what it has in play.
   const PRACTICE = 10_000_000_000n;
   function practiceBalance(user) {
@@ -130,6 +131,16 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
         case "listen":
           c.listening = !!msg.on;
           return null;
+        case "cheer": {
+          // 🔥 or 💀 for whoever is pitching: anyone may, a few a second at most each; sent out in batches.
+          if (msg.kind !== "fire" && msg.kind !== "skull") return { t: "error", code: "BadMessage" };
+          if (t - (c.lastCheer ?? 0) < 250) return null;
+          c.lastCheer = t;
+          cheers[msg.kind]++;
+          c.cheers ??= { fire: 0, skull: 0 };
+          c.cheers[msg.kind]++;
+          return null;
+        }
         case "chat": {
           if (c.session.guest) return { t: "error", code: "SignInToChat" };
           if (phaseAt(elapsed()) === "soon") return { t: "error", code: "LobbyNotOpen" };
@@ -226,6 +237,17 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
         if (elapsed() < 3300) sample(); // the race ends at the lock
         for (const r of changed) sent.race.set(r.index, r);
         broadcast({ t: "race", ideas: changed });
+      }
+      if (cheers.fire || cheers.skull) {
+        // Each one hears everyone else's (their own already flew on their screen).
+        for (const c of conns.values()) {
+          const fire = cheers.fire - (c.cheers?.fire ?? 0);
+          const skull = cheers.skull - (c.cheers?.skull ?? 0);
+          c.cheers = null;
+          if (fire || skull) c.send(JSON.stringify({ t: "cheers", fire, skull }));
+        }
+        cheers.fire = 0;
+        cheers.skull = 0;
       }
       const p = presence();
       const faces = p.people.join();

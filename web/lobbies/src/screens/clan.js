@@ -21,6 +21,21 @@ function birthLine(s, k) {
     : `${k.story} ${k.born}. Only founders can write here, forever.`;
 }
 
+// The clan's next lobby: the one its founders opened, or the way to open one (demo: hosting runs on the app's own
+// lobbies; live, lobbies come from the program).
+function Sibling({ s, a, k }) {
+  const lobby = s.hosted.find((h) => h.clan === k.id);
+  if (lobby) {
+    const on = !!s.reminders[lobby.id]?.notify;
+    return html`<div class="sibling" role="group" aria-label="Sibling lobby">
+      <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span class="t2" style="font-size:12px;font-weight:600">Sibling lobby · opens ${lobby.opens}</span><span class="ellipsis" style="font-size:14px;font-weight:600">${lobby.name}</span></span>
+      <${Button} size="sm" aria-pressed=${String(on)} onClick=${() => a.openReminder(lobby)}><${I.Bell} size=${13} />${on ? "On" : "Remind"}</${Button}>
+    </div>`;
+  }
+  if (s.live) return null;
+  return html`<${Button} size="sm" class="sibling-open" style="align-self:stretch" onClick=${() => a.openSheet("sibling")}><${I.Plus} size=${14} />Open a sibling lobby</${Button}>`;
+}
+
 function campfirePeople(s) {
   // Live, the Campfire is who the clan room says is in it, lit by who the voice room hears.
   if (s.liveClan && s.clan === "new") {
@@ -195,6 +210,7 @@ function PhoneClanList({ s, a, k }) {
         </div>
         <span class="t2" style="font-size:13px;line-height:1.45">${birthLine(s, k)}</span>
         ${k.fresh && html`<${Button} size="sm" style="align-self:flex-start" onClick=${() => a.go({ screen: "launch" })}>Replay the launch</${Button}>`}
+        <${Sibling} s=${s} a=${a} k=${k} />
       </div>
       <section aria-labelledby="m-voice" style="display:flex;flex-direction:column;gap:8px">
         <h2 id="m-voice" class="t2" style="font-size:13px;font-weight:600;padding:0 6px">Voice</h2>
@@ -248,6 +264,7 @@ export function Clan({ s, a, phone }) {
         <div class="row" style="flex-wrap:nowrap;gap:12px"><${Coin} coin=${coin(k)} size=${40} />
           <div style="display:flex;flex-direction:column;min-width:0"><span class="ellipsis" style="font-weight:600;font-size:15px">${k.name}</span><span class="t2 num" style="font-size:12px">${int(k.members)} founders · ${k.born}</span></div></div>
         <div class="row" style="justify-content:space-between;height:38px;padding:0 12px;border-radius:12px;background:rgba(118,118,128,.16)"><span class="num" style="font-size:13px;font-weight:600">${ticker(k.ticker)}</span>${change(k)}</div>
+        <${Sibling} s=${s} a=${a} k=${k} />
       </div>
       <div class="scroll" style="flex:1;min-height:0;padding:14px 8px;display:flex;flex-direction:column;gap:18px">
         <div style="display:flex;flex-direction:column;gap:2px"><span class="group-label">Text</span><${ChannelList} s=${s} a=${a} /></div>

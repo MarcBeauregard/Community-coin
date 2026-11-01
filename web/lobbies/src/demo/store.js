@@ -5,12 +5,13 @@
 //
 // Scenes (`?scene=`) seed deterministic states for screenshots and tests; `?freeze` stops the clock.
 
-import { CLANS, CROWD, CHATTER, ME, seedClanMessages, seedLobbyChat, message, FEATURED } from "./data.js";
+import { CLANS, CROWD, CHATTER, ME, seedClanMessages, seedLobbyChat, message, FEATURED, DEMO_HISTORY } from "./data.js";
 import { HOUR, sol } from "../format.js";
 import { connectLobby, connectClan, voiceToken, walletSession, guestSession } from "../realtime/client.js";
 import { createAudio } from "../voice/audio.js";
 import { detectWallets, connectWallet, signText, disconnectWallet, lastWallet, watchWallet, walletError, shortAddress, readBalance } from "../wallet/wallets.js";
 import { addSample, totalsOf } from "../race/curve.js";
+import { nextOpening, askToNotify, notifyPermission, loadReminders, saveReminders, armReminders, notify } from "../remind/remind.js";
 import { createDemoLobby, ideasFrom, ideaMeta, myPledge, act, crank, launchSummary, lockedOf, liveLaunch, founderAllocation, toLamports, toSol, errorText, receiptFor } from "./lobby.js";
 
 export const PHASES = [
@@ -52,14 +53,19 @@ function initialState() {
     voice: { listening: false, hand: false, onStage: false, mic: true, invited: false },
     chat: seedLobbyChat(),
     draft: "",
+    history: DEMO_HISTORY, // the lobbies this person was in, newest first (live: kept on this device per wallet)
     welcome: { text: FEATURED.welcome, from: FEATURED.host }, // the host's welcome, pinned atop the chat
     welcomeOff: false,
     joined: 0, // the demo: people who came in since it opened
+    cheers: [], // 🔥 and 💀 flying over the stage: { id, kind, x, delay }
+    cheerCount: { fire: 0, skull: 0 }, // since this page opened
     intro: null, // the first minute's card being shown (0 to 2), or null
     nudgeOff: null, // the finale's "move your pledge" offer, set aside for this pledge
     filter: "all",
     query: "",
-    reminders: { cat: true },
+    reminders: loadReminders(), // { [lobbyId]: { at, name, theme, notify } } (src/remind/remind.js)
+    remindFor: null, // the lobby the reminder sheet is about
+    remindError: null,
     hosted: [],
     lobbyTab: "ideas",
     clans: CLANS.map((c) => ({ ...c })),
@@ -102,6 +108,11 @@ export function createStore({ scene, freeze } = {}) {
   const set = (patch) => {
     const before = state;
     state = { ...state, ...(typeof patch === "function" ? patch(state) : patch) };
+    // Live, the history is the signed-in wallet's, from this device (none for a guest).
+    const who = state.wallet.address;
+    if (state.live && (!before.live || who !== before.wallet.address)) state = { ...state, history: who ? loadHistory(who) : [] };
+    // A launch is a line in the person's history: what they backed, what came of it, the ideas they proposed.
+    if (state.launched && (state.launched !== before.launched || who !== before.wallet.address)) state = { ...state, history: rememberLobby(state) };
     // The race over the hour: every change of the ideas until the lock is a sample (src/race/curve.js).
     if (state.ideas !== before.ideas && state.elapsed < LOCK_AT && !state.launched) state = { ...state, curve: addSample(state.curve, state.elapsed, totalsOf(state.ideas)) };
     subscribers.forEach((fn) => fn(state));
@@ -112,6 +123,31 @@ export function createStore({ scene, freeze } = {}) {
     later(() => { if (state.toast && state.toast.id === mine) set({ toast: null }); }, 2800);
   };
   const chatLine = (line) => [...state.chat, line].slice(-60);
+  // Reactions over the stage: a few at a time fly up and go; the counts keep what flew.
+  let cheerId = 0;
+  function flyCheers(fire, skull) {
+    const fresh = [...Array(Math.min(fire, 6)).fill("fire"), ...Array(Math.min(skull, 4)).fill("skull")]
+      .map((kind, i) => ({ id: ++cheerId, kind, x: 8 + Math.random() * 84, delay: i * 90 }));
+    if (!fresh.length) return;
+    set((s) => ({ cheers: [...s.cheers, ...fresh].slice(-16), cheerCount: { fire: s.cheerCount.fire + fire, skull: s.cheerCount.skull + skull } }));
+    const ids = new Set(fresh.map((c) => c.id));
+    later(() => set((s) => ({ cheers: s.cheers.filter((c) => !ids.has(c.id)) })), 2400);
+  }
+  // The person's lobbies. Live, on this device under the wallet's address; the demo's are the demo's.
+  const historyKey = (address) => `lobbies.history.${address}`;
+  const loadHistory = (address) => { try { const h = JSON.parse(localStorage.getItem(historyKey(address)) ?? "[]"); return Array.isArray(h) ? h : []; } catch { return []; } };
+  function rememberLobby(st) {
+    const l = st.launched;
+    const you = st.live ? st.live.you : ME;
+    const key = st.live ? `${st.live.lobby}-${st.live.opensAt}` : `demo-${FEATURED.number}-${st.runs ?? 0}`;
+    const win = st.ideas.find((d) => d.id === l.id);
+    const backed = l.myId ? st.ideas.find((d) => d.id === l.myId) : null;
+    const entry = { key, name: FEATURED.name, at: Date.now(), ticker: win?.ticker ?? l.id.toUpperCase(), pledged: backed?.ticker ?? null, amount: l.myAmount ?? 0,
+      founder: !!l.founder, rank: l.rank ?? null, proposed: st.ideas.filter((d) => d.by === you).map((d) => ({ ticker: d.ticker, name: d.name, won: d.id === l.id })) };
+    const history = [entry, ...st.history.filter((h) => h.key !== key)].slice(0, 100);
+    if (st.live && st.wallet.address) { try { localStorage.setItem(historyKey(st.wallet.address), JSON.stringify(history)); } catch {} }
+    return history;
+  }
   // People coming in, said quietly in the chat: one line that keeps counting while nothing else is said.
   const arrivals = (chat, n) => {
     const last = chat[chat.length - 1];
@@ -243,6 +279,7 @@ export function createStore({ scene, freeze } = {}) {
         }
         break;
       }
+      case "cheers": flyCheers(Math.max(0, m.fire | 0), Math.max(0, m.skull | 0)); break;
       case "presence": {
         const came = m.inside - s.live.inside;
         set({ live: { ...s.live, inside: m.inside, listening: m.listening, people: m.people ?? s.live.people }, ...(came > 0 ? { chat: arrivals(s.chat, came) } : {}) });
@@ -357,6 +394,8 @@ export function createStore({ scene, freeze } = {}) {
         if (beat % 6 === 0) patch.chat = chatLine({ sys: true, kind: "pledge", text: `@${CROWD[beat % CROWD.length]} pledged ${amount} SOL to $${ideas[k].ticker}` });
       }
     }
+    // The demo's crowd reacts to the pitches: mostly fire, now and then a skull.
+    if (beat % 2 === 0 && elapsed < LOCK_AT) later(() => flyCheers(beat % 6 === 0 ? 2 : 1, beat % 10 === 0 ? 1 : 0), 0);
     if (beat % 13 === 0 && elapsed < HOUR) {
       const n = 1 + ((beat * 7) % 6);
       patch.joined = (s.joined ?? 0) + n;
@@ -483,15 +522,35 @@ export function createStore({ scene, freeze } = {}) {
     closeSheet(fromBackdrop = false) { if (!state.signing && !(fromBackdrop === true && Date.now() - (state.sheetAt ?? 0) < 450)) set({ sheet: null }); },
     setFilter(filter) { set({ filter }); },
     setQuery(query) { set({ query }); },
-    toggleReminder(lobby) {
-      const on = !state.reminders[lobby.id];
-      set({ reminders: { ...state.reminders, [lobby.id]: on } });
-      if (on) toast(`We’ll ping you when ${lobby.name} opens at ${lobby.opens}`, "sky");
+    // Reminders: a notification 5 minutes before (while a tab is open), and the calendar.
+    openReminder(lobby) { set({ sheet: "remind", remindFor: lobby.id, remindError: null, sheetAt: Date.now() }); },
+    async notifyMe(lobby) {
+      const perm = notifyPermission() === "granted" ? "granted" : await askToNotify();
+      if (perm === null) return set({ remindError: "This browser can’t show notifications. Add the lobby to your calendar instead." });
+      if (perm !== "granted") return set({ remindError: "Notifications are blocked for this site. Allow them in your browser’s site settings, or add the lobby to your calendar." });
+      const at = nextOpening(lobby.opens);
+      setReminders({ ...state.reminders, [lobby.id]: { id: lobby.id, at, name: lobby.name, theme: lobby.theme, notify: true } });
+      set({ remindError: null });
+      toast(`You’ll get a notification at ${new Date(at - 5 * 60_000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}, 5 minutes before ${lobby.name} opens`, "sky");
     },
-    hostLobby({ name, theme, opens }) {
+    stopReminder(id) {
+      const { [id]: _, ...rest } = state.reminders;
+      setReminders(rest);
+      toast("Reminder off", "white");
+    },
+    remindDone(text) { toast(text, "white"); },
+    hostLobby({ name, theme, opens, clan = null }) {
       const id = `h${Date.now()}`;
-      set((s) => ({ hosted: [{ id, name, theme, host: "you", opens, waiting: 0, mine: true }, ...s.hosted], reminders: { ...s.reminders, [id]: true }, sheet: null, filter: "all", query: "" }));
+      set((s) => ({ hosted: [{ id, name, theme, host: "you", opens, waiting: 0, mine: true, clan }, ...s.hosted], sheet: null, filter: "all", query: "" }));
       toast(`${name} opens at ${opens}. You’re the host.`, "sky");
+      return id;
+    },
+    // A clan's next coin: a lobby its founders open for a little sibling, pinned in the clan, open to anyone.
+    openSibling({ name, theme, opens }) {
+      const k = state.clans.find((c) => c.id === state.clan);
+      if (!k || state.live) return;
+      actions.hostLobby({ name, theme, opens, clan: k.id });
+      set((s) => ({ clanMessages: { ...s.clanMessages, [s.channel]: [...(s.clanMessages[s.channel] || []), message(ME, `I opened a sibling lobby for $${k.ticker}: ${name}, at ${opens}. Founders, come pitch.`)] } }));
     },
 
     // Voice on the lobby stage.
@@ -609,6 +668,10 @@ export function createStore({ scene, freeze } = {}) {
       set((s) => ({ pledge: myPledge(s.chain), ideas: shownIdeas(s), receipt: r.receipt, receipts: [r.receipt, ...s.receipts] }));
       toast(`Moved your ${sol(p.amount)} to $${idea.ticker}`);
     },
+    cheer(kind) {
+      flyCheers(kind === "fire" ? 1 : 0, kind === "skull" ? 1 : 0);
+      if (link) link.cheer(kind);
+    },
     hideWelcome() { set({ welcomeOff: true }); },
     introNext() { set((s) => ({ intro: s.intro === null ? null : s.intro + 1 })); },
     introDone() { set({ intro: null }); try { localStorage.setItem(INTRO, "1"); } catch {} },
@@ -617,7 +680,7 @@ export function createStore({ scene, freeze } = {}) {
     replay() {
       const chain = createDemoLobby();
       const meta = ideaMeta();
-      set({ chain, meta, curve: chain.seedCurve, locked: null, launched: null, elapsed: START_ELAPSED, ideas: ideasFrom(chain, meta), pledge: null, selected: "wif", route: { screen: "lobby" }, voice: { listening: false, hand: false, onStage: false, mic: true } });
+      set({ chain, meta, runs: (state.runs ?? 0) + 1, curve: chain.seedCurve, locked: null, launched: null, elapsed: START_ELAPSED, ideas: ideasFrom(chain, meta), pledge: null, selected: "wif", route: { screen: "lobby" }, voice: { listening: false, hand: false, onStage: false, mic: true } });
       toast("A fresh run of the lobby has started", "sky");
     },
 
@@ -726,6 +789,8 @@ export function createStore({ scene, freeze } = {}) {
     "sheet-propose": () => set({ route: { screen: "lobby" }, sheet: "propose" }),
     "sheet-host": () => set({ sheet: "host" }),
     "sheet-terms": () => set({ sheet: "terms" }),
+    "sheet-remind": () => set({ sheet: "remind", remindFor: "arc" }),
+    "sheet-profile": () => { pledgeNow("WIF", 1); set({ sheet: "profile" }); },
     "sheet-wallet": () => { pledgeNow("WIF", 1); set({ sheet: "wallet", wallet: { ...SAMPLE_WALLET } }); },
     "sheet-connect": () => set({ sheet: "connect", connectFor: "chat" }),
     "launch-founder": () => { pledgeNow("WIF", 1); set({ route: { screen: "lobby" }, elapsed: HOUR }); set(settle(state)); },
@@ -743,13 +808,27 @@ export function createStore({ scene, freeze } = {}) {
   }
   if (scene && scenes[scene]) { scenes[scene](); state = { ...state, toast: null }; }
 
+  // The reminders' timers, re-armed whenever the reminders change; kept on this device.
+  let disarm = () => {};
+  const fire = (id, r) => {
+    notify(r, `${location.origin}${location.pathname}`);
+    toast(`${r.name} opens in 5 minutes`, "sky");
+  };
+  function setReminders(reminders) {
+    set({ reminders });
+    saveReminders(reminders);
+    disarm();
+    disarm = armReminders(reminders, fire);
+  }
+  if (typeof window !== "undefined") disarm = armReminders(state.reminders, fire);
+
   let interval = null;
   return {
     get: () => state,
     subscribe(fn) { subscribers.add(fn); return () => subscribers.delete(fn); },
     actions,
     start() { if (!freeze && !interval) interval = setInterval(tick, 1000); },
-    stop() { clearInterval(interval); interval = null; timers.forEach(clearTimeout); timers.clear(); if (link) link.close(); if (clanLink) clanLink.close(); audio.leave(); },
+    stop() { disarm(); clearInterval(interval); interval = null; timers.forEach(clearTimeout); timers.clear(); if (link) link.close(); if (clanLink) clanLink.close(); audio.leave(); },
     tick,
   };
 }

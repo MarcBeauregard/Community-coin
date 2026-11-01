@@ -111,8 +111,8 @@ function HowItWorks() {
 const pal = Object.keys(PEOPLE);
 function LobbyAction({ l, s, a, compact }) {
   if (l.live) return html`<${Button} variant="white" size="sm" onClick=${() => a.go({ screen: s.launched ? "launch" : "lobby" })}>Join</${Button}>`;
-  if (compact) return html`<${IconButton} label=${l.reminder ? "Reminder on" : "Remind me when it opens"} tone="sky" size="sm" pressed=${l.reminder} onClick=${() => a.toggleReminder(l)}><${I.Bell} size=${15} /></${IconButton}>`;
-  return html`<${Button} variant="fill" size="sm" aria-pressed=${String(l.reminder)} onClick=${() => a.toggleReminder(l)}><${I.Bell} size=${13} />${l.reminder ? "On" : "Remind"}</${Button}>`;
+  if (compact) return html`<${IconButton} label=${l.reminder ? "Reminder on" : "Remind me when it opens"} tone="sky" size="sm" pressed=${l.reminder} onClick=${() => a.openReminder(l)}><${I.Bell} size=${15} /></${IconButton}>`;
+  return html`<${Button} variant="fill" size="sm" aria-pressed=${String(l.reminder)} onClick=${() => a.openReminder(l)}><${I.Bell} size=${13} />${l.reminder ? "On" : "Remind"}</${Button}>`;
 }
 
 function ThisHour({ s, a, phone }) {
@@ -192,14 +192,18 @@ function YourClans({ s, a, phone }) {
   const clans = s.live ? s.clans.filter((k) => k.id === "new") : s.clans;
   if (s.live && !clans.length) {
     return html`<section class="section" aria-labelledby="clans-title" style=${phone ? "padding:0 20px" : ""}>
-      <h2 id="clans-title" class="display" style=${phone ? "font-size:22px" : ""}>Your clans</h2>
+      <div class="section-head"><h2 id="clans-title" class="display" style=${phone ? "font-size:22px" : ""}>Your clans</h2>
+        <${Button} variant="ghost" size="sm" class="profile-open" style="color:var(--sky);padding:0 8px" onClick=${() => a.openSheet("profile")}>Your profile</${Button}></div>
       <p class="t2" style="font-size:15px;line-height:1.5">No clan yet. Back the idea that wins a lobby and you become one of its founders, with a room that never closes.</p>
     </section>`;
   }
   return html`<section class=${phone ? "section hscroll-wrap" : "section"} style=${phone ? "gap:14px" : ""} aria-labelledby="clans-title">
     <div class="section-head" style=${phone ? "padding:0 20px" : ""}>
       <h2 id="clans-title" class="display" style=${phone ? "font-size:22px" : ""}>Your clans</h2>
-      ${!phone && html`<span class="t2" style="font-size:14px">Everyone you launched a coin with. The room never closes.</span>`}
+      <span class="row" style="gap:12px">
+        ${!phone && html`<span class="t2" style="font-size:14px">Everyone you launched a coin with. The room never closes.</span>`}
+        <${Button} variant="ghost" size="sm" class="profile-open" style="color:var(--sky);padding:0 8px" onClick=${() => a.openSheet("profile")}>Your profile</${Button}>
+      </span>
     </div>
     ${phone
       ? html`<div class="hscroll" style="gap:10px;padding:0 16px 4px">${clans.map((k) => html`<${ClanCard} key=${k.id} k=${k} a=${a} phone />`)}</div>`

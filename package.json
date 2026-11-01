@@ -33,7 +33,9 @@
     "test:finale": "node web/lobbies/finale-check.mjs",
     "test:intro": "node web/lobbies/intro-check.mjs",
     "test:replay": "node web/lobbies/replay-check.mjs",
-    "test:alive": "node web/lobbies/alive-check.mjs"
+    "test:alive": "node web/lobbies/alive-check.mjs",
+    "test:remind": "node web/lobbies/remind-check.mjs",
+    "test:profile": "node web/lobbies/profile-check.mjs"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "2.1.2",

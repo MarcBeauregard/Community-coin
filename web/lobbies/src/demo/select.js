@@ -90,7 +90,7 @@ export function lobbyCards(s) {
       if (l.opens) {
         const on = !!s.reminders[l.id];
         return { ...l, live: false, tone: l.mine ? "sky" : "neutral", phase: l.mine ? "Hosted by you" : `Opens ${l.opens}`, when: l.opens, progress: 0,
-          meta: `${l.waiting + (on ? 1 : 0)} waiting`, meta2: l.mine ? "you host" : `@${l.host}`, reminder: on };
+          meta: `${l.waiting + (on ? 1 : 0)} waiting`, meta2: l.clan ? `$${s.clans.find((c) => c.id === l.clan)?.ticker ?? ""} clan · you host` : l.mine ? "you host" : `@${l.host}`, reminder: on };
       }
       const e = (((s.elapsed + l.offset) % HOUR) + HOUR) % HOUR;
       const phase = phaseAt(e);
@@ -182,4 +182,30 @@ export function trend(s, ticker) {
   const then = standingsAt(s.curve, now - 600).find((x) => x.ticker === ticker)?.sol ?? 0;
   const gained = points[points.length - 1][1] - then;
   return { points, gained, text: gained >= 0.05 ? `up ${sol(gained)} in the last 10 minutes` : "no new SOL in the last 10 minutes" };
+}
+
+/**
+ * The founder profile: the person's clans and their number in each, the ideas they proposed and what came of them,
+ * the lobbies they were in, and their streak (lobbies in a row with a pledge, the open one included).
+ */
+export function profile(s) {
+  const you = s.live ? s.live.you : ME;
+  const open = !s.launched && s.pledge ? s.ideas.find((d) => d.id === s.pledge.id) : null;
+  const clans = (s.live ? s.clans.filter((k) => k.id === "new") : s.clans).map((k) => {
+    const live = s.live && s.liveClan ? (s.liveClan.founders ?? []).find((f) => f.user === s.liveClan.you) : null;
+    return { ...k, rank: live ? live.rank : s.live ? s.launched?.rank ?? null : myFounderRank(s, k) };
+  });
+  // This lobby's ideas, while it runs (after the launch they are in the history), then the past ones.
+  const now = s.launched ? [] : race(s).filter((d) => d.by === you).map((d) => ({ ticker: d.ticker, name: d.name, hue: d.hue, status: `Racing · #${d.rank}`, tone: "sky" }));
+  const past = s.history.flatMap((h) => (h.proposed ?? []).map((p) => ({ ticker: p.ticker, name: p.name, hue: s.ideas.find((d) => d.ticker === p.ticker)?.hue ?? 200,
+    status: p.won ? "Won · launched" : "Didn’t win · bond returned", tone: p.won ? "lime" : "neutral" })));
+  const lobbies = [
+    ...(open ? [{ key: "open", name: FEATURED.name, when: "Now", text: `${sol(s.pledge.amount)} on $${open.ticker} · racing`, tone: "sky" }] : []),
+    ...s.history.map((h) => ({ key: h.key, name: h.name, when: new Date(h.at).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      text: h.founder ? `Founder #${h.rank} of $${h.ticker}` : h.pledged ? `Backed $${h.pledged} · refunded · $${h.ticker} won` : `Watched · $${h.ticker} won`,
+      tone: h.founder ? "lime" : "neutral" })),
+  ];
+  let streak = open ? 1 : 0;
+  for (const h of s.history) { if (!h.pledged) break; streak++; }
+  return { you, clans, ideas: [...now, ...past], lobbies, streak, proposed: now.length + past.length };
 }
