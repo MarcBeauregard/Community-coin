@@ -1,10 +1,11 @@
 // Sheets: confirm a pledge, propose an idea, host a lobby, the wallet. Money sheets say what happens if the idea
 // wins, if it loses, and what it costs, before anything is signed.
 
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { html, Button, Segmented, Coin, Sheet, Avatar, Chip } from "../ui.js";
 import * as I from "../icons.js";
-import { coin } from "../demo/data.js";
+import { coin, FEATURED } from "../demo/data.js";
+import { prepareReplay, playReplay, recordReplay, drawFrame, replayStory, videoType, replayFileName, SIZE as REPLAY_SIZE, LENGTH_MS } from "../race/replay.js";
 import { addressPerson, shortAddress, WALLET_TINT, isAddress } from "../wallet/wallets.js";
 import { drawBirthCard, cardCaption, cardFileName, cardText, FORMATS } from "../card/birthcard.js";
 import { race, dock, lobbyClock } from "../demo/select.js";
@@ -236,6 +237,78 @@ function BirthCardSheet({ s, a }) {
     </div>`;
 }
 
+// The hour in 30 seconds: the race from what the lobby recorded, then the launch. It plays by itself (not when the
+// person asked for less motion), says in words what happened, and can be saved or shared as a video.
+function ReplaySheet({ s, a }) {
+  const canvas = useRef(null);
+  const player = useRef(null);
+  const [r, setR] = useState(null);
+  const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [video, setVideo] = useState(null); // { file, url }
+  const [recording, setRecording] = useState(false);
+  const ms = globalThis.__replayMs ?? LENGTH_MS; // tests play it faster
+  const l = s.launched;
+  const winner = l ? s.ideas.find((d) => d.id === l.id) : null;
+  useEffect(() => {
+    let live = true;
+    const coins = Object.fromEntries(s.ideas.map((d) => [d.ticker, { hue: d.hue, name: d.name, logo: coin(d).logo }]));
+    prepareReplay({ curve: s.curve, coins, winner: winner?.ticker ?? null, pot: l?.sol ?? 0, lobby: FEATURED.name, practice: !isAddress(l?.mint) }).then((x) => {
+      if (!live) return;
+      setR(x);
+      const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (still) { drawFrame(canvas.current.getContext("2d"), x, 1); setProgress(1); } else play(x, 0);
+    });
+    return () => { live = false; player.current?.stop(); };
+  }, []);
+  useEffect(() => () => { if (video) URL.revokeObjectURL(video.url); }, [video]);
+  function play(x = r, from = 0) {
+    player.current?.stop();
+    setPlaying(true);
+    player.current = playReplay(canvas.current, x, { ms, from, onFrame: setProgress, onEnd: () => setPlaying(false) });
+  }
+  const pause = () => { player.current?.stop(); setPlaying(false); };
+  const toggle = () => (playing ? pause() : play(r, progress >= 1 ? 0 : progress));
+  const record = async () => {
+    pause();
+    setRecording(true);
+    const file = await recordReplay(canvas.current, r, { ms, onFrame: setProgress });
+    setRecording(false);
+    if (!file) return a.cardDone("This browser can’t record video. Try another browser.");
+    setVideo({ file, url: URL.createObjectURL(file) });
+  };
+  const save = () => {
+    const anchor = document.createElement("a");
+    anchor.href = video.url;
+    anchor.download = video.file.name;
+    anchor.click();
+    a.cardDone("Video saved");
+  };
+  const caption = winner ? `The hour that launched $${winner.ticker}, in 30 seconds.${l && isAddress(l.mint) ? "" : " A Community Coin practice lobby."}` : "A Community Coin lobby, in 30 seconds.";
+  const share = async () => {
+    try { await navigator.share({ files: [video.file], text: caption, title: "Lobby replay" }); a.cardDone("Shared"); }
+    catch (e) { if (e?.name !== "AbortError") save(); }
+  };
+  const canShare = !!(video && navigator.canShare?.({ files: [video.file] }));
+  const story = r ? replayStory(r) : [];
+  const canRecord = !!videoType();
+  const left = Math.ceil(((1 - progress) * ms) / 1000);
+  return html`
+    <div class="card-preview replay">
+      <canvas ref=${canvas} width=${REPLAY_SIZE} height=${REPLAY_SIZE} role="img" aria-label="The lobby’s race, replayed. What happened is listed below."></canvas>
+      <span class="replay-progress" aria-hidden="true"><span style=${{ width: `${progress * 100}%` }} /></span>
+    </div>
+    <span class="sr" role="status">${recording ? "Recording the replay" : video ? "Video ready" : ""}</span>
+    <ol class="replay-story" aria-label="What happened">${story.map((e) => html`<li key=${e.t + e.text}><span class="num t2">${e.t}</span><span>${e.text}</span></li>`)}</ol>
+    <div class="sheet-actions">
+      ${video
+        ? html`<${Button} size="lg" onClick=${save}>Save video</${Button}>
+            ${canShare && html`<${Button} variant="prim" size="lg" style="flex:1.4" onClick=${share}><${I.Share} size=${17} />Share…</${Button}>`}`
+        : html`<${Button} size="lg" disabled=${!r || recording} onClick=${toggle}>${playing ? html`Pause` : html`<${I.Play} size=${15} />${progress > 0 && progress < 1 ? "Resume" : "Play"}`}</${Button}>
+            ${canRecord && html`<${Button} variant="prim" size="lg" style="flex:1.4" disabled=${!r || recording} onClick=${record}>${recording ? `Recording… ${left} s` : "Make a video"}</${Button}>`}`}
+    </div>`;
+}
+
 // Taking a pledge back: said plainly, asked once. A double tap can't withdraw twice.
 function WithdrawSheet({ s, a }) {
   const p = s.pledge;
@@ -289,6 +362,7 @@ const SHEETS = {
   connect: { title: "Connect a wallet", Body: ConnectSheet, refocus: ".wallet-pill" },
   withdraw: { title: "Withdraw your pledge?", Body: WithdrawSheet },
   card: { title: "Your birth card", Body: BirthCardSheet },
+  replay: { title: "The hour in 30 seconds", Body: ReplaySheet, refocus: ".replay-open" },
 };
 
 export function Sheets({ s, a }) {

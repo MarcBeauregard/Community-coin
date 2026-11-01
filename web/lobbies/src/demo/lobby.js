@@ -7,6 +7,7 @@ import { receipt as receiptOf } from "../chain/indexer.js";
 import { planCrank, stateOfRules } from "../chain/crank.js";
 import { buyOut, mulDiv, ROOT_VIRTUAL_QUOTE, VIRTUAL_TOKENS, TOKEN } from "../../../src/protocol.js";
 import { IDEAS, ME } from "./data.js";
+import { addSample } from "../race/curve.js";
 
 export const WINDOWS = { proposeSecs: 1800, lockSecs: 3300, length: 3600 };
 export const MAX_PLEDGE = 25n * LAMPORTS;
@@ -15,19 +16,40 @@ export const BOND = LAMPORTS / 20n;
 export const toLamports = (sol) => BigInt(Math.round(sol * 1e9));
 export const toSol = (lamports) => Number(lamports) / 1e9;
 
-/** Tonight's lobby: the ideas, each with the crowd's pledges already in it (one wallet per backer). */
+// When each idea's crowd came in, as a share of the time before the demo opens: below 1 a late surge, above 1 an
+// early rush. $POPCAT leads early, $WIF overtakes it: a race worth replaying.
+const RUSH = { POPCAT: 2.2, WIF: 0.6, MEW: 1.6, BRETT: 1, FLOKI: 0.8 };
+const SEEDED_UNTIL = 1440;
+
+/**
+ * Tonight's lobby: the ideas, each with the crowd's pledges already in it (one wallet per backer), made in the order
+ * they came. `chain.seedCurve` is the race as it went until the demo opens (src/race/curve.js).
+ */
 export function createDemoLobby() {
   const chain = new LobbyRules({ lobbyKey: "lobby-0412", mintOf: (key) => `mint-${key}`, isTaken: () => false });
   chain.apply("create_lobby", { host: "mira.sol", id: 412, opensAt: 0, ...WINDOWS, maxPledge: MAX_PLEDGE, bond: BOND }, 0);
+  const ops = [];
   IDEAS.forEach((idea, n) => {
     chain.apply("propose_idea", { proposer: idea.by, symbol: idea.ticker, name: idea.name }, 300 + n);
     const total = toLamports(idea.sol);
     const each = total / BigInt(idea.backers);
+    const from = 400 + n;
     for (let b = 0; b < idea.backers; b++) {
       const amount = b === idea.backers - 1 ? total - each * BigInt(idea.backers - 1) : each;
-      chain.apply("pledge", { user: `crowd-${idea.id}-${b}`, symbol: idea.ticker, amount }, 400 + n);
+      const t = from + Math.floor((SEEDED_UNTIL - from) * ((b + 0.5) / idea.backers) ** (RUSH[idea.ticker] ?? 1));
+      ops.push({ t, user: `crowd-${idea.id}-${b}`, symbol: idea.ticker, amount });
     }
   });
+  ops.sort((x, y) => x.t - y.t);
+  const lamports = Object.fromEntries(IDEAS.map((i) => [i.ticker, 0n]));
+  const totals = () => Object.fromEntries(Object.entries(lamports).map(([k, v]) => [k, Math.round(toSol(v) * 1000) / 1000]));
+  let curve = [{ t: 300, v: totals() }];
+  for (const op of ops) {
+    chain.apply("pledge", { user: op.user, symbol: op.symbol, amount: op.amount }, op.t);
+    lamports[op.symbol] += op.amount;
+    curve = addSample(curve, op.t, totals());
+  }
+  chain.seedCurve = curve;
   return chain;
 }
 

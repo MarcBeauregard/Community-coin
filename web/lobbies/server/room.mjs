@@ -4,6 +4,7 @@
 // race and presence go out at most every `batchMs`, only what changed.
 
 import { createStage } from "./voice.mjs";
+import { addSample } from "../src/race/curve.js";
 
 export const PHASES = [
   { id: "gather", end: 300 },
@@ -53,8 +54,14 @@ export function createRoom({ id, opensAt, source, host = null, onStage = null, c
   };
 
   const elapsed = () => Math.floor((now() - opensAt) / 1000);
+  // The race over the hour, for the per-idea curves and the replay: what the source already had, then each change.
+  let curve = (source.chain?.seedCurve ?? []).filter((p) => p.t <= Math.max(0, elapsed()));
+  const sample = () => {
+    const totals = Object.fromEntries(source.ideas().map((d) => [d.symbol, Math.round(Number(d.pledged) / 1e6) / 1000]));
+    curve = addSample(curve, Math.max(0, elapsed()), totals);
+  };
   // What every joiner gets in its hello counts as sent: the first tick only sends what changed after it.
-  queueMicrotask(() => { for (const r of raceRows()) sent.race.set(r.index, r); });
+  queueMicrotask(() => { for (const r of raceRows()) sent.race.set(r.index, r); if (elapsed() < 3300) sample(); });
   const broadcast = (msg) => { const s = JSON.stringify(msg); for (const c of conns.values()) c.send(s); };
   const raceRows = () => source.ideas().map((d) => ({ index: d.index, symbol: d.symbol, name: d.name, proposer: d.proposer ?? "", pledged: String(d.pledged), backers: d.backers }));
   function presence() {
@@ -73,7 +80,7 @@ export function createRoom({ id, opensAt, source, host = null, onStage = null, c
     join(connId, session, send) {
       conns.set(connId, { session, send, listening: false, lastChat: -Infinity, tokens: rate.burst, at: now() });
       if (settled.has(session.sub)) queueMicrotask(() => send(settled.get(session.sub))); // after the hello
-      return { t: "hello", lobby: id, now: now(), opensAt, phase: phaseAt(elapsed()), race: raceRows(), ...presence(), chat: history.slice(-50), you: session.sub, guest: !!session.guest, stage: stage.view(), ...outcome,
+      return { t: "hello", lobby: id, now: now(), opensAt, phase: phaseAt(elapsed()), race: raceRows(), ...presence(), chat: history.slice(-50), curve, you: session.sub, guest: !!session.guest, stage: stage.view(), ...outcome,
         practice: !!source.practice, ...(source.practice && !session.guest ? practiceOf(session.sub) : {}) };
     },
     leave(connId) {
@@ -202,6 +209,7 @@ export function createRoom({ id, opensAt, source, host = null, onStage = null, c
         return !prev || prev.pledged !== r.pledged || prev.backers !== r.backers;
       });
       if (changed.length) {
+        if (elapsed() < 3300) sample(); // the race ends at the lock
         for (const r of changed) sent.race.set(r.index, r);
         broadcast({ t: "race", ideas: changed });
       }

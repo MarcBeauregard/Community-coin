@@ -83,6 +83,7 @@ export function Launch({ s, a, phone }) {
                 <${Button} variant="white" size="lg" onClick=${() => a.go({ screen: "discover" })}>Find the next lobby</${Button}>
                 ${!s.live && html`<${Button} size="lg" onClick=${a.replay}>Run this lobby again</${Button}>`}
               </div>`}
+          ${s.curve.length > 1 && html`<${Button} variant="ghost" class="replay-open" style=${{ alignSelf: phone ? "center" : "flex-start", color: "var(--sky)" }} onClick=${() => a.openSheet("replay")}><${I.Play} size=${15} />Watch the hour in 30 seconds</${Button}>`}
         </div>
       </div>
       <ol class="recap">${recap.map((e) => html`<li key=${e.t} style=${{ borderColor: e.c }}><span class="num t2" style="font-size:12px;font-weight:600">${e.t}</span><span style="font-size:14px">${e.text}</span></li>`)}</ol>

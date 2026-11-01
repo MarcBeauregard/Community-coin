@@ -10,6 +10,7 @@ import { HOUR, sol } from "../format.js";
 import { connectLobby, connectClan, voiceToken, walletSession, guestSession } from "../realtime/client.js";
 import { createAudio } from "../voice/audio.js";
 import { detectWallets, connectWallet, signText, disconnectWallet, lastWallet, watchWallet, walletError, shortAddress, readBalance } from "../wallet/wallets.js";
+import { addSample, totalsOf } from "../race/curve.js";
 import { createDemoLobby, ideasFrom, ideaMeta, myPledge, act, crank, launchSummary, lockedOf, liveLaunch, founderAllocation, toLamports, toSol, errorText, receiptFor } from "./lobby.js";
 
 export const PHASES = [
@@ -33,6 +34,7 @@ function initialState() {
   const chain = createDemoLobby();
   const meta = ideaMeta();
   return {
+    curve: chain.seedCurve, // the race over the hour (src/race/curve.js)
     chain, // the lobby on the program's rules (mutable; state changes are announced by replacing `ideas`)
     meta,
     receipts: [], // newest first
@@ -95,7 +97,10 @@ export function createStore({ scene, freeze } = {}) {
   const timers = new Set();
   const later = (fn, ms) => { const t = setTimeout(() => { timers.delete(t); fn(); }, ms); timers.add(t); };
   const set = (patch) => {
+    const before = state;
     state = { ...state, ...(typeof patch === "function" ? patch(state) : patch) };
+    // The race over the hour: every change of the ideas until the lock is a sample (src/race/curve.js).
+    if (state.ideas !== before.ideas && state.elapsed < LOCK_AT && !state.launched) state = { ...state, curve: addSample(state.curve, state.elapsed, totalsOf(state.ideas)) };
     subscribers.forEach((fn) => fn(state));
   };
   const toast = (text, tone = "lime") => {
@@ -142,7 +147,7 @@ export function createStore({ scene, freeze } = {}) {
     switch (m.t) {
       case "hello":
         set({ live: { connected: true, lobby: m.lobby, inside: m.inside, listening: m.listening, opensAt: m.opensAt, you: m.you, guest: m.guest, race: m.race, stage: m.stage },
-          elapsed: Math.floor((m.now - m.opensAt) / 1000), ideas: raceIdeas(m.race, s.meta), chat: m.chat.map((l) => lineToChat(l, m.you)), voice: { ...s.voice, onStage: !!m.stage?.speakers.includes(m.you) } });
+          elapsed: Math.floor((m.now - m.opensAt) / 1000), ideas: raceIdeas(m.race, s.meta), curve: Array.isArray(m.curve) ? m.curve : [], chat: m.chat.map((l) => lineToChat(l, m.you)), voice: { ...s.voice, onStage: !!m.stage?.speakers.includes(m.you) } });
         // A practice lobby: this wallet's pledge and practice SOL, as the server keeps them (across reloads).
         if (m.practice) set({ live: { ...state.live, practice: true }, pledge: m.guest ? null : liveMine(m), balance: m.guest ? 10 : toSol(BigInt(m.balance ?? "0")) }); // a guest sees the allowance they get by signing in
         // Reloaded on the clan before any launch: the Clans screen (empty until there is one), never the demo's.
@@ -591,7 +596,7 @@ export function createStore({ scene, freeze } = {}) {
     replay() {
       const chain = createDemoLobby();
       const meta = ideaMeta();
-      set({ chain, meta, locked: null, launched: null, elapsed: START_ELAPSED, ideas: ideasFrom(chain, meta), pledge: null, selected: "wif", route: { screen: "lobby" }, voice: { listening: false, hand: false, onStage: false, mic: true } });
+      set({ chain, meta, curve: chain.seedCurve, locked: null, launched: null, elapsed: START_ELAPSED, ideas: ideasFrom(chain, meta), pledge: null, selected: "wif", route: { screen: "lobby" }, voice: { listening: false, hand: false, onStage: false, mic: true } });
       toast("A fresh run of the lobby has started", "sky");
     },
 
@@ -704,6 +709,7 @@ export function createStore({ scene, freeze } = {}) {
     "sheet-connect": () => set({ sheet: "connect", connectFor: "chat" }),
     "launch-founder": () => { pledgeNow("WIF", 1); set({ route: { screen: "lobby" }, elapsed: HOUR }); set(settle(state)); },
     "sheet-card": () => { pledgeNow("WIF", 1); set({ route: { screen: "lobby" }, elapsed: HOUR }); set(settle(state)); set({ sheet: "card" }); },
+    "sheet-replay": () => { pledgeNow("WIF", 1); set({ route: { screen: "lobby" }, elapsed: HOUR }); set(settle(state)); set({ sheet: "replay" }); },
     "launch-refund": () => { pledgeNow("BRETT", 2); set({ route: { screen: "lobby" }, elapsed: HOUR }); set(settle(state)); },
     clan: () => actions.openClan("bonk"),
     "clan-voice": () => { actions.openClan("bonk"); set({ clanView: "chat", campfire: { joined: true, muted: false, deafened: false, sharing: false } }); },

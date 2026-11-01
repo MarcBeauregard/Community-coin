@@ -31,7 +31,8 @@
     "test:audio": "node web/lobbies/audio-check.mjs",
     "test:card": "node web/lobbies/card-check.mjs",
     "test:finale": "node web/lobbies/finale-check.mjs",
-    "test:intro": "node web/lobbies/intro-check.mjs"
+    "test:intro": "node web/lobbies/intro-check.mjs",
+    "test:replay": "node web/lobbies/replay-check.mjs"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "2.1.2",
