@@ -170,11 +170,11 @@ function ChannelList({ s, a, phone }) {
 }
 
 function FounderRow({ f }) {
-  return html`<span class="member">
+  return html`<li class="member">
     <${Avatar} person=${person(f.who)} size=${34} status=${f.online ? "#30d158" : "rgba(235,235,245,.3)"} />
     <span style="flex:1;min-width:0;display:flex;flex-direction:column"><span style="font-size:14px;font-weight:500">${f.me ? "you" : person(f.who).name}</span><span class="t2 num" style="font-size:12px">pledged ${sol(f.amount)}</span></span>
     <span class="t2 num" style="font-size:12px;font-weight:600">#${f.rank}</span>
-  </span>`;
+  </li>`;
 }
 
 function PhoneClanList({ s, a, k }) {
@@ -190,7 +190,7 @@ function PhoneClanList({ s, a, k }) {
       <div class="panel" style="padding:16px;display:flex;flex-direction:column;gap:12px">
         <div class="row" style="flex-wrap:nowrap;gap:12px">
           <${Coin} coin=${coin(k)} size=${52} />
-          <div style="flex:1;min-width:0;display:flex;flex-direction:column"><span style="font-size:18px;font-weight:600">${k.name}</span><span class="t2 num" style="font-size:13px">${int(k.members)} founders · Founder #${myFounderRank(s, k)}</span></div>
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column"><h2 style="font-size:18px;font-weight:600">${k.name} clan</h2><span class="t2 num" style="font-size:13px">${int(k.members)} founders · Founder #${myFounderRank(s, k)}</span></div>
           <span style="display:flex;flex-direction:column;align-items:flex-end"><span class="num" style="font-size:13px;font-weight:600">${ticker(k.ticker)}</span>${change(k)}</span>
         </div>
         <span class="t2" style="font-size:13px;line-height:1.45">${birthLine(s, k)}</span>
@@ -215,7 +215,7 @@ function PhoneClanList({ s, a, k }) {
       </section>
       <section aria-labelledby="m-founders" style="display:flex;flex-direction:column;gap:8px">
         <h2 id="m-founders" class="t2" style="font-size:13px;font-weight:600;padding:0 6px">Top founders</h2>
-        <div class="panel" style="padding:6px 0">${founders(s, k).map((f) => html`<${FounderRow} key=${f.who} f=${f} />`)}</div>
+        <div class="panel" style="padding:6px 0"><ul class="founder-list" role="list">${founders(s, k).map((f) => html`<${FounderRow} key=${f.who} f=${f} />`)}</ul></div>
       </section>
     </div>
   </div>`;
@@ -273,7 +273,7 @@ export function Clan({ s, a, phone }) {
     <${Conversation} s=${s} a=${a} k=${k} />
     ${s.showMembers && html`<aside class="members scroll" aria-label="Founders">
       <span class="t2 num" style="font-size:12px;font-weight:600;padding:0 10px 8px">Founders · ${int(k.members)}</span>
-      ${founders(s, k).map((f) => html`<${FounderRow} key=${f.who} f=${f} />`)}
+      <ul class="founder-list" role="list">${founders(s, k).map((f) => html`<${FounderRow} key=${f.who} f=${f} />`)}</ul>
     </aside>`}
   </div>`;
 }

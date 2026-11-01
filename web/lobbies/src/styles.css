@@ -418,3 +418,4 @@ button, .btn, .ibtn { -webkit-user-select: none; user-select: none; }
 /* The dock never pushes its button off a phone: the words give way first. */
 .dock .who { min-width: 0; overflow: hidden; }
 .dock .who > span { max-width: 100%; }
+.founder-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }

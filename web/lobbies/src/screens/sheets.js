@@ -295,6 +295,6 @@ export function Sheets({ s, a }) {
   const def = s.sheet && SHEETS[s.sheet];
   if (!def) return null;
   const id = `${s.sheet}-title`;
-  return html`<${Sheet} title=${def.title} labelledBy=${id} busy=${s.signing} onClose=${a.closeSheet} refocus=${def.refocus}><${def.Body} s=${s} a=${a} /></${Sheet}>`;
+  return html`<${Sheet} key=${s.sheet} title=${def.title} labelledBy=${id} busy=${s.signing} onClose=${a.closeSheet} refocus=${def.refocus}><${def.Body} s=${s} a=${a} /></${Sheet}>`;
 }
 

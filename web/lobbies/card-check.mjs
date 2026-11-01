@@ -44,7 +44,7 @@ async function open(query, { share = false, width = 1440 } = {}) {
 {
   const page = await open("launch-founder");
   await page.getByRole("button", { name: "Share birth card" }).click();
-  const img = page.getByRole("img", { name: /Birth card: Founder #\d+ of \$WIF/ });
+  const img = page.getByRole("img", { name: /Birth card: practice lobby, Founder #\d+ of \$WIF/ });
   check(await img.waitFor({ timeout: 5000 }).then(() => true, () => false), "the founder's card is drawn and shown, described for screen readers");
   const facts = await img.evaluate(async (el) => {
     const c = document.createElement("canvas");

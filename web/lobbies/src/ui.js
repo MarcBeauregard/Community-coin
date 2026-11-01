@@ -99,6 +99,7 @@ export function Sheet({ title, labelledBy, onClose, busy, refocus, children }) {
     // Closed, the sheet gives focus back to what opened it; if that is gone (Connect became the wallet), to what
     // replaced it, else to the screen's heading.
     return () => setTimeout(() => {
+      if (document.querySelector("[role=dialog]")) return; // another sheet took over (pledge → receipt): it has the focus
       if (opener && opener.isConnected) return opener.focus();
       const next = (refocus && document.querySelector(refocus)) || document.querySelector(".screen h1, h1");
       if (next) { if (!next.matches("button, a, input")) next.setAttribute("tabindex", "-1"); next.focus(); }

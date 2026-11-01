@@ -1,7 +1,7 @@
 // The lobby: the stage (voice), the race of ideas with the pledge dock, and the chat. Three columns on a desktop,
 // one at a time behind a segmented control on a phone.
 
-import { useEffect, useRef } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { html, Button, IconButton, Segmented, Chip, Coin, Avatar, Bar, GestationTimeline, Equalizer, Composer } from "../ui.js";
 import * as I from "../icons.js";
 import { person, coin, FEATURED, SPEAKERS, MUTED_SPEAKERS, CROWD, PEOPLE, ME } from "../demo/data.js";
@@ -35,24 +35,24 @@ function StageControls({ s, a, vs, phone }) {
   const lg = phone ? "lg" : undefined;
   // Always the same shape: the one thing to do now on top, full width; ways out underneath, same place every time.
   const below = (...items) => html`<div class="row stage-exits">${items}</div>`;
-  const leave = html`<${Button} variant="ghost" size="sm" class="leave" onClick=${a.toggleListen}><${I.Close} size=${14} />Leave audio</${Button}>`;
-  const back = html`<${Button} size="sm" onClick=${a.stepDown}>Back to audience</${Button}>`;
+  const leave = html`<${Button} key="leave" variant="ghost" size="sm" class="leave" onClick=${a.toggleListen}><${I.Close} size=${14} />Leave audio</${Button}>`;
+  const back = html`<${Button} key="back" size="sm" onClick=${a.stepDown}>Back to audience</${Button}>`;
   if (!v.listening) {
-    return html`<${Button} variant="white" size=${lg} block data-primary onClick=${a.toggleListen}><${I.Headphones} size=${17} />${v.onStage ? "Join the stage" : "Listen in"}</${Button}>`;
+    return html`<${Button} key="listen" variant="white" size=${lg} block data-primary onClick=${a.toggleListen}><${I.Headphones} size=${17} />${v.onStage ? "Join the stage" : "Listen in"}</${Button}>`;
   }
-  if (s.live && s.audio.error === "connect-failed") return html`<${Button} variant="white" size=${lg} block data-primary onClick=${a.retryVoice}>Try again</${Button}>${below(leave)}`;
-  if (vs.needsTap) return html`<${Button} variant="white" size=${lg} block data-primary onClick=${a.startAudio}><${I.Speaker} size=${16} />Turn on sound</${Button}>${below(leave)}`;
+  if (s.live && s.audio.error === "connect-failed") return html`<${Button} key="retry" variant="white" size=${lg} block data-primary onClick=${a.retryVoice}>Try again</${Button}>${below(leave)}`;
+  if (vs.needsTap) return html`<${Button} key="sound" variant="white" size=${lg} block data-primary onClick=${a.startAudio}><${I.Speaker} size=${16} />Turn on sound</${Button}>${below(leave)}`;
   if (v.onStage && v.invited) {
-    return html`<${Button} variant="prim" size=${lg} block data-primary onClick=${a.acceptInvite}><${I.Mic} size=${16} />Speak now</${Button}>
-      ${below(html`<${Button} size="sm" onClick=${a.declineInvite}>Not now</${Button}>`, leave)}`;
+    return html`<${Button} key="speak" variant="prim" size=${lg} block data-primary onClick=${a.acceptInvite}><${I.Mic} size=${16} />Speak now</${Button}>
+      ${below(html`<${Button} key="notnow" size="sm" onClick=${a.declineInvite}>Not now</${Button}>`, leave)}`;
   }
   if (v.onStage) {
     return html`${vs.micBlocked
-        ? html`<${Button} variant="white" size=${lg} block data-primary onClick=${a.retryMic}><${I.Mic} size=${16} />Try again</${Button}>`
-        : html`<${Button} size=${lg} block data-primary onClick=${a.toggleMic}>${vs.micLive || vs.starting ? html`<${I.Mic} size=${16} />Mute` : html`<${I.MicOff} size=${16} />Unmute`}</${Button}>`}
+        ? html`<${Button} key="trymic" variant="white" size=${lg} block data-primary onClick=${a.retryMic}><${I.Mic} size=${16} />Try again</${Button}>`
+        : html`<${Button} key="mute" size=${lg} block data-primary onClick=${a.toggleMic}>${vs.micLive || vs.starting ? html`<${I.Mic} size=${16} />Mute` : html`<${I.MicOff} size=${16} />Unmute`}</${Button}>`}
       ${below(back, leave)}`;
   }
-  return html`<${Button} size=${lg} block data-primary aria-pressed=${String(v.hand)} onClick=${a.toggleHand}><${I.Hand} size=${16} />${v.hand ? "Hand raised" : "Raise hand to pitch"}</${Button}>
+  return html`<${Button} key="hand" size=${lg} block data-primary aria-pressed=${String(v.hand)} onClick=${a.toggleHand}><${I.Hand} size=${16} />${v.hand ? "Hand raised" : "Raise hand to pitch"}</${Button}>
     ${below(leave)}`;
 }
 
@@ -65,17 +65,17 @@ function Stage({ s, a, phone }) {
   // When the voice changes state, its new main control takes the focus if the focus was in this panel or lost (the
   // pressed button just went away): keyboard and screen-reader users keep their place.
   const panel = useRef(null);
-  const key = `${v.listening}|${v.onStage}|${v.invited}|${vs.needsTap}|${vs.micBlocked}|${v.hand}`;
+  const settling = s.live && v.listening && s.audio.status === "connecting"; // the voice room is still answering
+  const key = `${v.listening}|${v.onStage}|${v.invited}|${vs.needsTap}|${vs.micBlocked}|${v.hand}|${settling}`;
   const first = useRef(true);
+  const [mounted, setMounted] = useState(false); // the status region is in the page empty first, so its words are read
+  useEffect(() => { setMounted(true); }, []);
   useEffect(() => {
-    if (first.current) { first.current = false; return undefined; }
-    // States often come in pairs (joining, then "sound blocked"): wait for them to settle, then move once.
-    const timer = setTimeout(() => {
-      const el = panel.current;
-      const at = document.activeElement;
-      if (el && (!at || at === document.body || el.contains(at))) el.querySelector("[data-primary]")?.focus();
-    }, 250);
-    return () => clearTimeout(timer);
+    if (first.current) { first.current = false; return; }
+    if (settling) return; // move once, when the voice's state is known (not "Raise hand", then "Turn on sound")
+    const el = panel.current;
+    const at = document.activeElement;
+    if (el && (!at || at === document.body || el.contains(at))) el.querySelector("[data-primary]")?.focus();
   }, [key]);
   const help = s.live && s.audio.error && AUDIO_ERRORS[s.audio.error];
   return html`<section class=${phone ? "scroll" : "stage scroll"} style=${phone ? "padding:8px 16px 24px;display:flex;flex-direction:column;gap:20px" : ""} aria-label="Voice stage">
@@ -89,12 +89,12 @@ function Stage({ s, a, phone }) {
     </li>`)}</ul>
     <div class="panel" ref=${panel} style="padding:14px;display:flex;flex-direction:column;gap:12px">
       ${!v.listening && !v.onStage && html`<span class="t2" style="font-size:13px;line-height:1.45">Pitches happen out loud. Listen in, or raise your hand to pitch your idea on stage.</span>`}
-      <span role="status" style="display:flex;flex-direction:column;gap:4px">
+      <span role="status" style="display:flex;flex-direction:column;gap:4px">${mounted && html`
         ${(v.listening || v.onStage) && html`<span style=${{ fontSize: "13px", fontWeight: 600, color: TONE_COLOR[vs.tone] }}>${vs.text}</span>`}
         ${!v.listening && !v.onStage && html`<span class="sr">${vs.text}</span>`}
         ${vs.link && html`<span style=${{ fontSize: "12px", fontWeight: 600, color: TONE_COLOR[vs.link.tone] }}>${vs.link.text}</span>`}
         ${v.onStage && v.invited && html`<span class="t2" style="font-size:13px;line-height:1.45;font-weight:400">Your microphone stays off until you choose Speak now.</span>`}
-        ${help && html`<span class="wallet-error" style="font-size:13px;font-weight:400">${help}</span>`}
+        ${help && html`<span class="wallet-error" style="font-size:13px;font-weight:400">${help}</span>`}`}
       </span>
       <${StageControls} s=${s} a=${a} vs=${vs} phone=${phone} />
     </div>
