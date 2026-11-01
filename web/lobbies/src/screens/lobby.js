@@ -295,7 +295,7 @@ export function Lobby({ s, a, phone }) {
       ${head}
       <div class="lobby-sub">
         <${GestationTimeline} phases=${timeline(s.elapsed)} labels=${false} height=${4} />
-        <${Segmented} label="Lobby sections" full options=${TABS} value=${s.lobbyTab} onChange=${a.setLobbyTab} />
+        <${Segmented} label="Lobby sections" full tabs options=${TABS} value=${s.lobbyTab} onChange=${a.setLobbyTab} />
       </div>
       <div class="lobby-body">
         ${s.lobbyTab === "ideas" && html`<${Ideas} s=${s} a=${a} phone />`}

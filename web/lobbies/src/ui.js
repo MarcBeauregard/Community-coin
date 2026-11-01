@@ -20,9 +20,12 @@ export function IconButton({ label, tone, size, pressed, class: extra, children,
     aria-pressed=${pressed === undefined ? undefined : String(!!pressed)} ...${props}>${children}</button>`;
 }
 
-export function Segmented({ label, options, value, onChange, full }) {
-  return html`<div class=${cx("seg", full && "full")} role="group" aria-label=${label}>
-    ${options.map((o) => html`<button type="button" key=${o.id} aria-pressed=${String(o.id === value)} disabled=${o.disabled} onClick=${() => onChange(o.id)}>${o.label}</button>`)}
+// A segmented control; with `tabs` it switches between views and is announced as tabs (tablist, tab, selected).
+export function Segmented({ label, options, value, onChange, full, tabs }) {
+  return html`<div class=${cx("seg", full && "full")} role=${tabs ? "tablist" : "group"} aria-label=${label}>
+    ${options.map((o) => tabs
+      ? html`<button type="button" key=${o.id} role="tab" aria-selected=${String(o.id === value)} aria-pressed=${String(o.id === value)} onClick=${() => onChange(o.id)}>${o.label}</button>`
+      : html`<button type="button" key=${o.id} aria-pressed=${String(o.id === value)} disabled=${o.disabled} onClick=${() => onChange(o.id)}>${o.label}</button>`)}
   </div>`;
 }
 

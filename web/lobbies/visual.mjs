@@ -116,7 +116,7 @@ for (const [w, h] of [[1440, 900], [390, 844]]) {
   await page.waitForTimeout(1500);
   await click("Done");
 
-  if (phone) await click("Stage");
+  if (phone) await page.getByRole("tab", { name: "Stage" }).click();
   await click("Demo · skip to lock");
   await page.waitForTimeout(8000);
   check(await page.getByText("is alive.").isVisible(), `@${w} the winner launches at 01:00`);

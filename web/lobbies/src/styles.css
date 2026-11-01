@@ -311,7 +311,7 @@ textarea.inp { height: 84px; padding: 12px 14px; resize: none; line-height: 1.45
 .recap li { display: flex; flex-direction: column; gap: 4px; padding-left: 14px; border-left: 2px solid; }
 .app.phone .launch-inner { padding: 14px 20px 32px; gap: 22px; }
 .app.phone .launch-main { gap: 22px; }
-.app.phone .launch-art .stage-ring { width: 290px; }
+.app.phone .launch-art .stage-ring { width: 220px; } /* the founder's next steps fit on the first screen */
 .app.phone .launch-copy { gap: 18px; text-align: center; align-items: stretch; }
 .app.phone .launch-copy .chip { align-self: center; }
 .app.phone .launch-copy h1 { font-size: 46px; }

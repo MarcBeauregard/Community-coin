@@ -18,7 +18,7 @@ function PledgeSheet({ s, a }) {
   const d = dock(s, race(s));
   return html`<div style="display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;padding-top:8px">
       <${Coin} coin=${coin(d.sel)} size=${84} big />
-      <h2 id="pledge-title" class="t2" style="font-size:15px;font-weight:600">Back ${ticker(d.sel.ticker)} · ${d.sel.name}</h2>
+      <h2 id="pledge-title" style="font-size:16px;font-weight:600">Back ${ticker(d.sel.ticker)} · ${d.sel.name}</h2>
       <span class="display num" style="font-size:56px;line-height:1">${sol(s.amount)}</span>
       <${Chip} tone="amber">Practice pledge</${Chip}>
     </div>
