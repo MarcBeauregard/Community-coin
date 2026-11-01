@@ -451,3 +451,8 @@ button, .btn, .ibtn { -webkit-user-select: none; user-select: none; }
 .replay-story { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
 .replay-story li { display: flex; gap: 10px; }
 .replay-story li .num { font-size: 13px; font-weight: 600; min-width: 42px; }
+
+/* ---------------------------------------------------------------- a lobby that feels alive */
+.welcome { display: flex; gap: 10px; align-items: flex-start; margin: 10px 14px 0; padding: 10px 10px 10px 12px; border-radius: 16px; background: rgba(100, 210, 255, 0.07); border: 1px solid rgba(100, 210, 255, 0.16); }
+.faces { list-style: none; padding: 0; margin: 0; }
+.faces .more { height: 28px; padding: 0 10px; border-radius: 14px; background: var(--fill); font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; }

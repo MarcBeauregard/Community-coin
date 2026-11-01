@@ -5,7 +5,7 @@
 //
 // Scenes (`?scene=`) seed deterministic states for screenshots and tests; `?freeze` stops the clock.
 
-import { CLANS, CROWD, CHATTER, ME, seedClanMessages, seedLobbyChat, message } from "./data.js";
+import { CLANS, CROWD, CHATTER, ME, seedClanMessages, seedLobbyChat, message, FEATURED } from "./data.js";
 import { HOUR, sol } from "../format.js";
 import { connectLobby, connectClan, voiceToken, walletSession, guestSession } from "../realtime/client.js";
 import { createAudio } from "../voice/audio.js";
@@ -52,6 +52,9 @@ function initialState() {
     voice: { listening: false, hand: false, onStage: false, mic: true, invited: false },
     chat: seedLobbyChat(),
     draft: "",
+    welcome: { text: FEATURED.welcome, from: FEATURED.host }, // the host's welcome, pinned atop the chat
+    welcomeOff: false,
+    joined: 0, // the demo: people who came in since it opened
     intro: null, // the first minute's card being shown (0 to 2), or null
     nudgeOff: null, // the finale's "move your pledge" offer, set aside for this pledge
     filter: "all",
@@ -109,6 +112,13 @@ export function createStore({ scene, freeze } = {}) {
     later(() => { if (state.toast && state.toast.id === mine) set({ toast: null }); }, 2800);
   };
   const chatLine = (line) => [...state.chat, line].slice(-60);
+  // People coming in, said quietly in the chat: one line that keeps counting while nothing else is said.
+  const arrivals = (chat, n) => {
+    const last = chat[chat.length - 1];
+    const count = last?.kind === "arrive" ? last.n + n : n;
+    const line = { sys: true, kind: "arrive", n: count, text: count === 1 ? "1 person just arrived" : `${count} people just arrived` };
+    return last?.kind === "arrive" ? [...chat.slice(0, -1), line] : [...chat, line].slice(-60);
+  };
 
   // The lock and the launch come from the chain's crank; this turns its events into what the screens show. At the
   // lock our losing pledge and our bond come back; at 01:00 the winner launches.
@@ -146,7 +156,8 @@ export function createStore({ scene, freeze } = {}) {
     const s = state;
     switch (m.t) {
       case "hello":
-        set({ live: { connected: true, lobby: m.lobby, inside: m.inside, listening: m.listening, opensAt: m.opensAt, you: m.you, guest: m.guest, race: m.race, stage: m.stage },
+        set({ live: { connected: true, lobby: m.lobby, inside: m.inside, listening: m.listening, people: m.people ?? [], opensAt: m.opensAt, you: m.you, guest: m.guest, race: m.race, stage: m.stage },
+          welcome: m.welcome ?? null,
           elapsed: Math.floor((m.now - m.opensAt) / 1000), ideas: raceIdeas(m.race, s.meta), curve: Array.isArray(m.curve) ? m.curve : [], chat: m.chat.map((l) => lineToChat(l, m.you)), voice: { ...s.voice, onStage: !!m.stage?.speakers.includes(m.you) } });
         // A practice lobby: this wallet's pledge and practice SOL, as the server keeps them (across reloads).
         if (m.practice) set({ live: { ...state.live, practice: true }, pledge: m.guest ? null : liveMine(m), balance: m.guest ? 10 : toSol(BigInt(m.balance ?? "0")) }); // a guest sees the allowance they get by signing in
@@ -232,7 +243,11 @@ export function createStore({ scene, freeze } = {}) {
         }
         break;
       }
-      case "presence": set({ live: { ...s.live, inside: m.inside, listening: m.listening } }); break;
+      case "presence": {
+        const came = m.inside - s.live.inside;
+        set({ live: { ...s.live, inside: m.inside, listening: m.listening, people: m.people ?? s.live.people }, ...(came > 0 ? { chat: arrivals(s.chat, came) } : {}) });
+        break;
+      }
       case "chat": set({ chat: chatLine(lineToChat(m.line, s.live.you)), draft: m.line.from === s.live.you && m.line.text === s.draft.trim() ? "" : s.draft }); break;
       case "error":
         // A guest who tries to talk is offered the wallet, not just told.
@@ -341,6 +356,11 @@ export function createStore({ scene, freeze } = {}) {
         patch.ideas = ideasFrom(s.chain, s.meta);
         if (beat % 6 === 0) patch.chat = chatLine({ sys: true, kind: "pledge", text: `@${CROWD[beat % CROWD.length]} pledged ${amount} SOL to $${ideas[k].ticker}` });
       }
+    }
+    if (beat % 13 === 0 && elapsed < HOUR) {
+      const n = 1 + ((beat * 7) % 6);
+      patch.joined = (s.joined ?? 0) + n;
+      patch.chat = arrivals(patch.chat || s.chat, n);
     }
     if (beat % 7 === 0 && elapsed < HOUR) patch.chat = [...(patch.chat || s.chat), { who: CROWD[(beat * 3) % CROWD.length], text: CHATTER[beat % CHATTER.length] }].slice(-60);
     if (elapsed >= LOCK_AT) Object.assign(patch, settle({ ...s, ...patch }));
@@ -589,6 +609,7 @@ export function createStore({ scene, freeze } = {}) {
       set((s) => ({ pledge: myPledge(s.chain), ideas: shownIdeas(s), receipt: r.receipt, receipts: [r.receipt, ...s.receipts] }));
       toast(`Moved your ${sol(p.amount)} to $${idea.ticker}`);
     },
+    hideWelcome() { set({ welcomeOff: true }); },
     introNext() { set((s) => ({ intro: s.intro === null ? null : s.intro + 1 })); },
     introDone() { set({ intro: null }); try { localStorage.setItem(INTRO, "1"); } catch {} },
     dismissNudge() { set((s) => ({ nudgeOff: s.pledge?.symbol ?? null })); },
@@ -690,7 +711,7 @@ export function createStore({ scene, freeze } = {}) {
   const scenes = {
     lobby: () => set({ route: { screen: "lobby" } }),
     "lobby-stage": () => set({ route: { screen: "lobby" }, lobbyTab: "stage", voice: { listening: true, hand: false, onStage: true, mic: true } }),
-    "lobby-chat": () => set({ route: { screen: "lobby" }, lobbyTab: "chat" }),
+    "lobby-chat": () => set({ route: { screen: "lobby" }, lobbyTab: "chat", joined: 5, chat: arrivals(state.chat, 5) }),
     "lobby-backed": () => { pledgeNow("WIF", 1); set({ route: { screen: "lobby" } }); },
     "lobby-intro": () => set({ route: { screen: "lobby" }, intro: 0 }),
     "lobby-finale": () => { pledgeNow("BRETT", 2); set({ route: { screen: "lobby" }, elapsed: 3060 }); },

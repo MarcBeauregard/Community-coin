@@ -21,7 +21,7 @@ export function cleanText(text, max) {
   return String(text ?? "").replace(CONTROL, " ").replace(/\s+/g, " ").trim().slice(0, max);
 }
 
-export function createRoom({ id, opensAt, source, host = null, onStage = null, crank = null, now = () => Date.now(), chatSlowMs = 3000, chatMax = 200, historySize = 200, rate = { burst: 20, perSec: 2 } }) {
+export function createRoom({ id, opensAt, source, host = null, welcome = null, onStage = null, crank = null, now = () => Date.now(), chatSlowMs = 3000, chatMax = 200, historySize = 200, rate = { burst: 20, perSec: 2 } }) {
   const conns = new Map(); // connId -> { session, send, listening, lastChat, tokens, at }
   const history = [];
   let sent = { phase: null, race: new Map(), inside: -1, listening: -1, clockAt: 0 };
@@ -64,15 +64,29 @@ export function createRoom({ id, opensAt, source, host = null, onStage = null, c
   queueMicrotask(() => { for (const r of raceRows()) sent.race.set(r.index, r); if (elapsed() < 3300) sample(); });
   const broadcast = (msg) => { const s = JSON.stringify(msg); for (const c of conns.values()) c.send(s); };
   const raceRows = () => source.ideas().map((d) => ({ index: d.index, symbol: d.symbol, name: d.name, proposer: d.proposer ?? "", pledged: String(d.pledged), backers: d.backers }));
+  // Who is in: everyone counted once (a person with two tabs is one), the guests among them, and the faces to show:
+  // the last signed-in people to come in, newest first.
+  const FACES = 12;
   function presence() {
     const users = new Set();
     const listening = new Set();
+    const signed = [];
+    let guests = 0;
     for (const c of conns.values()) {
-      users.add(c.session.sub);
-      if (c.listening) listening.add(c.session.sub);
+      const sub = c.session.sub;
+      if (!users.has(sub)) { if (c.session.guest) guests++; else signed.push(sub); }
+      users.add(sub);
+      if (c.listening) listening.add(sub);
     }
-    return { inside: users.size, listening: listening.size };
+    const people = [];
+    for (let i = signed.length - 1; i >= 0 && people.length < FACES; i--) people.push(signed[i]);
+    return { inside: users.size, listening: listening.size, guests, people };
   }
+  // The host's welcome, pinned for everyone who comes in.
+  const welcomeLine = () => {
+    const text = cleanText(welcome, 280);
+    return text ? { text, from: host?.() ?? source.host?.() ?? null } : null;
+  };
 
   return {
     id,
@@ -80,7 +94,7 @@ export function createRoom({ id, opensAt, source, host = null, onStage = null, c
     join(connId, session, send) {
       conns.set(connId, { session, send, listening: false, lastChat: -Infinity, tokens: rate.burst, at: now() });
       if (settled.has(session.sub)) queueMicrotask(() => send(settled.get(session.sub))); // after the hello
-      return { t: "hello", lobby: id, now: now(), opensAt, phase: phaseAt(elapsed()), race: raceRows(), ...presence(), chat: history.slice(-50), curve, you: session.sub, guest: !!session.guest, stage: stage.view(), ...outcome,
+      return { t: "hello", lobby: id, now: now(), opensAt, phase: phaseAt(elapsed()), race: raceRows(), ...presence(), chat: history.slice(-50), curve, welcome: welcomeLine(), you: session.sub, guest: !!session.guest, stage: stage.view(), ...outcome,
         practice: !!source.practice, ...(source.practice && !session.guest ? practiceOf(session.sub) : {}) };
     },
     leave(connId) {
@@ -214,10 +228,12 @@ export function createRoom({ id, opensAt, source, host = null, onStage = null, c
         broadcast({ t: "race", ideas: changed });
       }
       const p = presence();
-      if (p.inside !== sent.inside || p.listening !== sent.listening) {
+      const faces = p.people.join();
+      if (p.inside !== sent.inside || p.listening !== sent.listening || faces !== sent.faces) {
         broadcast({ t: "presence", ...p });
         sent.inside = p.inside;
         sent.listening = p.listening;
+        sent.faces = faces;
       }
       if (t - sent.clockAt >= 5000) {
         broadcast({ t: "clock", now: t });

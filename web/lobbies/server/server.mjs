@@ -1,7 +1,7 @@
 // The lobbies' realtime server: one WebSocket room per lobby (presence, chat, live race, phases, the clock) and
 // Sign-In With Solana. The server's clock is the only clock: clients render from the `now` it sends.
 //
-//   node web/lobbies/server/server.mjs --port 8790 [--guests] [--dev-sessions] [--data <dir>] [--sfu <wss url>]
+//   node web/lobbies/server/server.mjs --port 8790 [--guests] [--dev-sessions] [--data <dir>] [--sfu <wss url>] [--welcome <text>]
 //          [--origins https://app.example] [--trust-proxy] [--max-per-ip 50] [--http-per-min 120] [--lobby 412 --opens-at <ms>]
 //          [--rpc <url> --program <id>]    (race from the chain through the indexer; else the simulated demo lobby)
 //
@@ -236,7 +236,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const source = arg("rpc") ? chainSource({ rpc: arg("rpc"), programId: arg("program"), lobby: id }) : simulatedSource();
   const s = await createServer({ port: Number(arg("port") ?? 8790), guests: process.argv.includes("--guests"), devSessions: process.argv.includes("--dev-sessions"),
     maxPerIp: Number(arg("max-per-ip") ?? 50), httpPerMin: Number(arg("http-per-min") ?? 120), origins: arg("origins")?.split(","), trustProxy: process.argv.includes("--trust-proxy"),
-    dataDir: arg("data"), lobbies: [{ id, opensAt, source }],
+    dataDir: arg("data"), lobbies: [{ id, opensAt, source, welcome: arg("welcome") ?? null }],
     // --sfu wss://… with LIVEKIT_API_KEY and LIVEKIT_API_SECRET in the environment
     voice: arg("sfu") ? { url: arg("sfu"), apiKey: process.env.LIVEKIT_API_KEY, apiSecret: process.env.LIVEKIT_API_SECRET } : null });
   console.log(`lobby ${id} live on :${s.port} (${arg("rpc") ? "race from the chain" : "simulated race"})`);

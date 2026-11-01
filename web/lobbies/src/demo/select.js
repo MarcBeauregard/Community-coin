@@ -138,7 +138,7 @@ export function allocation(l) {
 /** Who is in the featured lobby: the realtime server's count when connected, the demo's otherwise. */
 export function presence(s) {
   if (s.live && s.live.connected) return { inside: s.live.inside, listening: s.live.listening };
-  return { inside: FEATURED.inside, listening: FEATURED.listeners + (s.voice.listening ? 1 : 0) };
+  return { inside: FEATURED.inside + (s.joined ?? 0), listening: FEATURED.listeners + (s.voice.listening ? 1 : 0) };
 }
 
 /**

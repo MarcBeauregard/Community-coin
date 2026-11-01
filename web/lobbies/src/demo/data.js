@@ -57,7 +57,8 @@ export const IDEAS = [
     pitch: "Named after Elon Musk’s Shiba Inu. A Viking dog in a horned helmet with big plans." },
 ];
 
-export const FEATURED = { id: "fnd", name: "Friday Night Degens", host: "mira.sol", theme: "animal coins only", inside: 1284, listeners: 306, number: "0412" };
+export const FEATURED = { id: "fnd", name: "Friday Night Degens", host: "mira.sol", theme: "animal coins only", inside: 1284, listeners: 306, number: "0412",
+  welcome: "Welcome in! Animal coins only tonight. Pledge on the idea you want launched, and raise your hand if you want to pitch yours." };
 
 // Other lobbies of the hour. `offset` shifts their clock against the featured one; `opens` marks upcoming ones.
 export const LOBBIES = [

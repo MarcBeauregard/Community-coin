@@ -117,7 +117,11 @@ function Stage({ s, a, phone }) {
     <div style="display:flex;flex-direction:column;gap:10px">
       <span class="t2 num" style="font-size:13px;font-weight:600">${phone && !s.live ? `In the room · ${listeners} listening` : "In the room"}</span>
       ${s.live
-        ? html`<span class="t2 num" style="font-size:13px">${int(pres.inside)} ${pres.inside === 1 ? "person" : "people"} inside</span>`
+        ? html`${s.live.people?.length > 0 && html`<ul class="row faces" style="gap:6px" aria-label="Some of the people inside">
+              ${s.live.people.map((who) => html`<li key=${who}><${Avatar} person=${person(who)} size=${phone ? 34 : 28} /></li>`)}
+              ${pres.inside > s.live.people.length && html`<li class="num more" aria-label=${`and ${int(pres.inside - s.live.people.length)} more`}>+${int(pres.inside - s.live.people.length)}</li>`}
+            </ul>`}
+            <span class="t2 num" style="font-size:13px">${int(pres.inside)} ${pres.inside === 1 ? "person" : "people"} inside</span>`
         : html`<div class="row" style="gap:6px">
             ${Object.keys(PEOPLE).slice(0, 15).map((who) => html`<${Avatar} key=${who} person=${person(who)} size=${phone ? 34 : 28} />`)}
             <span class="num" style="height:28px;padding:0 10px;border-radius:14px;background:var(--fill);font-size:12px;font-weight:600;display:inline-flex;align-items:center">+${int(Math.max(0, pres.inside - 15))}</span>
@@ -321,7 +325,7 @@ function Ideas({ s, a, phone }) {
 
 function ChatLine({ m, ideas }) {
   if (m.sys) {
-    const dot = m.kind === "pledge" ? "var(--lime)" : "var(--sky)";
+    const dot = m.kind === "pledge" ? "var(--lime)" : m.kind === "arrive" ? "rgba(235,235,245,.4)" : "var(--sky)";
     return html`<li><span class="sys"><span style=${{ width: "6px", height: "6px", borderRadius: "50%", background: dot, flex: "none" }} />${m.text}</span></li>`;
   }
   const p = person(m.who);
@@ -342,6 +346,14 @@ function Chat({ s, a, phone }) {
   const hint = phone ? "Message" : presence(s).inside > 1 ? `Message ${int(presence(s).inside)} people` : "Message the lobby";
   return html`<aside class="chat" aria-label="Lobby chat">
     ${!phone && html`<div class="chat-head"><h2 style="font-size:15px;font-weight:600">Chat</h2><span class="t2" style="font-size:12px">Slow mode · 3 s</span></div>`}
+    ${s.welcome && !s.welcomeOff && html`<div class="welcome" role="note" aria-label="The host’s welcome">
+      <${Avatar} person=${person(s.welcome.from ?? FEATURED.host)} size=${28} />
+      <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0">
+        <span style="font-size:12px;font-weight:600">${person(s.welcome.from ?? FEATURED.host).name} <span class="t2" style="font-weight:500">· host · pinned</span></span>
+        <span style="font-size:13px;line-height:1.45">${s.welcome.text}</span>
+      </div>
+      <${IconButton} label="Hide the welcome" size="sm" onClick=${a.hideWelcome}><${I.Close} size=${12} /></${IconButton}>
+    </div>`}
     <ol class="feed scroll" aria-live="off">${s.chat.slice().reverse().map((m, i) => html`<${ChatLine} key=${s.chat.length - i} m=${m} ideas=${byId} />`)}
       ${s.chat.length === 0 && html`<li class="t2 chat-empty">No messages yet. Say gm: everyone in the lobby reads this chat.</li>`}</ol>
     <${Composer} label=${hint === "Message" ? "Message the lobby" : hint} value=${s.draft} placeholder=${hint} maxLength=${200}
