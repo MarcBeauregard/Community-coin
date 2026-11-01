@@ -61,6 +61,23 @@ export function Bar({ value, color = "var(--lime)", label }) {
   return html`<span class="bar" role=${label ? "img" : undefined} aria-label=${label}><span style=${{ width: `${value}%`, background: color }} /></span>`;
 }
 
+// A small line of a value over time: `points` [[t, v], ...], scaled to its own range (its shape, not its size).
+// Decorative: what it says goes in words next to it.
+export function Spark({ points, width = 96, height = 28, color = "var(--lime)" }) {
+  if (!points || points.length < 2) return null;
+  const t0 = points[0][0], t1 = points[points.length - 1][0] || 1;
+  const max = Math.max(...points.map((p) => p[1])) || 1;
+  const x = (t) => ((t - t0) / (t1 - t0 || 1)) * (width - 2) + 1;
+  const y = (v) => height - 2 - (v / max) * (height - 4);
+  const d = points.map(([t, v], i) => `${i ? "L" : "M"}${x(t).toFixed(1)} ${y(v).toFixed(1)}`).join("");
+  const [lt, lv] = points[points.length - 1];
+  return html`<svg class="spark" width=${width} height=${height} viewBox=${`0 0 ${width} ${height}`} aria-hidden="true" focusable="false">
+    <path d=${`${d}L${x(lt).toFixed(1)} ${height}L${x(t0).toFixed(1)} ${height}Z`} fill=${color} opacity="0.12" />
+    <path d=${d} fill="none" stroke=${color} stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" />
+    <circle cx=${x(lt)} cy=${y(lv)} r="2.2" fill=${color} />
+  </svg>`;
+}
+
 // The hour, as four segments sized by their duration, each filled as time passes.
 export function GestationTimeline({ phases, labels = true, height = 6, mono }) {
   return html`<div class="timeline">

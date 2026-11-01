@@ -3,6 +3,7 @@
 import { PHASES, PROPOSALS_CLOSE, LOCK_AT, FINALE_AT, phaseAt, pledgedOn } from "./store.js";
 import { FEATURED, LOBBIES, CHANNELS, FOUNDERS, ME } from "./data.js";
 import { HOUR, clock, sol } from "../format.js";
+import { seriesOf, standingsAt } from "../race/curve.js";
 
 export const PHASE_LABEL = { gather: "Gathering", floor: "Proposing & pledging", pledge: "Pledging", lock: "Locked", done: "Launched" };
 
@@ -168,4 +169,17 @@ export function voiceStatus(s) {
   if (v.hand) return { ...base, text: "Hand raised · the host will bring you up", tone: "sky" };
   if (joining) return { ...base, link: null, text: "Joining the stage…", tone: "sky" };
   return { ...base, text: "Listening · you can raise your hand", tone: "sky" };
+}
+
+/**
+ * One idea's SOL over the hour so far, for its small curve, and what it gained in the last ten minutes, in words.
+ * From the race's samples (src/race/curve.js); null before there are two.
+ */
+export function trend(s, ticker) {
+  if (!s.curve || s.curve.length < 2) return null;
+  const points = seriesOf(s.curve, ticker);
+  const now = s.curve[s.curve.length - 1].t;
+  const then = standingsAt(s.curve, now - 600).find((x) => x.ticker === ticker)?.sol ?? 0;
+  const gained = points[points.length - 1][1] - then;
+  return { points, gained, text: gained >= 0.05 ? `up ${sol(gained)} in the last 10 minutes` : "no new SOL in the last 10 minutes" };
 }

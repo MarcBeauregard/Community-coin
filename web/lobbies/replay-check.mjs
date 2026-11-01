@@ -11,6 +11,7 @@ import { dirname, join, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { addSample, standingsAt, leadChanges, CURVE_STEP } from "./src/race/curve.js";
 import { createDemoLobby } from "./src/demo/lobby.js";
+import { trend } from "./src/demo/select.js";
 import { createServer } from "./server/server.mjs";
 import { simulatedSource } from "./server/sources.mjs";
 import { connectLobby } from "./src/realtime/client.js";
@@ -39,6 +40,11 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const end = demo.seedCurve[demo.seedCurve.length - 1].v;
   check(demo.ideas.every((d) => Math.abs(end[d.symbol] - Number(d.pledged) / 1e9) < 0.001), "the demo's curve ends on the chain's own totals");
   check(leadChanges(demo.seedCurve).map((x) => x.ticker).join(" ") === "POPCAT WIF", "in the demo, $POPCAT leads early and $WIF overtakes");
+  const curve = [{ t: 0, v: { A: 0 } }, { t: 600, v: { A: 4 } }, { t: 1200, v: { A: 10 } }];
+  const tr = trend({ curve }, "A");
+  check(tr.points.length === 3 && tr.text === "up 6.0 SOL in the last 10 minutes", "an idea's curve, and what it gained in the last ten minutes, in words");
+  check(trend({ curve: [{ t: 0, v: { A: 1 } }, { t: 900, v: { A: 1, B: 2 } }] }, "A").text === "no new SOL in the last 10 minutes", "a still idea says so");
+  check(trend({ curve: curve.slice(0, 1) }, "A") === null, "no curve before two samples");
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -77,6 +83,13 @@ const pixels = (page) => page.evaluate(() => {
   return { lit, sum };
 });
 
+{
+  // Each idea's small curve, and its words for a screen reader.
+  const page = await open("?freeze&scene=lobby");
+  check(await page.locator(".idea .spark").count() === 5, "every idea in the race has its curve");
+  check(await page.getByRole("button", { name: /dogwifhat.*up [\d.]+ SOL in the last 10 minutes/ }).count() === 1, "and says what it gained, in words");
+  await page.context().close();
+}
 {
   const page = await open("?freeze&scene=launch-founder");
   const open1 = page.getByRole("button", { name: "Watch the hour in 30 seconds" });

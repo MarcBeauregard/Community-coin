@@ -2,10 +2,10 @@
 // one at a time behind a segmented control on a phone.
 
 import { useEffect, useRef, useState } from "preact/hooks";
-import { html, Button, IconButton, Segmented, Chip, Coin, Avatar, Bar, GestationTimeline, Equalizer, Composer } from "../ui.js";
+import { html, Button, IconButton, Segmented, Chip, Coin, Avatar, Bar, Spark, GestationTimeline, Equalizer, Composer } from "../ui.js";
 import * as I from "../icons.js";
 import { person, coin, FEATURED, SPEAKERS, MUTED_SPEAKERS, CROWD, PEOPLE, ME } from "../demo/data.js";
-import { race, timeline, lobbyClock, dock, presence, voiceStatus, finale } from "../demo/select.js";
+import { race, timeline, lobbyClock, dock, presence, voiceStatus, finale, trend } from "../demo/select.js";
 import { sol, int, ticker } from "../format.js";
 import { WalletPill } from "./discover.js";
 import { AUDIO_ERRORS } from "../voice/audio.js";
@@ -152,11 +152,14 @@ function IdeaCard({ d, s, a, phone }) {
   const selected = s.selected === d.id;
   const badges = html`${d.mine && html`<${Chip} tone="lime" class="sm">Your pledge</${Chip}>`}${d.yours && html`<${Chip} tone="sky">Your idea</${Chip}>`}`;
   const barColor = selected ? "var(--lime)" : "rgba(235,235,245,.38)";
+  const tr = trend(s, d.ticker);
+  const sparkColor = selected ? "var(--lime)" : `hsl(${d.hue} 80% 68%)`;
+  const said = tr && html`<span class="sr">, ${tr.text}</span>`;
   if (phone) {
     return html`<button type="button" class="idea" aria-pressed=${String(selected)} onClick=${() => a.select(d.id)}>
       <${Coin} coin=${coin(d)} size=${48} />
       <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
-        <span class="row" style="flex-wrap:nowrap;justify-content:space-between;gap:8px"><span class="ellipsis" style="font-size:15px;font-weight:600">${d.name}</span><span class="num" style="font-size:14px;font-weight:600;flex:none">${sol(d.total)}</span></span>
+        <span class="row" style="flex-wrap:nowrap;justify-content:space-between;gap:8px"><span class="ellipsis" style="font-size:15px;font-weight:600">${d.name}</span><span class="row" style="flex:none;gap:8px;flex-wrap:nowrap">${tr && html`<${Spark} points=${tr.points} width=${44} height=${18} color=${sparkColor} />`}<span class="num" style="font-size:14px;font-weight:600">${sol(d.total)}</span>${said}</span></span>
         <${Bar} value=${d.share} color=${barColor} />
         <span class="t2 num ellipsis" style="font-size:12px">${ticker(d.ticker)} · ${d.backersShown} backers${d.yours ? " · you" : d.by ? ` · @${person(d.by).name}` : ""}${d.mine ? " · your pledge" : ""}</span>
       </span>
@@ -165,6 +168,7 @@ function IdeaCard({ d, s, a, phone }) {
   return html`<button type="button" class="idea" aria-pressed=${String(selected)} onClick=${() => a.select(d.id)}>
     <span class="row" style="justify-content:space-between;align-items:flex-start;width:100%">
       <${Coin} coin=${coin(d)} size=${56} />
+      ${tr && html`<span style="flex:1;display:flex;justify-content:center;padding:14px 10px 0"><${Spark} points=${tr.points} width=${88} height=${30} color=${sparkColor} /></span>`}
       <span style="display:flex;flex-direction:column;align-items:flex-end;gap:6px"><span class="num t2" style="font-size:13px;font-weight:600">#${d.rank}</span>${badges}</span>
     </span>
     <span style="display:flex;flex-direction:column;gap:4px">
@@ -173,7 +177,7 @@ function IdeaCard({ d, s, a, phone }) {
     </span>
     <span style="width:100%"><${Bar} value=${d.share} color=${barColor} /></span>
     <span class="row" style="justify-content:space-between;width:100%;align-items:baseline">
-      <span class="num" style="font-size:15px;font-weight:600">${sol(d.total)}</span>
+      <span class="num" style="font-size:15px;font-weight:600">${sol(d.total)}${said}</span>
       <span class="t2 num" style="font-size:12px">${d.backersShown} backers${d.yours ? " · you" : d.by ? ` · @${person(d.by).name}` : ""}</span>
     </span>
   </button>`;
