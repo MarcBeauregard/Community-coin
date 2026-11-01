@@ -2,18 +2,28 @@
 // `window.solana`), connecting to one, and proving the address with a signed message (Sign-In With Solana). No
 // transaction is ever signed here and nothing costs anything: connecting only shares the public address.
 
+// `browse`: on a phone, a wallet lives in its own app, which a web page can't see; these links reopen this page in
+// the wallet's built-in browser, where it can connect (Phantom's and Solflare's universal links).
+const here = () => encodeURIComponent(location.href);
+const ref = () => encodeURIComponent(location.origin);
 const KNOWN = [
-  { id: "phantom", name: "Phantom", url: "https://phantom.com/download", find: () => window.phantom?.solana ?? (window.solana?.isPhantom ? window.solana : null) },
-  { id: "solflare", name: "Solflare", url: "https://solflare.com/download", find: () => window.solflare ?? null },
+  { id: "phantom", name: "Phantom", url: "https://phantom.com/download", find: () => window.phantom?.solana ?? (window.solana?.isPhantom ? window.solana : null),
+    browse: () => `https://phantom.app/ul/browse/${here()}?ref=${ref()}` },
+  { id: "solflare", name: "Solflare", url: "https://solflare.com/download", find: () => window.solflare ?? null,
+    browse: () => `https://solflare.com/ul/v1/browse/${here()}?ref=${ref()}` },
   { id: "backpack", name: "Backpack", url: "https://backpack.app/download", find: () => window.backpack?.solana ?? window.backpack ?? null },
 ];
+
+/** A phone or tablet browser (where wallets are apps, not extensions). */
+export const onPhone = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && matchMedia("(pointer: coarse)").matches);
 const LAST = "lobbies.wallet";
 
 const safe = (fn, fallback = null) => { try { return fn(); } catch { return fallback; } };
 
 /** The wallets to offer: each known one (installed or not), then any other injected provider. */
 export function detectWallets() {
-  const list = KNOWN.map((w) => ({ id: w.id, name: w.name, url: w.url, provider: safe(w.find) }));
+  const phone = safe(onPhone, false);
+  const list = KNOWN.map((w) => ({ id: w.id, name: w.name, url: w.url, provider: safe(w.find), browseUrl: phone && w.browse ? w.browse() : null }));
   const other = safe(() => window.solana);
   if (other && !list.some((w) => w.provider === other)) list.push({ id: "injected", name: other.name || "Browser wallet", url: null, provider: other });
   return list.map((w) => ({ ...w, installed: !!w.provider }));

@@ -4,7 +4,7 @@
 import { createDemoLobby } from "../src/demo/lobby.js";
 import { createIndexer } from "../indexer.mjs";
 
-const rows = (ideas) => ideas.map((d) => ({ index: d.index, symbol: d.symbol, name: d.name, pledged: d.pledged, backers: d.backers }));
+const rows = (ideas) => ideas.map((d) => ({ index: d.index, symbol: d.symbol, name: d.name, proposer: d.proposer, pledged: d.pledged, backers: d.backers }));
 
 /** The demo lobby: every `everySec` seconds of lobby time a new wallet pledges on an idea, weighted by its pot. */
 export function simulatedSource({ everySec = 3, random = Math.random } = {}) {

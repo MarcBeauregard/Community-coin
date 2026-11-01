@@ -65,7 +65,7 @@ export function Launch({ s, a, phone }) {
               </div>
               <div class="row" style=${phone ? "flex-direction:column;align-items:stretch" : ""}>
                 <${Button} variant="prim" size="lg" onClick=${() => a.openClan("new")}>Enter the clan<${I.Arrow} size=${17} /></${Button}>
-                <${Button} size="lg" onClick=${a.shareBirthCard}>Share birth card</${Button}>
+                <${Button} size="lg" onClick=${a.shareBirthCard}><${I.Share} size=${17} />Share birth card</${Button}>
               </div>`
             : html`<div class="panel" style="padding:20px;display:flex;flex-direction:column;gap:8px;text-align:left">
                 <span style="font-size:17px;font-weight:600">${l.myAmount ? `Your ${sol(l.myAmount)} is back in your wallet` : "You watched this one from the stands"}</span>

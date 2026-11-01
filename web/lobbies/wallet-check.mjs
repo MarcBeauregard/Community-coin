@@ -150,6 +150,18 @@ const live = `${app}?live=${encodeURIComponent(base)}#/lobby`;
   await context.close();
 }
 {
+  // An iPhone: wallets are apps the page can't see; the sheet offers to reopen the page inside them.
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1", hasTouch: true, isMobile: true });
+  const page = await open(`${app}?freeze`, { wallet: false, context: ctx });
+  await page.route(/phantom\.app/, (r) => r.abort()); // the request is the proof; nothing leaves this machine
+  await page.getByRole("button", { name: "Connect" }).last().click();
+  const row = page.getByRole("button", { name: /Phantom.*Open in Phantom/ });
+  check(await row.isVisible() && await page.getByText("On a phone, your wallet is an app").isVisible(), "on an iPhone with no wallet seen, the sheet offers to open the page in Phantom");
+  const [req] = await Promise.all([page.waitForRequest(/phantom\.app\/ul\/browse\//, { timeout: 3000 }).catch(() => null), row.click()]);
+  check(!!req && decodeURIComponent(req.url()).includes("index.html"), "and Open in Phantom takes this page into Phantom's browser");
+  await ctx.close();
+}
+{
   const page = await open(`${app}?freeze`, { width: 390 });
   check(await page.getByRole("button", { name: "Connect" }).last().isVisible(), "on a phone, the tab bar offers Connect");
   await page.context().close();

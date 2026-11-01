@@ -38,7 +38,7 @@ export function createRoom({ id, opensAt, source, host = null, onStage = null, c
   // What every joiner gets in its hello counts as sent: the first tick only sends what changed after it.
   queueMicrotask(() => { for (const r of raceRows()) sent.race.set(r.index, r); });
   const broadcast = (msg) => { const s = JSON.stringify(msg); for (const c of conns.values()) c.send(s); };
-  const raceRows = () => source.ideas().map((d) => ({ index: d.index, symbol: d.symbol, name: d.name, pledged: String(d.pledged), backers: d.backers }));
+  const raceRows = () => source.ideas().map((d) => ({ index: d.index, symbol: d.symbol, name: d.name, proposer: d.proposer ?? "", pledged: String(d.pledged), backers: d.backers }));
   function presence() {
     const users = new Set();
     const listening = new Set();

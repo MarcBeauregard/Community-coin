@@ -33,7 +33,7 @@ const TONE_COLOR = { lime: "var(--lime)", sky: "var(--sky)", amber: "#ffb340" };
 function StageControls({ s, a, vs, phone }) {
   const v = s.voice;
   const lg = phone ? "lg" : undefined;
-  const leave = html`<${Button} variant="ghost" size=${lg} class="leave" onClick=${a.toggleListen}><${I.Close} size=${14} />Leave</${Button}>`;
+  const leave = html`<${Button} variant="ghost" size=${lg} class="leave" onClick=${a.toggleListen}><${I.Close} size=${14} />Leave audio</${Button}>`;
   if (!v.listening) {
     return html`<${Button} variant="white" size=${lg} data-primary onClick=${a.toggleListen}><${I.Headphones} size=${17} />${v.onStage ? "Join the stage" : "Listen in"}</${Button}>`;
   }
@@ -49,8 +49,8 @@ function StageControls({ s, a, vs, phone }) {
     return html`<div class="row" style="gap:8px">
       ${vs.micBlocked
         ? html`<${Button} variant="white" size=${lg} style="flex:1" data-primary onClick=${a.retryMic}><${I.Mic} size=${16} />Try again</${Button}>`
-        : html`<${Button} size=${lg} style="flex:1" data-primary aria-pressed=${String(!vs.micLive)} onClick=${a.toggleMic}>${vs.micLive ? html`<${I.Mic} size=${16} />` : html`<${I.MicOff} size=${16} />`}Mute</${Button}>`}
-      <${Button} variant="ghost" size=${phone ? "lg" : "sm"} onClick=${a.stepDown}>Step down</${Button}>
+        : html`<${Button} size=${lg} style="flex:1" data-primary onClick=${a.toggleMic}>${vs.micLive ? html`<${I.Mic} size=${16} />Mute` : html`<${I.MicOff} size=${16} />Unmute`}</${Button}>`}
+      <${Button} variant="ghost" size=${phone ? "lg" : "sm"} onClick=${a.stepDown}>Back to audience</${Button}>
       ${leave}
     </div>`;
   }
@@ -116,7 +116,7 @@ function Stage({ s, a, phone }) {
     <div style="display:flex;flex-direction:column;gap:10px">
       <span class="t2 num" style="font-size:13px;font-weight:600">${phone ? `In the room · ${listeners} listening` : "In the room"}</span>
       ${s.live
-        ? html`<span class="t2 num" style="font-size:13px">${int(pres.inside)} ${pres.inside === 1 ? "person" : "people"} inside · ${listeners} listening</span>`
+        ? html`<span class="t2 num" style="font-size:13px">${int(pres.inside)} ${pres.inside === 1 ? "person" : "people"} inside</span>`
         : html`<div class="row" style="gap:6px">
             ${Object.keys(PEOPLE).slice(0, 15).map((who) => html`<${Avatar} key=${who} person=${person(who)} size=${phone ? 34 : 28} />`)}
             <span class="num" style="height:28px;padding:0 10px;border-radius:14px;background:var(--fill);font-size:12px;font-weight:600;display:inline-flex;align-items:center">+${int(Math.max(0, pres.inside - 15))}</span>
@@ -136,7 +136,7 @@ export function VoicePill({ s, a, onOpen }) {
   const vs = voiceStatus(s);
   const action = v.onStage && v.invited ? html`<${Button} variant="prim" size="sm" onClick=${a.acceptInvite}>Speak now</${Button}>`
     : vs.needsTap ? html`<${Button} variant="white" size="sm" onClick=${a.startAudio}>Tap to hear</${Button}>`
-    : v.onStage && !vs.micBlocked ? html`<${Button} size="sm" aria-pressed=${String(!vs.micLive)} onClick=${a.toggleMic}>Mute</${Button}>`
+    : v.onStage && !vs.micBlocked ? html`<${Button} size="sm" onClick=${a.toggleMic}>${vs.micLive ? "Mute" : "Unmute"}</${Button}>`
     : null;
   return html`<div class="voice-pill glass" role="region" aria-label="Voice">
     <button type="button" class="open" onClick=${onOpen}>

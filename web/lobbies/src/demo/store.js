@@ -126,7 +126,9 @@ export function createStore({ scene, freeze } = {}) {
   const short = (who) => (who.length > 20 ? `${who.slice(0, 4)}…${who.slice(-4)}` : who);
   // Live, everyone is who the server says, the person included (their wallet), with `mine` to say "you".
   const lineToChat = (line, you) => ({ who: line.from, mine: line.from === you, text: line.text });
-  const raceIdeas = (rows, meta) => ideasFrom({ ideas: rows.map((r) => ({ ...r, pledged: BigInt(r.pledged), proposer: "" })) }, meta);
+  const raceIdeas = (rows, meta) => ideasFrom({ ideas: rows.map((r) => ({ ...r, pledged: BigInt(r.pledged), proposer: r.proposer ?? "" })) }, meta);
+  // Live, the race on screen is the server's: a practice pledge never replaces it with the demo's numbers.
+  const shownIdeas = (s) => (s.live ? s.ideas : ideasFrom(s.chain, s.meta));
   function onLive(m) {
     const s = state;
     switch (m.t) {
@@ -308,6 +310,7 @@ export function createStore({ scene, freeze } = {}) {
       server = { base, token, lobby };
       if (link) link.close();
       link = connectLobby({ base, lobby, token, onMessage: onLive });
+      if (state.voice.listening) link.listen(true); // a new session (signed in) keeps the person counted as listening
     },
     go(route) { set({ route, sheet: null }); },
     openClan(id) {
@@ -329,7 +332,8 @@ export function createStore({ scene, freeze } = {}) {
       const w = detectWallets().find((x) => x.id === id);
       if (!w) return;
       if (state.wallet.status === "connecting" || state.wallet.status === "signing") return; // one request at a time
-      if (!w.installed) { window.open(w.url, "_blank", "noopener"); return; }
+      // Not here: on a phone, reopen this page inside the wallet's app; elsewhere, its download page.
+      if (!w.installed) { if (w.browseUrl) location.href = w.browseUrl; else window.open(w.url, "_blank", "noopener"); return; }
       setWallet({ status: "connecting", id: w.id, name: w.name, error: null });
       try {
         const address = await connectWallet(w);
@@ -485,7 +489,7 @@ export function createStore({ scene, freeze } = {}) {
           return toast(errorText(r.error), "error");
         }
         set((s) => ({ signing: false, sheet: "receipt", receipt: r.receipt, receipts: [r.receipt, ...s.receipts], pledge: myPledge(s.chain),
-          ideas: ideasFrom(s.chain, s.meta), balance: s.balance - s.amount,
+          ideas: shownIdeas(s), balance: s.balance - s.amount,
           chat: chatLine({ sys: true, kind: "pledge", text: `@degen_marc pledged ${s.amount} SOL to $${idea.ticker}` }) }));
       }, 1200);
     },
@@ -494,7 +498,7 @@ export function createStore({ scene, freeze } = {}) {
       if (!p) return;
       const r = act(state.chain, "withdraw", { user: ME, symbol: p.symbol, amount: p.lamports }, state.elapsed);
       if (!r.ok) return toast(errorText(r.error), "error");
-      set((s) => ({ balance: s.balance + p.amount, pledge: myPledge(s.chain), ideas: ideasFrom(s.chain, s.meta), sheet: null, receipt: r.receipt, receipts: [r.receipt, ...s.receipts] }));
+      set((s) => ({ balance: s.balance + p.amount, pledge: myPledge(s.chain), ideas: shownIdeas(s), sheet: null, receipt: r.receipt, receipts: [r.receipt, ...s.receipts] }));
       toast(`${sol(p.amount)} returned to your wallet`, "white");
     },
     movePledge() {
@@ -502,7 +506,7 @@ export function createStore({ scene, freeze } = {}) {
       const idea = selectedIdea();
       const r = act(state.chain, "move_pledge", { user: ME, from: p.symbol, to: idea.ticker }, state.elapsed);
       if (!r.ok) return toast(errorText(r.error), "error");
-      set((s) => ({ pledge: myPledge(s.chain), ideas: ideasFrom(s.chain, s.meta), receipt: r.receipt, receipts: [r.receipt, ...s.receipts] }));
+      set((s) => ({ pledge: myPledge(s.chain), ideas: shownIdeas(s), receipt: r.receipt, receipts: [r.receipt, ...s.receipts] }));
       toast(`Moved your ${sol(p.amount)} to $${idea.ticker}`);
     },
     skipToLock() { set((s) => ({ elapsed: Math.max(s.elapsed, HOUR - 6), sheet: null })); set(settle(state)); },

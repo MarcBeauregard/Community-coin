@@ -178,7 +178,7 @@ textarea.inp { height: 84px; padding: 12px 14px; resize: none; line-height: 1.45
 .sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .sheet-head h2 { font-size: 26px; }
 .sheet-actions { display: flex; gap: 10px; }
-.sheet-actions > * { flex: 1; }
+.sheet-actions > * { flex: 1; min-width: 0; white-space: normal; }
 @keyframes rise { from { opacity: 0; transform: translateY(28px) scale(0.97); } }
 .sheet:focus { outline: none; }
 .app.phone .sheet-bg { align-items: flex-end; padding: 0; }

@@ -100,20 +100,22 @@ function ConnectSheet({ s, a }) {
     <ul class="wallets" role="list">
       ${wallets.map((x) => {
         const mine = busy && w.id === x.id;
-        const hint = !x.installed ? "Get it" : mine ? (w.status === "signing" ? `Sign the message in ${x.name}` : `Approve in ${x.name}`) : "Detected";
+        const hint = !x.installed ? (x.browseUrl ? `Open in ${x.name}` : "Get it") : mine ? (w.status === "signing" ? `Sign the message in ${x.name}` : `Approve in ${x.name}`) : "Detected";
         return html`<li key=${x.id}>
           <button type="button" class="wallet-row" disabled=${busy && !mine} aria-busy=${mine ? "true" : undefined} onClick=${() => a.connectWallet(x.id)}>
             <span class="wallet-mark" style=${{ background: WALLET_TINT[x.id] ?? WALLET_TINT.injected }} aria-hidden="true">${x.name[0]}</span>
             <span style="flex:1;text-align:left;font-size:16px;font-weight:600">${x.name}</span>
             <span class=${x.installed ? "t2" : "wallet-get"} style="font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:8px">
-              ${mine && html`<span class="spin light" aria-hidden="true" />`}${hint}${!x.installed && html`<${I.Arrow} size=${13} /><span class="sr"> (opens its site in a new tab)</span>`}
+              ${mine && html`<span class="spin light" aria-hidden="true" />`}${hint}${!x.installed && html`<${I.Arrow} size=${13} /><span class="sr">${x.browseUrl ? " (opens this page in the app)" : " (opens its site in a new tab)"}</span>`}
             </span>
           </button>
         </li>`;
       })}
     </ul>
     ${w.error && html`<p class="wallet-error" role="alert">${w.error}</p>`}
-    ${none && html`<p class="t2" style="font-size:13px;line-height:1.5">No wallet found in this browser. Phantom is the easiest to start with: install it, come back, and it shows up here.</p>`}`;
+    ${none && (wallets.some((x) => x.browseUrl)
+      ? html`<p class="t2" style="font-size:13px;line-height:1.5">On a phone, your wallet is an app. Open this page in it to connect: tap your wallet above. No wallet yet? Phantom is the easiest to start with.</p>`
+      : html`<p class="t2" style="font-size:13px;line-height:1.5">No wallet found in this browser. Phantom is the easiest to start with: install it, come back, and it shows up here.</p>`)}`;
 }
 
 function WalletSheet({ s, a }) {
@@ -212,7 +214,7 @@ function BirthCardSheet({ s, a }) {
         : html`<span class="t2" style="font-size:14px">Drawing your card…</span>`}
     </div>
     <span class="sr" role="status">${ready ? `${FORMATS[format].label} card ready` : "Drawing your card"}</span>
-    <p class="t2" style="font-size:14px;line-height:1.5">Made on this device from the launch on Solana. Only what you share leaves it.</p>
+    <p class="t2" style="font-size:14px;line-height:1.5">Made on this device from the launch. Only what you share leaves it.</p>
     <div class="sheet-actions">
       ${canShare
         ? html`<${Button} size="lg" disabled=${!ready} onClick=${save}>Save image</${Button}>
