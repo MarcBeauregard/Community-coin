@@ -177,3 +177,42 @@ Sheets: propose (invalid, valid, ticker taken), pledge (idle, signing), host, wa
 - Audio against a real SFU: the app is tested against a stand-in LiveKit room; a LiveKit server (or LiveKit Cloud
   keys) is needed for an end-to-end test.
 - Real pledges on Solana (devnet first), which replaces the practice SOL.
+
+# After launch, round two: thirteen UI/UX improvements
+
+## Done
+- The last five minutes (00:50–00:55): the live gap between the top two, the clock counting to the lock (amber in
+  the last minute), a light tap on phones when the lead changes (only after the person touched the page, never
+  with reduced motion), and for a pledge in 3rd or lower an offer to move it to the leader in one tap, or keep it.
+  `finale-check.mjs`.
+- The first minute: three inline cards on a first lobby visit (your pledge is your vote; lost, refunded at 00:55;
+  won, a founder), once. `intro-check.mjs`.
+- The race over the hour (`src/race/curve.js`): samples of each idea's SOL, kept by the app and by the realtime
+  server (handed to late joiners). Each idea's card has its small curve, with what it gained in the last ten
+  minutes in words. The replay: the hour in 30 seconds on a canvas (each change of leader, the lock, the launch),
+  what happened in words, a still under reduced motion, a video made on the device to save or share.
+  `replay-check.mjs`.
+- A lobby that feels like the people in it: the host's welcome pinned atop the chat (`--welcome`), arrivals as one
+  quiet chat line, live faces of the signed-in people inside (each person counted once, guests counted apart),
+  🔥 and 💀 reactions over the stage (batched, rate-limited, never echoed back). `alive-check.mjs`.
+- Reminders: a notification 5 minutes before (said honestly: from the page, so a tab must be open), Google Calendar
+  and an .ics file with a 5-minute alarm. `remind-check.mjs`.
+- Founder profile: clans and your number in each, ideas proposed and what came of them, lobbies, streak. Live it is
+  the wallet's own, kept on the device. Sibling lobbies: a clan opens the next lobby for a little sibling of its
+  coin, pinned in the clan. `profile-check.mjs`.
+- Report and remove an idea: anyone signed in reports (the host sees how many, not who); the host or a co-host
+  removes it before the lock; every pledge on it is refunded at once and the proposer's bond returned.
+  `moderate-check.mjs`.
+- Verifiable receipts: a settlement's transaction (the crank's or the indexer's signature) is linked on Solscan for
+  its cluster; never in a practice lobby, never for something that isn't a signature. A calm network banner:
+  offline, lobby server reconnecting / down after 15 s / back online, slow round trip, Solana not answering.
+  `net-check.mjs`.
+
+## Left
+- The lobby program has no instruction to remove an idea: removal works in practice lobbies only. On Solana it
+  needs a host-signed `remove_idea` that refunds every pledge on the idea and returns the bond (with a Rust test and
+  a security review), before the app offers it there.
+- A server restarted with a new signing key drops every session (4401) and the banner stays on "Can't reach the
+  lobby server"; the app should then sign in again by itself. Keep the key across restarts meanwhile.
+- Notifications from a closed tab need a push service (Web Push and a service worker); until then the calendar is
+  the reminder that always works.

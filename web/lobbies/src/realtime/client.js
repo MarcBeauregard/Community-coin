@@ -38,6 +38,9 @@ export function connectLobby({ base, lobby, token, onMessage, WebSocketImpl = gl
     practice: (t, args) => link.send({ t, ...args }),
     listen: (on) => link.send({ t: "listen", on }),
     cheer: (kind) => link.send({ t: "cheer", kind }),
+    /** Tell the host an idea breaks the lobby's rules; the host (or a co-host) removes it, refunding everyone on it. */
+    report: (symbol) => link.send({ t: "report", symbol }),
+    remove: (symbol) => link.send({ t: "remove", symbol }),
     hand: (up) => link.send({ t: "hand", up }),
     bring: (user) => link.send({ t: "bring", user }),
     down: (user) => link.send({ t: "down", user }),

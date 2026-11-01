@@ -34,6 +34,8 @@ export function simulatedSource({ everySec = 3, random = Math.random } = {}) {
   };
 }
 
+export const clusterOf = (rpc) => (/devnet/.test(rpc) ? "devnet" : /testnet/.test(rpc) ? "testnet" : /mainnet|api\.solana\.com|helius|quiknode|alchemy/.test(rpc) ? "mainnet" : null);
+
 /** A lobby on a cluster, through the indexer. `tick` polls at most every `pollMs`. */
 export function chainSource({ rpc, programId, lobby, pollMs = 2000, now = () => Date.now() }) {
   const listeners = [];
@@ -41,6 +43,8 @@ export function chainSource({ rpc, programId, lobby, pollMs = 2000, now = () => 
   let polledAt = 0;
   let polling = null;
   return {
+    /** The cluster, for explorer links: "devnet", "testnet", "mainnet", or null (a local validator: no explorer). */
+    cluster: clusterOf(rpc),
     ideas: () => rows((indexer.view(lobby)?.ideas ?? []).filter(Boolean)),
     host: () => indexer.view(lobby)?.lobby?.host ?? null,
     /** Every program event of the lobby's transactions, in order (the crank's, anyone else's). */

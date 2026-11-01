@@ -59,6 +59,9 @@ function initialState() {
     joined: 0, // the demo: people who came in since it opened
     cheers: [], // 🔥 and 💀 flying over the stage: { id, kind, x, delay }
     cheerCount: { fire: 0, skull: 0 }, // since this page opened
+    reported: {}, // the ideas this person reported, by ticker
+    net: { server: "ok", slow: false, offline: false, solana: "ok", back: false }, // what the network banner says
+    sheetIdea: null, // the idea a report or remove sheet is about
     intro: null, // the first minute's card being shown (0 to 2), or null
     nudgeOff: null, // the finale's "move your pledge" offer, set aside for this pledge
     filter: "all",
@@ -181,18 +184,44 @@ export function createStore({ scene, freeze } = {}) {
   // ------------------------------------------------------------------ live (realtime server)
   // When connected, the server owns the clock, the race, the chat and the presence; the demo's crowd stops.
   let link = null;
-  const LIVE_ERRORS = { SlowMode: "Slow mode: one message every 3 seconds.", SignInToChat: "Connect a wallet to chat.", EmptyMessage: "Write something first.", LobbyNotOpen: "The lobby is not open yet." };
+  const LIVE_ERRORS = { HostOnly: "Only the host can remove an idea.", SignInToReport: "Connect a wallet to report an idea.", UnknownIdea: "That idea is no longer in the race.", PledgesLocked: "Pledges are locked.", SlowMode: "Slow mode: one message every 3 seconds.", SignInToChat: "Connect a wallet to chat.", EmptyMessage: "Write something first.", LobbyNotOpen: "The lobby is not open yet." };
   const short = (who) => (who.length > 20 ? `${who.slice(0, 4)}…${who.slice(-4)}` : who);
   // Live, everyone is who the server says, the person included (their wallet), with `mine` to say "you".
   const lineToChat = (line, you) => ({ who: line.from, mine: line.from === you, text: line.text });
   const raceIdeas = (rows, meta) => ideasFrom({ ideas: rows.map((r) => ({ ...r, pledged: BigInt(r.pledged), proposer: r.proposer ?? "" })) }, meta);
   // Live, the race on screen is the server's: a practice pledge never replaces it with the demo's numbers.
   const shownIdeas = (s) => (s.live ? s.ideas : ideasFrom(s.chain, s.meta));
+  // The network, for a calm banner: the lobby server's link (reconnecting, then down after 15 s), its round trip
+  // (slow above 1.5 s), the browser offline, and the Solana cluster's answers when the app reads it.
+  const setNet = (patch) => set((s) => ({ net: { ...s.net, ...patch } }));
+  let downTimer = null;
+  let backTimer = null;
+  function linkLost() {
+    if (state.net.server !== "ok") return;
+    setNet({ server: "reconnecting", back: false });
+    clearTimeout(downTimer);
+    downTimer = setTimeout(() => { if (state.net.server === "reconnecting") setNet({ server: "down" }); }, 15000);
+  }
+  function linkBack() {
+    clearTimeout(downTimer);
+    if (state.net.server === "ok") return;
+    setNet({ server: "ok", slow: false, back: true });
+    clearTimeout(backTimer);
+    backTimer = setTimeout(() => setNet({ back: false }), 3000);
+  }
+  async function readSolana(address) {
+    const t0 = Date.now();
+    const b = await readBalance(rpc, address);
+    const ms = Date.now() - t0;
+    setNet({ solana: b === null ? "down" : ms > 3000 ? "slow" : "ok" });
+    if (state.wallet.address === address && b !== null) setWallet({ balance: b });
+  }
   function onLive(m) {
     const s = state;
     switch (m.t) {
       case "hello":
-        set({ live: { connected: true, lobby: m.lobby, inside: m.inside, listening: m.listening, people: m.people ?? [], opensAt: m.opensAt, you: m.you, guest: m.guest, race: m.race, stage: m.stage },
+        linkBack();
+        set({ live: { connected: true, reports: m.reports ?? {}, lobby: m.lobby, inside: m.inside, listening: m.listening, people: m.people ?? [], opensAt: m.opensAt, you: m.you, guest: m.guest, race: m.race, stage: m.stage },
           welcome: m.welcome ?? null,
           elapsed: Math.floor((m.now - m.opensAt) / 1000), ideas: raceIdeas(m.race, s.meta), curve: Array.isArray(m.curve) ? m.curve : [], chat: m.chat.map((l) => lineToChat(l, m.you)), voice: { ...s.voice, onStage: !!m.stage?.speakers.includes(m.you) } });
         // A practice lobby: this wallet's pledge and practice SOL, as the server keeps them (across reloads).
@@ -226,6 +255,11 @@ export function createStore({ scene, freeze } = {}) {
       case "settled": {
         const amount = toSol(BigInt(m.amount));
         const l = s.launched;
+        // The settlement's receipt: verifiable on Solana when it has a transaction there, practice otherwise.
+        const proof = m.signature ? { signature: m.signature, cluster: m.cluster ?? null, practice: false } : { practice: true };
+        const r = m.kind === "founder" ? { kind: "founder", title: `Founder #${m.rank ?? "?"}`, lines: [["Committed to the opening", amount]], ...proof }
+          : m.kind === "refund" ? { kind: "refund", title: `Refunded ${sol(amount)}`, lines: [["Back in your wallet", amount]], ...proof } : null;
+        if (r && !s.receipts.some((x) => x.title === r.title && x.signature === r.signature)) set({ receipts: [r, ...state.receipts] });
         if (m.kind === "founder" && l) {
           set({ launched: { ...l, founder: true, rank: m.rank, myAmount: amount, myId: l.id, allocation: founderAllocation(l.pot, BigInt(m.amount)) },
             clans: [{ id: "new", name: m.name ?? s.ideas.find((d) => d.id === l.id)?.name ?? l.id, ticker: l.id.toUpperCase(), hue: s.ideas.find((d) => d.id === l.id)?.hue ?? 150,
@@ -279,6 +313,21 @@ export function createStore({ scene, freeze } = {}) {
         }
         break;
       }
+      case "reports": set({ live: { ...s.live, reports: m.reports } }); break;
+      case "reported": set({ reported: { ...s.reported, [m.symbol]: true } }); toast(`Reported. The host will look at $${m.symbol}.`, "white"); break;
+      case "removed": {
+        const ideas = raceIdeas(m.race, s.meta);
+        const gone = !ideas.some((d) => d.id === s.selected);
+        set({ live: { ...s.live, race: m.race }, ideas, ...(gone ? { selected: ideas[0]?.id ?? null } : {}), ...(s.sheet === "remove" || s.sheet === "report" ? { sheet: null } : {}) });
+        toast(m.by === s.live.you ? `$${m.symbol} is out of the race. Everyone on it is refunded.` : `The host removed $${m.symbol} from the race. Pledges on it are refunded.`, "white");
+        break;
+      }
+      case "refunded": {
+        const amount = toSol(BigInt(m.amount)), bond = toSol(BigInt(m.bond));
+        set({ pledge: liveMine(m), balance: toSol(BigInt(m.balance ?? "0")) });
+        later(() => toast([amount ? `${sol(amount)} back from $${m.symbol}` : "", bond ? `your ${sol(bond)} bond is back` : ""].filter(Boolean).join(", and ").replace(/^./, (c) => c.toUpperCase()), "white"), 2900);
+        break;
+      }
       case "cheers": flyCheers(Math.max(0, m.fire | 0), Math.max(0, m.skull | 0)); break;
       case "presence": {
         const came = m.inside - s.live.inside;
@@ -291,7 +340,13 @@ export function createStore({ scene, freeze } = {}) {
         if (m.code === "SignInToChat" || m.code === "SignInToSpeak") actions.openConnect(m.code === "SignInToChat" ? "chat" : "speak");
         else toast(LIVE_ERRORS[m.code] || m.code, "error");
         break;
-      case "closed": if (s.live) set({ live: { ...s.live, connected: false } }); break;
+      case "closed": if (s.live) set({ live: { ...s.live, connected: false } }); linkLost(); break;
+      case "pong": {
+        const rtt = Date.now() - (m.echo ?? Date.now());
+        if (rtt > 1500 && !state.net.slow) setNet({ slow: true });
+        else if (rtt < 800 && state.net.slow) setNet({ slow: false });
+        break;
+      }
       default:
     }
   }
@@ -492,7 +547,7 @@ export function createStore({ scene, freeze } = {}) {
         },
         onDisconnect: () => signedOut(`${w.name} disconnected.`),
       });
-      if (rpc) readBalance(rpc, address).then((b) => { if (state.wallet.address === address) setWallet({ balance: b }); });
+      if (rpc) readSolana(address);
     },
     /** On load: the wallet used last time reconnects without asking, if it still trusts this site. */
     async restoreWallet() {
@@ -672,6 +727,21 @@ export function createStore({ scene, freeze } = {}) {
       flyCheers(kind === "fire" ? 1 : 0, kind === "skull" ? 1 : 0);
       if (link) link.cheer(kind);
     },
+    // Report an idea to the host; the host (or a co-host) removes it, and everyone on it is refunded.
+    askReport(id) { set({ sheet: "report", sheetIdea: id, sheetAt: Date.now() }); },
+    askRemove(id) { set({ sheet: "remove", sheetIdea: id, sheetAt: Date.now() }); },
+    report(id) {
+      const idea = state.ideas.find((d) => d.id === id);
+      if (!idea) return;
+      if (link && state.live?.guest && !state.wallet.signedIn) return actions.openConnect("report");
+      if (link) { set({ sheet: null }); return link.report(idea.ticker); }
+      set((s) => ({ sheet: null, reported: { ...s.reported, [idea.ticker]: true } }));
+      toast(`Reported. The host will look at $${idea.ticker}.`, "white");
+    },
+    removeIdea(id) {
+      const idea = state.ideas.find((d) => d.id === id);
+      if (idea && link) link.remove(idea.ticker);
+    },
     hideWelcome() { set({ welcomeOff: true }); },
     introNext() { set((s) => ({ intro: s.intro === null ? null : s.intro + 1 })); },
     introDone() { set({ intro: null }); try { localStorage.setItem(INTRO, "1"); } catch {} },
@@ -823,12 +893,27 @@ export function createStore({ scene, freeze } = {}) {
   if (typeof window !== "undefined") disarm = armReminders(state.reminders, fire);
 
   let interval = null;
+  let pulse = null;
+  let onlineWatch = null;
   return {
     get: () => state,
     subscribe(fn) { subscribers.add(fn); return () => subscribers.delete(fn); },
     actions,
-    start() { if (!freeze && !interval) interval = setInterval(tick, 1000); },
-    stop() { disarm(); clearInterval(interval); interval = null; timers.forEach(clearTimeout); timers.clear(); if (link) link.close(); if (clanLink) clanLink.close(); audio.leave(); },
+    start() {
+      if (!freeze && !interval) interval = setInterval(tick, 1000);
+      // Every 10 s: the lobby server's round trip, and the wallet's balance on the cluster (?rpc=).
+      if (!pulse) pulse = setInterval(() => {
+        if (link && state.live?.connected) link.ping();
+        if (rpc && state.wallet.address) readSolana(state.wallet.address);
+      }, globalThis.__netEveryMs ?? 10000);
+      if (typeof window !== "undefined" && !onlineWatch) {
+        onlineWatch = () => setNet({ offline: !navigator.onLine });
+        addEventListener("online", onlineWatch);
+        addEventListener("offline", onlineWatch);
+        if (!navigator.onLine) onlineWatch();
+      }
+    },
+    stop() { disarm(); clearInterval(interval); clearInterval(pulse); clearTimeout(downTimer); clearTimeout(backTimer); interval = null; timers.forEach(clearTimeout); timers.clear(); if (link) link.close(); if (clanLink) clanLink.close(); audio.leave(); },
     tick,
   };
 }

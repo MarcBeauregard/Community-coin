@@ -34,7 +34,7 @@ export function createIndexer({ rpc: url, programId = PROGRAM_ID, lobbies, onEve
       if (!s.err) {
         const tx = await rpc(url, "getTransaction", [s.signature, { commitment: "confirmed", maxSupportedTransactionVersion: 0 }]);
         // One transaction may touch several lobbies (or none): keep this lobby's events.
-        const events = eventsFromLogs(tx?.meta?.logMessages);
+        const events = eventsFromLogs(tx?.meta?.logMessages).map((e) => ({ ...e, signature: s.signature })); // where to verify it
         for (const e of events) if (e.lobby === f.address) apply(f.view, e);
         // Listeners get the whole transaction's events (a launch's `Launched` carries no lobby, only its mint).
         if (onEvents && events.some((e) => e.lobby === f.address)) onEvents(events);

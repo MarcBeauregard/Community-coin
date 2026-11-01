@@ -29,6 +29,14 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
   const settled = new Map(); // user -> their settled message, for when they come back
   let seq = 0;
   const cheers = { fire: 0, skull: 0 }; // reactions since the last batch
+  // Ideas reported to the host (who reported each), and the ones the host took out of the race.
+  const reports = new Map();
+  const removed = new Set();
+  const manages = (user) => { const v = stage.view(); return !!user && (user === v.host || v.cohosts.includes(user)); };
+  // A settlement's transaction, when it is one on a cluster (a practice lobby's never is).
+  const proof = (e) => (typeof e.signature === "string" && !source.practice ? { signature: e.signature, cluster: source.cluster ?? null } : {});
+  const reportCounts = () => Object.fromEntries([...reports].map(([sym, who]) => [sym, who.size]));
+  const tellManagers = () => { const m = JSON.stringify({ t: "reports", reports: reportCounts() }); for (const c of conns.values()) if (manages(c.session.sub)) c.send(m); };
   // Practice SOL: what each signed-in wallet may play with in a practice lobby, minus what it has in play.
   const PRACTICE = 10_000_000_000n;
   function practiceBalance(user) {
@@ -64,7 +72,7 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
   // What every joiner gets in its hello counts as sent: the first tick only sends what changed after it.
   queueMicrotask(() => { for (const r of raceRows()) sent.race.set(r.index, r); if (elapsed() < 3300) sample(); });
   const broadcast = (msg) => { const s = JSON.stringify(msg); for (const c of conns.values()) c.send(s); };
-  const raceRows = () => source.ideas().map((d) => ({ index: d.index, symbol: d.symbol, name: d.name, proposer: d.proposer ?? "", pledged: String(d.pledged), backers: d.backers }));
+  const raceRows = () => source.ideas().filter((d) => !removed.has(d.symbol)).map((d) => ({ index: d.index, symbol: d.symbol, name: d.name, proposer: d.proposer ?? "", pledged: String(d.pledged), backers: d.backers }));
   // Who is in: everyone counted once (a person with two tabs is one), the guests among them, and the faces to show:
   // the last signed-in people to come in, newest first.
   const FACES = 12;
@@ -95,7 +103,7 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
     join(connId, session, send) {
       conns.set(connId, { session, send, listening: false, lastChat: -Infinity, tokens: rate.burst, at: now() });
       if (settled.has(session.sub)) queueMicrotask(() => send(settled.get(session.sub))); // after the hello
-      return { t: "hello", lobby: id, now: now(), opensAt, phase: phaseAt(elapsed()), race: raceRows(), ...presence(), chat: history.slice(-50), curve, welcome: welcomeLine(), you: session.sub, guest: !!session.guest, stage: stage.view(), ...outcome,
+      return { t: "hello", lobby: id, now: now(), opensAt, phase: phaseAt(elapsed()), race: raceRows(), ...presence(), chat: history.slice(-50), curve, welcome: welcomeLine(), ...(manages(session.sub) ? { reports: reportCounts() } : {}), you: session.sub, guest: !!session.guest, stage: stage.view(), ...outcome,
         practice: !!source.practice, ...(source.practice && !session.guest ? practiceOf(session.sub) : {}) };
     },
     leave(connId) {
@@ -154,6 +162,45 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
           broadcast({ t: "chat", line });
           return null;
         }
+        case "report": {
+          // Anyone signed in can tell the host an idea breaks the lobby's rules; once each.
+          if (c.session.guest) return { t: "error", code: "SignInToReport" };
+          const sym = typeof msg.symbol === "string" ? msg.symbol : "";
+          if (!source.ideas().some((d) => d.symbol === sym) || removed.has(sym)) return { t: "error", code: "UnknownIdea" };
+          if (!reports.has(sym)) reports.set(sym, new Set());
+          reports.get(sym).add(c.session.sub);
+          tellManagers();
+          return { t: "reported", symbol: sym };
+        }
+        case "remove": {
+          // The host (or a co-host) takes an idea out of the race: every pledge on it comes back now, and its bond.
+          // Practice lobbies only: the lobby program has no such instruction yet (PLAN.md).
+          if (!manages(c.session.sub)) return { t: "error", code: "HostOnly" };
+          if (!source.practice) return { t: "error", code: "NotPractice" };
+          if (phaseAt(elapsed()) === "lock" || phaseAt(elapsed()) === "done") return { t: "error", code: "PledgesLocked" };
+          const ch = source.chain;
+          const idea = ch.ideas.find((d) => d.symbol === msg.symbol);
+          if (!idea || removed.has(idea.symbol)) return { t: "error", code: "UnknownIdea" };
+          const back = [];
+          for (const [user, p] of ch.pledges) {
+            if (p.idea !== idea.index || p.settled || p.amount === 0n) continue;
+            const amount = p.amount;
+            if (ch.apply("withdraw", { user, symbol: idea.symbol, amount }, elapsed()).ok) back.push([user, amount]);
+          }
+          idea.bond_returned = true; // the proposer's practice bond (src/chain/rules.js has no instruction for this)
+          removed.add(idea.symbol);
+          reports.delete(idea.symbol);
+          broadcast({ t: "removed", symbol: idea.symbol, by: c.session.sub, race: raceRows() });
+          for (const r of raceRows()) sent.race.set(r.index, r);
+          // Each person it concerned hears what came back.
+          for (const x of conns.values()) {
+            const u = x.session.sub;
+            const mine = back.find(([who]) => who === u);
+            if (mine || idea.proposer === u) x.send(JSON.stringify({ t: "refunded", symbol: idea.symbol, amount: String(mine?.[1] ?? 0n), bond: idea.proposer === u ? String(ch.lobby.bond) : "0", ...practiceOf(u) }));
+          }
+          tellManagers();
+          return null;
+        }
         case "pledge": case "withdraw": case "move": case "propose": {
           // The practice lobby's money, for signed-in people only, through the program's rules.
           if (!source.practice) return { t: "error", code: "NotPractice" };
@@ -166,6 +213,7 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
             : msg.t === "move" ? { user: me, from: text(msg.from, 12), to: text(msg.to, 12) }
             : { proposer: me, symbol: text(msg.symbol, 12), name: text(msg.name, 40) };
           if (Object.values(args).some((v) => v === null)) return { t: "error", code: "BadMessage" };
+          if (removed.has(args.symbol) || removed.has(args.to)) return { t: "practice", op: msg.t, ok: false, error: "IdeaRemoved", ...practiceOf(me) };
           if ((msg.t === "pledge" || msg.t === "propose") && practiceBalance(me) < (msg.t === "pledge" ? args.amount : source.chain.lobby.bond)) {
             return { t: "practice", op: msg.t, ok: false, error: "NotEnoughPractice", ...practiceOf(me) };
           }
@@ -211,8 +259,8 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
           broadcast({ t: "launch", ...outcome.launch });
         } else if (e.event === "PledgeRefunded" || e.event === "FounderJoined") {
           const msg = JSON.stringify(e.event === "PledgeRefunded"
-            ? { t: "settled", kind: "refund", amount: String(e.amount) }
-            : { t: "settled", kind: "founder", amount: String(e.amount), rank: clans?.rankOf(e.mint, e.user) ?? null, mint: e.mint });
+            ? { t: "settled", kind: "refund", amount: String(e.amount), ...proof(e) }
+            : { t: "settled", kind: "founder", amount: String(e.amount), rank: clans?.rankOf(e.mint, e.user) ?? null, mint: e.mint, ...proof(e) });
           settled.set(e.user, msg);
           for (const c of conns.values()) if (c.session.sub === e.user) c.send(msg);
         }

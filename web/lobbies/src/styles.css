@@ -489,3 +489,12 @@ button.profile-row:hover { background: rgba(255, 255, 255, 0.04); }
 .cheer-btn:active { transform: scale(.92); }
 .cheer-btn .num { font-size: 12px; font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { .cheer { display: none; } }
+
+/* ---------------------------------------------------------------- network status */
+.net-wrap { position: fixed; left: 50%; top: calc(12px + env(safe-area-inset-top)); transform: translateX(-50%); z-index: 59; pointer-events: none; max-width: calc(100% - 32px); }
+.net { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 8px 16px; border-radius: 999px; font-size: 13px; font-weight: 600; animation: net-in 0.5s cubic-bezier(0.2, 0.9, 0.25, 1); }
+@keyframes net-in { from { opacity: 0; transform: translateY(-12px); } }
+.net .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--sky); }
+.net.amber .dot { background: #ffb340; }
+.net.lime .dot { background: var(--lime); }
+.app.net-on .toast { top: calc(64px + env(safe-area-inset-top)); }

@@ -7,7 +7,7 @@ import * as I from "../icons.js";
 import { coin, FEATURED, LOBBIES } from "../demo/data.js";
 import { nextOpening, icsFor, googleCalendarUrl, calendarFileName, LEAD_MS } from "../remind/remind.js";
 import { prepareReplay, playReplay, recordReplay, drawFrame, replayStory, videoType, replayFileName, SIZE as REPLAY_SIZE, LENGTH_MS } from "../race/replay.js";
-import { addressPerson, shortAddress, WALLET_TINT, isAddress } from "../wallet/wallets.js";
+import { addressPerson, shortAddress, WALLET_TINT, isAddress, txUrl } from "../wallet/wallets.js";
 import { drawBirthCard, cardCaption, cardFileName, cardText, FORMATS } from "../card/birthcard.js";
 import { race, dock, lobbyClock, profile } from "../demo/select.js";
 import { PROPOSE_BOND } from "../demo/store.js";
@@ -86,6 +86,7 @@ function HostSheet({ a }) {
 
 const WHY = {
   chat: "Connect a wallet to chat.",
+  report: "Connect a wallet to report an idea.",
   speak: "Connect a wallet to speak on stage.",
   clan: "Connect the wallet you pledged with to enter your clan.",
   switched: "You switched accounts in your wallet, so you were signed out. Connect to continue with the new one.",
@@ -173,7 +174,8 @@ function WalletSheet({ s, a }) {
     ${s.receipts.length > 0 && html`<div style="display:flex;flex-direction:column;gap:10px">
       <span class="t2" style="font-size:13px;font-weight:600">Activity</span>
       <ol class="rows">${s.receipts.slice(0, 5).map((r, i) => html`<li key=${i} style="display:flex;justify-content:space-between;gap:12px;padding:12px 0;font-size:14px;border-top:${i ? "1px solid rgba(255,255,255,.07)" : "0"}">
-        <button type="button" style="text-align:left;flex:1;min-height:44px" onClick=${() => a.showReceipt(r)}>${r.title}</button><span class="t2"><${I.Chevron} size=${14} /></span></li>`)}</ol>
+        <button type="button" style="text-align:left;flex:1;min-height:44px" onClick=${() => a.showReceipt(r)}>${r.title}</button>
+        ${proofLink(r) ? html`<a class="link" style="align-self:center;font-size:13px" href=${proofLink(r)} target="_blank" rel="noopener" aria-label=${`${r.title}: view on Solscan (opens in a new tab)`}>Solscan</a>` : html`<span class="t2" style="align-self:center"><${I.Chevron} size=${14} /></span>`}</li>`)}</ol>
     </div>`}`;
 }
 
@@ -433,6 +435,33 @@ function SiblingSheet({ s, a }) {
     </div>`;
 }
 
+// Reporting an idea: what the host can do with it, said before anything is sent.
+function ReportSheet({ s, a }) {
+  const d = s.ideas.find((x) => x.id === s.sheetIdea);
+  if (!d) return null;
+  return html`
+    <div class="row" style="gap:12px;flex-wrap:nowrap"><${Coin} coin=${coin(d)} size=${44} /><span style="font-size:16px;font-weight:600">${ticker(d.ticker)} · ${d.name}</span></div>
+    <p class="t2" style="font-size:14px;line-height:1.5">Report an idea that breaks the lobby’s rules: a scam, hate, someone impersonated, a ticker that copies a live coin. The host sees how many people reported it, not who, and can take it out of the race; everyone on it is then refunded.</p>
+    <div class="sheet-actions">
+      <${Button} size="lg" onClick=${a.closeSheet}>Cancel</${Button}>
+      <${Button} variant="danger" size="lg" data-primary onClick=${() => a.report(d.id)}>Report ${ticker(d.ticker)}</${Button}>
+    </div>`;
+}
+
+// The host takes an idea out of the race: what happens to the money first, then one tap.
+function RemoveSheet({ s, a }) {
+  const d = race(s).find((x) => x.id === s.sheetIdea);
+  if (!d) return null;
+  const n = s.live?.reports?.[d.ticker] ?? 0;
+  return html`
+    <div class="row" style="gap:12px;flex-wrap:nowrap"><${Coin} coin=${coin(d)} size=${44} /><span style="display:flex;flex-direction:column;gap:2px"><span style="font-size:16px;font-weight:600">${ticker(d.ticker)} · ${d.name}</span><span class="t2 num" style="font-size:13px">${sol(d.total)} from ${d.backersShown} ${d.backersShown === 1 ? "backer" : "backers"}${n ? ` · reported by ${n}` : ""}</span></span></div>
+    <p class="t2" style="font-size:14px;line-height:1.5">It leaves the race for good. Every pledge on it is refunded now, and its proposer’s bond is returned. Practice lobbies only, for now.</p>
+    <div class="sheet-actions">
+      <${Button} size="lg" onClick=${a.closeSheet}>Keep it</${Button}>
+      <${Button} variant="danger" size="lg" data-primary onClick=${() => a.removeIdea(d.id)}>Remove ${ticker(d.ticker)}</${Button}>
+    </div>`;
+}
+
 // Taking a pledge back: said plainly, asked once. A double tap can't withdraw twice.
 function WithdrawSheet({ s, a }) {
   const p = s.pledge;
@@ -464,6 +493,9 @@ function TermsSheet({ a }) {
 }
 
 // What the last operation did, read from the program's events: a pledge, a withdrawal, a move, a refund.
+// Where a receipt can be checked: its transaction on Solscan, only for a real signature on a known cluster.
+const proofLink = (r) => (r && !r.practice ? txUrl(r.signature, r.cluster) : null);
+
 function ReceiptSheet({ s, a }) {
   const r = s.receipt;
   if (!r) return null;
@@ -472,7 +504,10 @@ function ReceiptSheet({ s, a }) {
       <h2 id="receipt-title" class="display" style="font-size:24px">${r.title}</h2>
     </div>
     <div class="rows">${r.lines.map(([k, v]) => html`<div key=${k}><span>${k}</span><span class="num">${sol(v)}</span></div>`)}</div>
-    <span class="t2" style="font-size:12px;line-height:1.5;text-align:center">${r.practice ? "Practice: recorded by the lobby server under the lobby program’s rules; no SOL moved." : "Practice: worked out by the lobby program’s own rules on this device; no SOL moved."} Pledges can be withdrawn or moved until 00:55; losing pledges are refunded at the lock.</span>
+    ${proofLink(r)
+      ? html`<div class="row" style="justify-content:center;gap:8px;font-size:13px"><${Chip} tone="lime"><${I.Check} size=${12} />On Solana</${Chip}>
+          <a class="link" href=${proofLink(r)} target="_blank" rel="noopener">View the transaction on Solscan<span class="sr"> (opens in a new tab)</span></a></div>`
+      : html`<span class="t2" style="font-size:12px;line-height:1.5;text-align:center">${r.signature ? "This transaction is on a local validator: no explorer shows it." : r.practice ? "Practice: recorded by the lobby server under the lobby program’s rules; no SOL moved, so there is no transaction to look up." : "Practice: worked out by the lobby program’s own rules on this device; no SOL moved, so there is no transaction to look up."} Pledges can be withdrawn or moved until 00:55; losing pledges are refunded at the lock.</span>`}
     <${Button} variant="white" size="lg" onClick=${a.closeSheet}>Done</${Button}>`;
 }
 
@@ -487,6 +522,8 @@ const SHEETS = {
   withdraw: { title: "Withdraw your pledge?", Body: WithdrawSheet },
   card: { title: "Your birth card", Body: BirthCardSheet },
   remind: { title: "Remind me", Body: RemindSheet },
+  report: { title: "Report this idea?", Body: ReportSheet, refocus: ".dock button" },
+  remove: { title: "Remove this idea?", Body: RemoveSheet, refocus: ".dock button" },
   sibling: { title: "A sibling lobby", Body: SiblingSheet, refocus: ".sibling-open" },
   profile: { title: "Founder profile", Body: ProfileSheet, refocus: ".profile-open" },
   replay: { title: "The hour in 30 seconds", Body: ReplaySheet, refocus: ".replay-open" },

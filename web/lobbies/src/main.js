@@ -5,6 +5,7 @@
 import { render } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { html, IconButton, Avatar, Toast } from "./ui.js";
+import { netState } from "./demo/select.js";
 import * as I from "./icons.js";
 import { phoneBreakpoint } from "./tokens.js";
 import { createStore } from "./demo/store.js";
@@ -119,7 +120,7 @@ function App() {
 
   const screen = s.route.screen === "launch" && !s.launched ? "discover" : s.route.screen;
   const showTabs = phone && (screen === "discover" || (screen === "clan" && s.clanView === "list"));
-  return html`<div class=${phone ? "app phone" : "app"} data-balance=${s.balance}>
+  return html`<div class=${`${phone ? "app phone" : "app"}${netState(s.net) ? " net-on" : ""}`} data-balance=${s.balance}>
     ${screen === "discover" && html`<${Discover} s=${s} a=${a} phone=${phone} />`}
     ${screen === "lobby" && html`<${Lobby} s=${s} a=${a} phone=${phone} />`}
     ${screen === "launch" && html`<${Launch} s=${s} a=${a} phone=${phone} />`}
@@ -128,8 +129,25 @@ function App() {
     ${s.voice.listening && screen !== "lobby" && s.live && html`<${VoicePill} s=${s} a=${a} onOpen=${() => { a.go({ screen: "lobby" }); a.setLobbyTab("stage"); }} />`}
     ${showTabs && html`<${TabBar} s=${s} a=${a} />`}
     <${Sheets} s=${s} a=${a} />
+    <${NetBanner} net=${s.net} />
     <${Toast} toast=${s.toast} />
   </div>`;
+}
+
+// The network, said calmly at the top while something is off (the most pressing thing only), and "Back online" for
+// a moment after. One status region, always in the page, so a screen reader hears each change once.
+const NET = {
+  offline: ["amber", "You’re offline. The lobby catches up when you’re back."],
+  down: ["amber", "Can’t reach the lobby server. Still trying; your pledge is safe."],
+  reconnecting: ["sky", "Reconnecting to the lobby…"],
+  solanaDown: ["amber", "Solana isn’t answering. Your balance may be out of date."],
+  slow: ["sky", "The lobby is slow right now. Numbers may lag a few seconds."],
+  solanaSlow: ["sky", "Solana is slow right now. Your balance may lag."],
+  back: ["lime", "Back online"],
+};
+function NetBanner({ net }) {
+  const k = netState(net);
+  return html`<div role="status" class="net-wrap">${k && html`<div class=${`net glass ${NET[k][0]}`}><span class="dot" aria-hidden="true" />${NET[k][1]}</div>`}</div>`;
 }
 
 render(html`<${App} />`, document.getElementById("app"));

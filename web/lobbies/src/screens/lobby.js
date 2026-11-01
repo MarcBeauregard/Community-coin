@@ -162,7 +162,8 @@ export function VoicePill({ s, a, onOpen }) {
 
 function IdeaCard({ d, s, a, phone }) {
   const selected = s.selected === d.id;
-  const badges = html`${d.mine && html`<${Chip} tone="lime" class="sm">Your pledge</${Chip}>`}${d.yours && html`<${Chip} tone="sky">Your idea</${Chip}>`}`;
+  const flagged = manages(s) ? s.live.reports?.[d.ticker] ?? 0 : 0;
+  const badges = html`${d.mine && html`<${Chip} tone="lime" class="sm">Your pledge</${Chip}>`}${d.yours && html`<${Chip} tone="sky">Your idea</${Chip}>`}${flagged > 0 && html`<${Chip} tone="amber">Reported · ${flagged}</${Chip}>`}`;
   const barColor = selected ? "var(--lime)" : "rgba(235,235,245,.38)";
   const tr = trend(s, d.ticker);
   const sparkColor = selected ? "var(--lime)" : `hsl(${d.hue} 80% 68%)`;
@@ -173,7 +174,7 @@ function IdeaCard({ d, s, a, phone }) {
       <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:6px">
         <span class="row" style="flex-wrap:nowrap;justify-content:space-between;gap:8px"><span class="ellipsis" style="font-size:15px;font-weight:600">${d.name}</span><span class="row" style="flex:none;gap:8px;flex-wrap:nowrap">${tr && html`<${Spark} points=${tr.points} width=${44} height=${18} color=${sparkColor} />`}<span class="num" style="font-size:14px;font-weight:600">${sol(d.total)}</span>${said}</span></span>
         <${Bar} value=${d.share} color=${barColor} />
-        <span class="t2 num ellipsis" style="font-size:12px">${ticker(d.ticker)} · ${d.backersShown} backers${d.yours ? " · you" : d.by ? ` · @${person(d.by).name}` : ""}${d.mine ? " · your pledge" : ""}</span>
+        <span class="t2 num ellipsis" style="font-size:12px">${flagged > 0 ? html`<span style="color:#ffb340">Reported · ${flagged} · </span>` : ""}${ticker(d.ticker)} · ${d.backersShown} backers${d.yours ? " · you" : d.by ? ` · @${person(d.by).name}` : ""}${d.mine ? " · your pledge" : ""}</span>
       </span>
     </button>`;
   }
@@ -220,10 +221,17 @@ function Dock({ s, a, ideas, phone }) {
       : `No winner · every pledge refunded`;
     action = html`<${Chip} tone="amber" class="dock-chip" role="status">${text}</${Chip}>`;
   }
+  // The host removes an idea; anyone else can report one (not their own), once.
+  const host = manages(s) && s.live?.practice && t.canPledge;
+  const reported = !!s.reported[d.sel.ticker];
+  const flag = host
+    ? html`<${IconButton} label=${`Remove ${ticker(d.sel.ticker)} from the race`} tone="danger" size="sm" onClick=${() => a.askRemove(d.sel.id)}><${I.Close} size=${13} /></${IconButton}>`
+    : !d.sel.yours && t.canPledge && html`<${IconButton} label=${reported ? `${ticker(d.sel.ticker)} reported` : `Report ${ticker(d.sel.ticker)}`} size="sm" pressed=${reported} disabled=${reported} onClick=${() => a.askReport(d.sel.id)}><${I.Alert} size=${14} /></${IconButton}>`;
   return html`<section class="dock glass" aria-label="Your pledge">
     <div class="row" style="flex-wrap:nowrap;gap:12px;flex:1 1 260px;min-width:0">
       <${Coin} coin=${coin(d.sel)} size=${phone ? 40 : 48} />
-      <div class="who" style="min-width:0"><span style="font-size:16px;font-weight:600">${d.sel.name}</span><span class="t2 num ellipsis" style="font-size:13px">${d.sub}</span></div>
+      <div class="who" style="min-width:0;flex:1"><span style="font-size:16px;font-weight:600">${d.sel.name}</span><span class="t2 num ellipsis" style="font-size:13px">${d.sub}</span></div>
+      ${flag}
     </div>
     ${action}
   </section>`;

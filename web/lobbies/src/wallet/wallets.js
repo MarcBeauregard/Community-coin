@@ -109,3 +109,7 @@ export const WALLET_TINT = { phantom: "#ab9ff2", solflare: "#fc7227", backpack: 
 /** Whether a string is a Solana address (base58, 32 to 44 characters): the only kind we link to an explorer. */
 export const isAddress = (a) => typeof a === "string" && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a);
 export const explorerUrl = (mint) => `https://solscan.io/token/${mint}`;
+/** A transaction signature: 64 bytes in base58. */
+export const isSignature = (s) => typeof s === "string" && /^[1-9A-HJ-NP-Za-km-z]{86,88}$/.test(s);
+/** A transaction on Solscan; null for a cluster Solscan doesn't show (a local validator). */
+export const txUrl = (sig, cluster) => (isSignature(sig) && cluster ? `https://solscan.io/tx/${sig}${cluster === "mainnet" ? "" : `?cluster=${cluster}`}` : null);

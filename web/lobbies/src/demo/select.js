@@ -24,7 +24,7 @@ export function race(s) {
     rank: i + 1,
     share: Math.max(3, (d.total / max) * 100),
     mine: !!(s.pledge && s.pledge.id === d.id),
-    yours: d.by === ME,
+    yours: d.by === (s.live?.you ?? ME),
     backersShown: d.backers,
   }));
 }
@@ -208,4 +208,15 @@ export function profile(s) {
   let streak = open ? 1 : 0;
   for (const h of s.history) { if (!h.pledged) break; streak++; }
   return { you, clans, ideas: [...now, ...past], lobbies, streak, proposed: now.length + past.length };
+}
+
+/** What the network banner says, the most pressing first; null when all is well. */
+export function netState(n) {
+  if (n.offline) return "offline";
+  if (n.server === "down") return "down";
+  if (n.server === "reconnecting") return "reconnecting";
+  if (n.solana === "down") return "solanaDown";
+  if (n.slow) return "slow";
+  if (n.solana === "slow") return "solanaSlow";
+  return n.back ? "back" : null;
 }

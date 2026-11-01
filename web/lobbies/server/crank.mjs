@@ -35,7 +35,7 @@ export function clusterExecutor({ connection, programId, secretKey, lobbyId, min
         const done = await connection.confirmTransaction(sig);
         if (done.value.err) { console.error(`${op}: ${programError(done.value.err)}`); continue; }
         const sent = await connection.getTransaction(sig, { maxSupportedTransactionVersion: 0 });
-        events.push(...eventsFromLogs(sent?.meta?.logMessages));
+        events.push(...eventsFromLogs(sent?.meta?.logMessages).map((e) => ({ ...e, signature: sig }))); // where to verify it
       } catch (e) {
         console.error(`${op}: ${e.message}`);
       }

@@ -68,3 +68,9 @@ Hardening: `npm run test:load` (5,000 people in one lobby), `npm run test:a11y` 
 After launch: the app connects wallets (`npm run test:lobby-wallet`), plays the voice rooms through LiveKit
 (`npm run test:audio`, against a stand-in room), and draws the founder's birth card (`npm run test:card`). Live
 lobbies are practice lobbies until they run on Solana: pledges use practice SOL on the server, and say so.
+
+Round two of the experience (PLAN.md): the last five minutes and a one-tap move (`npm run test:finale`), the first
+minute (`test:intro`), each idea's curve and the hour replayed in 30 seconds (`test:replay`), the host's welcome,
+arrivals, live faces and stage reactions (`test:alive`), reminders (`test:remind`), the founder profile and sibling
+lobbies (`test:profile`), reporting and removing an idea (`test:moderate`), verifiable receipts and the network
+banner (`test:net`). The server takes `--welcome <text>` for the host's pinned welcome.
