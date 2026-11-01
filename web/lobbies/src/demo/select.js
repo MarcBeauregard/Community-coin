@@ -80,17 +80,23 @@ export function lobbyCards(s) {
 export function featured() { return FEATURED; }
 
 export function channels(s) {
+  const live = s.live && s.clan === "new";
   return CHANNELS.map((c) => {
-    const unread = s.read[c.id] ? 0 : c.unread;
+    const unread = live || s.read[c.id] ? 0 : c.unread; // live counts come from the clan, not the demo
     return { ...c, unread: c.id === s.channel ? 0 : unread, current: c.id === s.channel };
   });
 }
 
 export function currentClan(s) {
+  if (s.live) return s.clans.find((c) => c.id === "new") ?? null;
   return s.clans.find((c) => c.id === s.clan) || s.clans[0];
 }
 
 export function founders(s, clan) {
+  // Live, the clan's founders as the chain ranked them; the person is "you" at their own number.
+  if (s.live && clan.id === "new" && s.liveClan) {
+    return (s.liveClan.founders ?? []).map((f) => ({ who: f.user, me: f.user === s.liveClan.you, amount: Number(f.amount) / 1e9, rank: f.rank, online: f.user === s.liveClan.you }));
+  }
   const fresh = clan.fresh && s.launched && s.launched.founder;
   return [...FOUNDERS, [ME, fresh ? s.launched.myAmount : 1, fresh ? s.launched.rank : 212]].map(([who, amount, rank], i) => ({
     who, amount, rank, online: i < 4 || who === ME,

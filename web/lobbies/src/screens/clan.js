@@ -172,7 +172,7 @@ function ChannelList({ s, a, phone }) {
 function FounderRow({ f }) {
   return html`<span class="member">
     <${Avatar} person=${person(f.who)} size=${34} status=${f.online ? "#30d158" : "rgba(235,235,245,.3)"} />
-    <span style="flex:1;min-width:0;display:flex;flex-direction:column"><span style="font-size:14px;font-weight:500">${person(f.who).name}</span><span class="t2 num" style="font-size:12px">pledged ${f.amount} SOL</span></span>
+    <span style="flex:1;min-width:0;display:flex;flex-direction:column"><span style="font-size:14px;font-weight:500">${f.me ? "you" : person(f.who).name}</span><span class="t2 num" style="font-size:12px">pledged ${sol(f.amount)}</span></span>
     <span class="t2 num" style="font-size:12px;font-weight:600">#${f.rank}</span>
   </span>`;
 }
@@ -182,7 +182,7 @@ function PhoneClanList({ s, a, k }) {
   return html`<div class="clan-list scroll screen" style=${{ background: `radial-gradient(60% 35% at 50% 0%, hsla(${k.hue},90%,55%,.09), transparent 70%), #000` }}>
     <h1 class="display large-title" style="margin:20px 20px 14px">Clans</h1>
     <div class="hscroll" style="gap:12px;padding:4px 20px 14px" role="group" aria-label="Your clans">
-      ${s.clans.map((c) => html`<button type="button" key=${c.id} class="rail-btn" aria-label=${`${ticker(c.ticker)} clan`} aria-current=${c.id === k.id ? "page" : undefined}
+      ${(s.live ? s.clans.filter((c) => c.id === "new") : s.clans).map((c) => html`<button type="button" key=${c.id} class="rail-btn" aria-label=${`${ticker(c.ticker)} clan`} aria-current=${c.id === k.id ? "page" : undefined}
         style=${{ width: "56px", height: "56px", flex: "none", borderRadius: c.id === k.id ? "16px" : "50%", boxShadow: c.id === k.id ? "0 0 0 2px #000, 0 0 0 4px #f5f5f7" : "none", overflow: "hidden" }} onClick=${() => a.openClan(c.id)}>
         <${Coin} coin=${coin(c)} size=${56} /></button>`)}
     </div>
@@ -223,13 +223,21 @@ function PhoneClanList({ s, a, k }) {
 
 export function Clan({ s, a, phone }) {
   const k = currentClan(s);
+  // Live with no clan yet: say how to get one, nothing borrowed from the demo.
+  if (!k) {
+    return html`<main class="screen" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;padding:32px;text-align:center">
+      <h1 class="display" style="font-size:28px">Clans</h1>
+      <p class="t2" style="font-size:15px;line-height:1.5;max-width:420px">No clan yet. Back the idea that wins a lobby: at the launch you become one of its founders, with a room that never closes.</p>
+      <${Button} variant="white" size="lg" onClick=${() => a.go({ screen: "lobby" })}>Go to the lobby</${Button}>
+    </main>`;
+  }
   if (phone) return s.clanView === "chat" ? html`<${Conversation} s=${s} a=${a} k=${k} phone />` : html`<${PhoneClanList} s=${s} a=${a} k=${k} />`;
   const people = campfirePeople(s);
   return html`<div class="clan screen">
     <nav class="rail scroll" aria-label="Your clans">
       <button type="button" class="rail-btn" aria-label="Lobbies" style="background:var(--fill);display:flex;align-items:center;justify-content:center" onClick=${() => a.go({ screen: "discover" })}><${I.Logo} size=${24} /></button>
       <span style="width:28px;height:1px;background:rgba(255,255,255,.1)" />
-      ${s.clans.map((c) => html`<span key=${c.id} class="rail-item">
+      ${(s.live ? s.clans.filter((c) => c.id === "new") : s.clans).map((c) => html`<span key=${c.id} class="rail-item">
         <span class="pill" style=${{ height: c.id === k.id ? "36px" : c.unread ? "8px" : "0" }} />
         <button type="button" class="rail-btn" aria-label=${`${ticker(c.ticker)} clan`} aria-current=${c.id === k.id ? "page" : undefined} style="overflow:hidden;border-radius:50%" onClick=${() => a.openClan(c.id)}><${Coin} coin=${coin(c)} size=${48} /></button>
       </span>`)}

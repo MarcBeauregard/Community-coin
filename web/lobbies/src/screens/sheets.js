@@ -86,6 +86,7 @@ const WHY = {
   chat: "Connect a wallet to chat.",
   speak: "Connect a wallet to speak on stage.",
   clan: "Connect the wallet you pledged with to enter your clan.",
+  switched: "You switched accounts in your wallet, so you were signed out. Connect to continue with the new one.",
   pledge: "Connect a wallet to pledge. Each wallet gets 10 practice SOL here; none of your own SOL moves.",
 };
 

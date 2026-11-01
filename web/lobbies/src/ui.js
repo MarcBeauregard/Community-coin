@@ -92,6 +92,10 @@ export function Sheet({ title, labelledBy, onClose, busy, refocus, children }) {
     // Forms start in their first field; other sheets take focus themselves, so no button is armed by accident.
     const field = el && el.querySelector("input, textarea");
     (field || el).focus();
+    // The second click of a double click lands behind the sheet: drop whatever it selected there.
+    const clear = () => window.getSelection?.()?.removeAllRanges();
+    clear();
+    setTimeout(clear, 300);
     // Closed, the sheet gives focus back to what opened it; if that is gone (Connect became the wallet), to what
     // replaced it, else to the screen's heading.
     return () => setTimeout(() => {

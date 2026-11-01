@@ -267,7 +267,7 @@ export function createStore({ scene, freeze } = {}) {
     const you = s.liveClan?.you;
     switch (m.t) {
       case "hello":
-        set({ liveClan: { connected: true, you: m.you, role: m.role, rank: m.rank, mods: m.mods, mutedUntil: m.mutedUntil, campfire: m.campfire },
+        set({ liveClan: { connected: true, you: m.you, role: m.role, rank: m.rank, mods: m.mods, mutedUntil: m.mutedUntil, campfire: m.campfire, founders: m.founderList ?? [], count: m.founders },
           clanMessages: Object.fromEntries(m.channels.map((c) => [c.id, c.lines.map((l) => lineToMessage(l, m.you))])) });
         break;
       case "post": {
@@ -351,6 +351,7 @@ export function createStore({ scene, freeze } = {}) {
     },
     go(route) { set({ route, sheet: null }); },
     openClan(id) {
+      if (state.live && id !== "new") id = "new"; // live, the only clan is the one this wallet founded
       set((s) => ({ route: { screen: "clan" }, clan: id, clanView: "list", sheet: null, clans: s.clans.map((c) => (c.id === id ? { ...c, unread: 0 } : c)) }));
       const mint = state.launched?.mint;
       if (id === "new" && mint && server && state.launched.founder && !clanLink) {
@@ -409,7 +410,10 @@ export function createStore({ scene, freeze } = {}) {
       setWallet({ status: "connected", id: w.id, name: w.name, address, signedIn, error: null });
       unwatch();
       unwatch = watchWallet(w, {
-        onAccount: (next) => { if (next !== state.wallet.address) signedOut(`You switched accounts in ${w.name}. Connect again to use the new one.`); },
+        onAccount: (next) => {
+          if (next === state.wallet.address) return;
+          signedOut().then(() => actions.openConnect("switched"));
+        },
         onDisconnect: () => signedOut(`${w.name} disconnected.`),
       });
       if (rpc) readBalance(rpc, address).then((b) => { if (state.wallet.address === address) setWallet({ balance: b }); });

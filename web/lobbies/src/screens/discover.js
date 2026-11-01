@@ -116,8 +116,7 @@ function LobbyAction({ l, s, a, compact }) {
 }
 
 function ThisHour({ s, a, phone }) {
-  // Live, only the lobbies that exist on the server; the demo's others are for the demo.
-  const cards = s.live ? lobbyCards(s).filter((c) => c.id === FEATURED.id) : lobbyCards(s);
+  const cards = lobbyCards(s);
   const search = html`<label class="search" style=${phone ? "" : "width:240px;max-width:100%"}>
     <${I.Search} size=${15} /><span class="sr">Search lobbies</span>
     <input type="search" value=${s.query} placeholder="Search" onInput=${(e) => a.setQuery(e.currentTarget.value)} />
@@ -224,7 +223,7 @@ export function Discover({ s, a, phone }) {
       ${phone && html`<h1 class="display large-title" style="position:relative">Lobbies</h1>`}
       <${Hero} s=${s} a=${a} phone=${phone} />
       ${!phone && html`<${HowItWorks} />`}
-      <${ThisHour} s=${s} a=${a} phone=${phone} />
+      ${!s.live && html`<${ThisHour} s=${s} a=${a} phone=${phone} />`}
       <${YourClans} s=${s} a=${a} phone=${phone} />
       <footer class="t2" style="position:relative;font-size:12px;line-height:1.5;padding:8px 4px 32px;display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center">
         <span>Memecoins are speculative and can lose all their value. Not investment advice.</span>

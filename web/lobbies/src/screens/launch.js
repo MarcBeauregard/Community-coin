@@ -35,7 +35,7 @@ export function Launch({ s, a, phone }) {
         ${phone
           ? html`<${IconButton} label="Back to lobbies" size="sm" onClick=${() => a.go({ screen: "discover" })}><${I.Back} size=${15} /></${IconButton}>`
           : html`<${Button} variant="ghost" size="sm" onClick=${() => a.go({ screen: "discover" })}><${I.Back} size=${14} />Lobbies</${Button}>`}
-        <span class="t2 num" style="font-size:13px;font-weight:600">Lobby #${FEATURED.number} · minted at 01:00:00</span>
+        <span class="t2 num" style="font-size:13px;font-weight:600">Lobby #${FEATURED.number} · launched at 01:00</span>
       </div>
       <div class="launch-main">
         <div class="launch-art">
@@ -49,7 +49,7 @@ export function Launch({ s, a, phone }) {
           <span class="row" style="gap:8px"><${Chip} tone="lime" live>Just launched</${Chip}><${Chip} tone="amber">Practice launch</${Chip}></span>
           <h1 class="display">${ticker(win.ticker)}<br />is alive.</h1>
           <p class="t2" style=${{ fontSize: phone ? "15px" : "18px", lineHeight: 1.5, maxWidth: "500px" }}>
-            ${win.name} won ${s.ideas.length} ideas and one hour of pitches. Its ${int(l.backers)} founders now share a clan that never closes.
+            ${win.name} beat ${s.ideas.length - 1} other ${s.ideas.length - 1 === 1 ? "idea" : "ideas"} in an hour of pitches. Its ${int(l.backers)} founders now share a clan that never closes.
           </p>
           <dl class="stats">
             <div><dt class="t2" style="font-size:13px;font-weight:600">Raised</dt><dd class="num">${sol(l.sol)}</dd></div>

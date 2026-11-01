@@ -121,7 +121,7 @@ export function createClanRoom({ mint, clans, media, store = memoryStore(), onVo
       conns.set(connId, { user: session.sub, send, tokens: rate.burst, at: now(), lastPost: -Infinity });
       const c = clan();
       return { t: "hello", mint, name: c.name, symbol: c.symbol, you: session.sub, role: roleOf(session.sub), rank: rankOf(session.sub),
-        founders: c.founders.size, mods: [...mods], mutedUntil: muted.get(session.sub) ?? 0, campfire: [...campfire],
+        founders: c.founders.size, founderList: clans.toJSON(mint).founders.slice(0, 100), mods: [...mods], mutedUntil: muted.get(session.sub) ?? 0, campfire: [...campfire],
         channels: CHANNELS.map((ch) => ({ id: ch, slowSec: channels.get(ch).slowSec, lines: page(ch, session.sub) })) };
     },
     leave(connId) {
