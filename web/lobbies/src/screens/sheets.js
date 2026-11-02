@@ -60,7 +60,7 @@ function ProposeSheet({ s, a }) {
       ${taken && html`<span id="ticker-err" class="err">${ticker(form.ticker)} is already in the race. Pick another ticker.</span>`}
     </label>
     <label class="field"><span class="lbl"><span>One-line pitch</span><span class="num" style="font-weight:500">${form.pitch.length}/90</span></span>
-      <textarea class="inp" maxLength=${90} placeholder="Why should 1,284 people back it?" value=${form.pitch} onInput=${(e) => setForm({ ...form, pitch: e.currentTarget.value })} /></label>
+      <textarea class="inp" maxLength=${90} placeholder="Why should the lobby back it?" value=${form.pitch} onInput=${(e) => setForm({ ...form, pitch: e.currentTarget.value })} /></label>
     <div class="field"><span class="lbl">Color</span>
       <div class="row" role="group" aria-label="Coin color">${HUES.map(([hue, label]) => html`<button type="button" key=${hue} aria-label=${label} aria-pressed=${String(form.hue === hue)} onClick=${() => setForm({ ...form, hue })}
         style=${{ width: "36px", height: "36px", borderRadius: "50%", background: `radial-gradient(circle at 32% 24%, hsl(${hue} 100% 90%), hsl(${hue} 72% 48%))`, boxShadow: form.hue === hue ? "0 0 0 2px #000, 0 0 0 4px #f5f5f7" : "none" }} />`)}</div>
@@ -314,7 +314,7 @@ function ReplaySheet({ s, a }) {
       ${video
         ? html`<${Button} size="lg" onClick=${save}>Save video</${Button}>
             ${canShare && html`<${Button} variant="prim" size="lg" style="flex:1.4" onClick=${share}><${I.Share} size=${17} />Share…</${Button}>`}`
-        : html`${!recording && html`<${Button} size="lg" disabled=${!r} onClick=${toggle}>`}${playing ? html`Pause` : html`<${I.Play} size=${15} />${progress > 0 && progress < 1 ? "Resume" : "Play"}`}</${Button}>`}
+        : html`${!recording && html`<${Button} size="lg" disabled=${!r} onClick=${toggle}>${playing ? html`Pause` : html`<${I.Play} size=${15} />${progress > 0 && progress < 1 ? "Resume" : "Play"}`}</${Button}>`}
             ${canRecord && html`<${Button} variant="prim" size="lg" style="flex:1.4" disabled=${!r || recording} onClick=${record}>${recording ? `Recording… ${left} s` : "Make a video"}</${Button}>`}`}
     </div>`;
 }

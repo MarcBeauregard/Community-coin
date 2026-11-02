@@ -25,8 +25,10 @@ const check = (cond, msg) => { if (cond) console.log(`  ok  ${msg}`); else { fai
   check(at(3100, { pledge: { symbol: "C", amount: 2 } }).nudge?.text === "$C is 3rd. Move your 2.0 SOL to $A?", "a pledge out of the top two is offered a move to the leader");
   check(at(3100, { pledge: { symbol: "B", amount: 2 } }).nudge === null, "a pledge in the top two is left alone");
   check(at(3100, { pledge: { symbol: "C", amount: 2 }, nudgeOff: "C" }).nudge === null, "set aside, the offer stays away for that pledge");
-  const tie = finale({ elapsed: 3100, launched: null, pledge: null }, [{ ...ideas[0], total: 5 }, { ...ideas[1], total: 5.01 }]);
-  check(tie.tied && tie.text === "$A and $B are tied", "a gap under 0.1 SOL reads as a tie");
+  const tie = finale({ elapsed: 3100, launched: null, pledge: null }, [{ ...ideas[0], total: 5 }, { ...ideas[1], total: 5 }]);
+  check(tie.tied && tie.text === "$A and $B are tied: the idea proposed first wins a tie", "a tie to the lamport says so, and who wins it");
+  const near = finale({ elapsed: 3100, launched: null, pledge: null }, [{ ...ideas[0], total: 5.04 }, { ...ideas[1], total: 5 }]);
+  check(!near.tied && near.text === "$A leads $B by 0.04 SOL", "a near tie is a lead, shown exactly");
 }
 
 const dist = join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "lobbies");
@@ -74,6 +76,7 @@ const visible = (loc) => loc.first().waitFor({ timeout: 3000 }).then(() => true,
   const page = await open("?freeze&scene=lobby-finale");
   const panel = page.getByRole("region", { name: "Final minutes" });
   check(await visible(panel), "at 00:51 the ideas open on the final minutes");
+  check(await page.getByRole("status").filter({ hasText: /^Final minutes: pledges lock in 4:00\. \$WIF leads \$POPCAT by 52\.6 SOL\. \$BRETT is 4th/ }).count() === 1, "a screen reader hears them start, with the offer");
   check(await panel.getByText("$WIF leads $POPCAT by 52.6 SOL").isVisible(), "with the live gap between the top two");
   check(await page.getByRole("timer", { name: "Pledges lock in 04:00" }).isVisible(), "the clock now counts to the lock");
   check(await panel.getByText("$BRETT is 4th. Move your 2.0 SOL to $WIF?").isVisible(), "a pledge in 4th is offered a move to the leader");
@@ -86,8 +89,11 @@ const visible = (loc) => loc.first().waitFor({ timeout: 3000 }).then(() => true,
 }
 {
   const page = await open("?freeze&scene=lobby-finale");
-  await page.getByRole("button", { name: "Keep it" }).click();
-  check(await page.getByText(/Move your/).count() === 0 && await page.getByText(/Backing with 2\.0 SOL/).isVisible(), "Keep it sets the offer aside, the pledge stays where it was");
+  await page.getByRole("button", { name: "Keep it" }).focus();
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(100);
+  check(await page.evaluate(() => document.activeElement?.classList.contains("finale")), "Keep it by keyboard: the focus stays in the panel");
+  check(await page.locator(".finale").getByText(/Move your/).count() === 0 && await page.getByText(/Backing with 2\.0 SOL/).isVisible(), "Keep it sets the offer aside, the pledge stays where it was");
   await page.context().close();
 }
 {

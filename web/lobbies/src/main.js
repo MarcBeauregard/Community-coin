@@ -139,6 +139,7 @@ function App() {
 const NET = {
   offline: ["amber", "You’re offline. The lobby catches up when you’re back."],
   down: ["amber", "Can’t reach the lobby server. Still trying."],
+  gone: ["amber", "The lobby closed this connection. Reload the page to come back in."],
   reconnecting: ["sky", "Reconnecting to the lobby…"],
   solanaDown: ["amber", "Solana isn’t answering. Your balance may be out of date."],
   slow: ["sky", "The lobby is slow right now. Numbers may lag a few seconds."],

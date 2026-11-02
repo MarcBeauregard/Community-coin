@@ -40,12 +40,13 @@ const conn = (who) => {
   const c = connectLobby({ base, lobby: 412, token: server.auth.issue(who), onMessage: (m) => got.push(m) });
   return { c, got, last: (t) => got.filter((m) => m.t === t).pop() };
 };
-const ana = conn("ana"), cleo = conn("cleo"), ben = conn("ben"), host = conn("mira.sol");
+const ana = conn("ana"), cleo = conn("cleo"), ben = conn("ben"), host = conn("mira.sol"), cleoTab2 = conn("cleo");
 await wait(200);
 ana.c.practice("propose", { symbol: "PIGW", name: "Pigeon Wizard" });
 await wait(100);
 cleo.c.practice("pledge", { symbol: "PIGW", amount: String(2n * SOL) });
 await wait(150);
+check(cleoTab2.last("mine") && BigInt(cleoTab2.last("mine").balance) === 8n * SOL && cleoTab2.last("mine").mine?.symbol === "PIGW", "Cleo's other tab follows her pledge");
 check(BigInt(cleo.last("practice").balance) === 8n * SOL && BigInt(ana.last("practice").balance) === 10n * SOL - source.chain.lobby.bond, "before: Cleo has 2 SOL on $PIGW, Ana's bond is in");
 
 // ------------------------------------------------------------------ reports
@@ -98,10 +99,14 @@ check(!late.last("hello").race.some((r) => r.symbol === "PIGW"), "and a late joi
   const dlg = hostPage.getByRole("dialog", { name: "Remove this idea?" });
   check(await dlg.getByText(/1\.0 SOL from 1 backer · reported by 1/).isVisible() && await dlg.getByText(/Every pledge on it is refunded now/).isVisible(), "removing says what happens to the money first");
   await dlg.getByRole("button", { name: "Remove $FROG" }).click();
+  await dlg.getByRole("button", { name: "Remove $FROG" }).click({ timeout: 300 }).catch(() => {}); // a double click
+  await hostPage.waitForTimeout(400);
+  check(await hostPage.evaluate(() => !/Remove/.test(document.activeElement?.getAttribute("aria-label") ?? document.activeElement?.textContent ?? "")), "after removing, the focus is not on another idea's Remove");
+  check(await hostPage.getByText("That idea is no longer in the race.").count() === 0, "a double click removes once, without a false error");
   check(await visible(hostPage.getByText("$FROG is out of the race. Everyone on it is refunded.")), "the host is told it's done");
   check(await hostPage.locator(".idea", { hasText: "Frog Prince" }).count() === 0, "and it's gone from the race");
-  check(await visible(cleoPage.getByText("The host removed $FROG from the race. Pledges on it are refunded.")), "Cleo is told why it went");
-  check(await visible(cleoPage.getByText("1.0 SOL back from $FROG"), 6000), "and that her SOL is back");
+  check(await visible(cleoPage.getByText("The host removed $FROG: your 1.0 SOL is back.")), "Cleo is told why it went, and her own amount");
+  check(await cleoPage.getByText("The host removed $FROG from the race. Pledges on it are refunded.").count() === 0, "not a generic line on top of it");
   check(hostPage.errors.length + cleoPage.errors.length === 0, `no script errors${[...hostPage.errors, ...cleoPage.errors].join(" | ")}`);
   await hostPage.close(); await cleoPage.close();
 }
@@ -121,7 +126,7 @@ check(!late.last("hello").race.some((r) => r.symbol === "PIGW"), "and a late joi
   await page.close();
 }
 
-[ana, cleo, ben, host, late].forEach((x) => x.c.close());
+[ana, cleo, ben, host, late, cleoTab2].forEach((x) => x.c.close());
 g.close();
 await server.close();
 await browser.close();

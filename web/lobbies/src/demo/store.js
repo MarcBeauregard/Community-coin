@@ -6,7 +6,7 @@
 // Scenes (`?scene=`) seed deterministic states for screenshots and tests; `?freeze` stops the clock.
 
 import { CLANS, CROWD, CHATTER, ME, seedClanMessages, seedLobbyChat, message, FEATURED, DEMO_HISTORY } from "./data.js";
-import { HOUR, sol } from "../format.js";
+import { HOUR, sol, solExact } from "../format.js";
 import { connectLobby, connectClan, voiceToken, walletSession, guestSession } from "../realtime/client.js";
 import { createAudio } from "../voice/audio.js";
 import { detectWallets, connectWallet, signText, disconnectWallet, lastWallet, watchWallet, walletError, shortAddress, readBalance } from "../wallet/wallets.js";
@@ -113,6 +113,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
   const set = (patch) => {
     const before = state;
     state = { ...state, ...(typeof patch === "function" ? patch(state) : patch) };
+    if (state.pledge) lastBacked = state.pledge.symbol;
     // Live, the history is the signed-in wallet's, from this device (none for a guest).
     const who = state.wallet.address;
     if (state.live && (!before.live || who !== before.wallet.address)) state = { ...state, history: who ? loadHistory(who) : [] };
@@ -128,9 +129,14 @@ export function createStore({ scene, freeze, live = false } = {}) {
     later(() => { if (state.toast && state.toast.id === mine) set({ toast: null }); }, 2800);
   };
   const chatLine = (line) => [...state.chat, line].slice(-60);
+  let settledEarly = null; // this wallet's refund, when it came before the launch
+  let lastBacked = null; // the idea this person last had SOL on (a refund's message may not say)
+  let pendingTimer = null;
   const hiddenWelcome = (text) => { try { return !!text && localStorage.getItem("lobbies.welcomeOff") === text; } catch { return false; } };
   // Reactions over the stage: a few at a time fly up and go; the counts keep what flew.
   let cheerId = 0;
+  let lastCheer = 0;
+  let removing = null;
   function flyCheers(fire, skull) {
     const fresh = [...Array(Math.min(fire, 6)).fill("fire"), ...Array(Math.min(skull, 4)).fill("skull")]
       .map((kind, i) => ({ id: ++cheerId, kind, x: 8 + Math.random() * 84, delay: i * 90 }));
@@ -258,7 +264,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
         break;
       case "launch":
         // The launch screen opens if the person was in the lobby, or had it open before a reload.
-        set({ launched: liveLaunch(m, s.locked?.total ?? 0), route: s.route.screen === "lobby" || wantScreen === "launch" ? { screen: "launch" } : s.route, sheet: null });
+        set({ launched: { ...liveLaunch(m, s.locked?.total ?? 0), ...(settledEarly ?? {}) }, route: s.route.screen === "lobby" || wantScreen === "launch" ? { screen: "launch" } : s.route, sheet: null });
         if (wantScreen === "launch") wantScreen = null; // a wanted clan waits for this wallet's settlement
         break;
       case "settled": {
@@ -276,14 +282,19 @@ export function createStore({ scene, freeze, live = false } = {}) {
           if (wantScreen === "clan") { wantScreen = null; actions.openClan("new"); } // reloaded on the clan: back in it
         } else if (m.kind === "refund") {
           if (wantScreen === "clan") { wantScreen = null; set({ route: { screen: "clan" } }); }
-          set({ launched: l && { ...l, refund: amount, myAmount: amount } });
+          // A refund comes at the lock, before the launch: kept until the launch shows it, with the idea backed.
+          const backed = (m.symbol ?? lastBacked)?.toLowerCase() ?? null;
+          settledEarly = { refund: amount, myAmount: amount, myId: backed };
+          set({ launched: l && { ...l, ...settledEarly } });
           toast(`${sol(amount)} refunded to your wallet`, "white");
         }
         break;
       }
+      case "mine": set({ pledge: liveMine(m), balance: toSol(BigInt(m.balance ?? "0")) }); break; // another tab of this person
       case "practice": {
         const op = pending;
         pending = null;
+        clearTimeout(pendingTimer);
         const patch = { signing: false, pledge: liveMine(m), balance: toSol(BigInt(m.balance ?? "0")) };
         if (!m.ok) {
           set({ ...patch, sheet: op?.op === "pledge" ? null : state.sheet });
@@ -323,7 +334,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
         break;
       }
       case "reports": set({ live: { ...s.live, reports: m.reports } }); break;
-      case "reported": set({ reported: { ...s.reported, [m.symbol]: true } }); toast(`Reported. The host will look at $${m.symbol}.`, "white"); break;
+      case "reported": set({ reported: { ...s.reported, [m.symbol]: true } }); if (!m.quiet) toast(`Reported. The host will look at $${m.symbol}.`, "white"); break;
       case "removed": {
         const ideas = raceIdeas(m.race, s.meta);
         const gone = !ideas.some((d) => d.id === s.selected);
@@ -338,7 +349,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
       case "refunded": {
         const amount = toSol(BigInt(m.amount)), bond = toSol(BigInt(m.bond));
         set({ pledge: liveMine(m), balance: toSol(BigInt(m.balance ?? "0")) });
-        toast(`The host removed $${m.symbol}: ${[amount ? `your ${sol(amount)} is back` : "", bond ? `your ${sol(bond)} bond is back` : ""].filter(Boolean).join(", and ")}.`, "white");
+        toast(`The host removed $${m.symbol}: ${[amount ? `your ${solExact(amount)} is back` : "", bond ? `your ${solExact(bond)} bond is back` : ""].filter(Boolean).join(", and ")}.`, "white");
         break;
       }
       case "cheers": flyCheers(Math.max(0, m.fire | 0), Math.max(0, m.skull | 0)); break;
@@ -353,7 +364,12 @@ export function createStore({ scene, freeze, live = false } = {}) {
         if (m.code === "SignInToChat" || m.code === "SignInToSpeak") actions.openConnect(m.code === "SignInToChat" ? "chat" : "speak");
         else toast(LIVE_ERRORS[m.code] || m.code, "error");
         break;
-      case "closed": if (s.live) set({ live: { ...s.live, connected: false } }); linkLost(); break;
+      case "closed":
+        if (s.live) set({ live: { ...s.live, connected: false } });
+        // The server refused this session (signed out, unknown lobby): no reconnection is coming.
+        if (m.code >= 4400 && m.code < 4500 && m.code !== 4408) { clearTimeout(downTimer); setNet({ server: "gone", back: false }); }
+        else linkLost();
+        break;
       case "pong": {
         const rtt = Date.now() - (m.echo ?? Date.now());
         if (state.net.offline || m.echo < quietUntil - 5000 || Date.now() < quietUntil) break;
@@ -476,7 +492,16 @@ export function createStore({ scene, freeze, live = false } = {}) {
   }
 
   // Live on a practice lobby, the money goes to the server's lobby (shared, kept, settled at the launch).
-  const practiceLive = () => !!(link && state.live?.practice);
+  // Live practice money goes to the lobby's server: one operation at a time, and never into a link that is down
+  // (it would wait in a queue and land minutes later). An answer that doesn't come in 10 s frees the sheet.
+  const practiceLive = () => {
+    if (!(link && state.live?.practice)) return false;
+    if (pending) return null; // a double click: the first one is on its way
+    if (state.net.offline || state.net.server !== "ok") { toast(state.net.offline ? "You’re offline. Try again when you’re back." : "The lobby server can’t be reached right now. Try again in a moment.", "error"); return null; }
+    clearTimeout(pendingTimer);
+    pendingTimer = setTimeout(() => { if (pending) { pending = null; set({ signing: false }); toast("The lobby didn’t answer. Check your pledge before trying again.", "error"); } }, 10000);
+    return true;
+  };
   const signedLive = () => !!(state.live && (!state.live.guest || state.wallet.signedIn));
   let pending = null; // the practice operation waiting for the server's answer
   let wantScreen = null; // a screen the address asked for that needs the server first (#/launch after a reload)
@@ -619,7 +644,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
       const k = state.clans.find((c) => c.id === state.clan);
       if (!k || state.live) return;
       actions.hostLobby({ name, theme, opens, clan: k.id });
-      set((s) => ({ clanMessages: { ...s.clanMessages, [s.channel]: [...(s.clanMessages[s.channel] || []), message(ME, `I opened a sibling lobby for $${k.ticker}: ${name}, at ${opens}. Founders, come pitch.`)] } }));
+      set((s) => ({ clanMessages: { ...s.clanMessages, "next-lobby": [...(s.clanMessages["next-lobby"] || []), message(ME, `I opened a sibling lobby for $${k.ticker}: ${name}, at ${opens}. Founders, come pitch.`)] } }));
     },
 
     // Voice on the lobby stage.
@@ -682,7 +707,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
     select(id) { set({ selected: id }); },
     setAmount(amount) { set({ amount }); },
     proposeIdea({ name, ticker, pitch, hue }) {
-      if (practiceLive()) {
+      const pl = practiceLive(); if (pl === null) return; if (pl) {
         if (!signedLive()) return actions.openConnect("pledge");
         pending = { op: "propose", ticker, name, hue, pitch };
         return link.practice("propose", { symbol: ticker, name });
@@ -697,7 +722,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
       toast(`$${ticker} is in the race. Back it to give it a start.`, "sky");
     },
     confirmPledge() {
-      if (practiceLive()) {
+      const pl = practiceLive(); if (pl === null) return; if (pl) {
         if (!signedLive()) return actions.openConnect("pledge");
         const idea = selectedIdea();
         set({ signing: true });
@@ -720,7 +745,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
     withdraw() {
       const p = state.pledge;
       if (!p || state.signing) return;
-      if (practiceLive()) { set({ signing: true }); pending = { op: "withdraw", amount: p.amount }; return link.practice("withdraw", { symbol: p.symbol, amount: String(p.lamports) }); }
+      const pl = practiceLive(); if (pl === null) return; if (pl) { set({ signing: true }); pending = { op: "withdraw", amount: p.amount }; return link.practice("withdraw", { symbol: p.symbol, amount: String(p.lamports) }); }
       const r = act(state.chain, "withdraw", { user: ME, symbol: p.symbol, amount: p.lamports }, state.elapsed);
       if (!r.ok) return toast(errorText(r.error), "error");
       set((s) => ({ balance: s.balance + p.amount, pledge: myPledge(s.chain), ideas: shownIdeas(s), sheet: null, receipt: r.receipt, receipts: [r.receipt, ...s.receipts] }));
@@ -731,13 +756,16 @@ export function createStore({ scene, freeze, live = false } = {}) {
       const idea = (to && state.ideas.find((i) => i.id === to)) || selectedIdea();
       if (!p || idea.ticker === p.symbol) return;
       if (to) set({ selected: idea.id });
-      if (practiceLive()) { pending = { op: "move", symbol: idea.ticker, amount: p.amount }; return link.practice("move", { from: p.symbol, to: idea.ticker }); }
+      const pl = practiceLive(); if (pl === null) return; if (pl) { pending = { op: "move", symbol: idea.ticker, amount: p.amount }; return link.practice("move", { from: p.symbol, to: idea.ticker }); }
       const r = act(state.chain, "move_pledge", { user: ME, from: p.symbol, to: idea.ticker }, state.elapsed);
       if (!r.ok) return toast(errorText(r.error), "error");
       set((s) => ({ pledge: myPledge(s.chain), ideas: shownIdeas(s), receipt: r.receipt, receipts: [r.receipt, ...s.receipts] }));
       toast(`Moved your ${sol(p.amount)} to $${idea.ticker}`);
     },
     cheer(kind) {
+      // As fast as the server counts them (4 a second): every one that flies here is one the others see.
+      if (Date.now() - lastCheer < 250) return;
+      lastCheer = Date.now();
       flyCheers(kind === "fire" ? 1 : 0, kind === "skull" ? 1 : 0);
       if (link) link.cheer(kind);
     },
@@ -754,7 +782,9 @@ export function createStore({ scene, freeze, live = false } = {}) {
     },
     removeIdea(id) {
       const idea = state.ideas.find((d) => d.id === id);
-      if (idea && link) link.remove(idea.ticker);
+      if (!idea || !link || removing === idea.ticker) return; // a double click removes once
+      removing = idea.ticker;
+      link.remove(idea.ticker);
     },
     hideWelcome() { set({ welcomeOff: true }); try { localStorage.setItem("lobbies.welcomeOff", state.welcome?.text ?? ""); } catch {} },
     introNext() { set((s) => ({ intro: s.intro === null ? null : s.intro + 1 })); },

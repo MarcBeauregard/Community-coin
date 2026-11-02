@@ -77,7 +77,7 @@ const sheet = (page) => page.getByRole("dialog", { name: "Remind me" });
   await card.getByRole("button", { name: /Remind/ }).click();
   check(await sheet(page).isVisible(), "Remind opens the reminder sheet");
   check(await sheet(page).getByText(/Opens today at (0?9:00 PM|21:00) · hosted by @pixel/).isVisible(), "it says when the lobby opens");
-  check(await sheet(page).getByText("From this page: keep a tab of it open.", { exact: false }).isVisible(), "and, honestly, what a notification from a page can do");
+  check(await sheet(page).getByText("Sent by this page, so keep it open in a tab.", { exact: false }).isVisible(), "and, honestly, what a notification from a page can do");
   await sheet(page).getByRole("button", { name: "Notify me" }).click();
   check(await sheet(page).getByText(/Notification at (0?8:55 PM|20:55)/).isVisible(), "allowed: the notification is set for 5 minutes before");
   await page.keyboard.press("Escape");

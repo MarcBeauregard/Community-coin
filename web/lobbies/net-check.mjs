@@ -67,12 +67,16 @@ const banner = (page) => page.locator(".net-wrap");
   await visible(page.getByText(/1 person inside|2 people inside/));
   await wait(300);
   const room = server.rooms.get("412");
-  room.announce([{ event: "Launched", mint: "Mint111111111111111111111111111111111111111", symbol: "WIF", name: "dogwifhat" }, { event: "LobbyLaunched", mint: "Mint111111111111111111111111111111111111111", idea: 0, pot: 171n * 10n ** 9n, founders: 398 },
-    { event: "PledgeRefunded", user: "ana", amount: 10n ** 9n, signature: SIG }, { event: "PledgeRefunded", user: "cleo", amount: 2n * 10n ** 9n, signature: SIG }]);
+  // Refunds come at the lock, the launch five minutes later.
+  room.announce([{ event: "PledgeRefunded", user: "ana", amount: 10n ** 9n, signature: SIG }, { event: "PledgeRefunded", user: "cleo", amount: 2n * 10n ** 9n, signature: SIG }]);
+  await wait(300);
+  room.announce([{ event: "Launched", mint: "Mint111111111111111111111111111111111111111", symbol: "WIF", name: "dogwifhat" }, { event: "LobbyLaunched", mint: "Mint111111111111111111111111111111111111111", idea: 0, pot: 171n * 10n ** 9n, founders: 398 }]);
   await wait(200);
   const settled = got.find((m) => m.t === "settled");
   check(settled?.signature === SIG && settled.cluster === "devnet", "on a cluster, the settlement carries its transaction and cluster");
   check(await visible(page.getByRole("link", { name: /View on Solscan/ })), "the launch screen links the person's refund on Solscan");
+  check(await page.getByText("Your 2.0 SOL is back in your wallet").isVisible() && await page.getByText("You watched this one from the stands").count() === 0, "a refund that came before the launch is kept: never 'watched from the stands'");
+  check(await page.getByText("Practice launch").count() === 0, "a launch on a cluster is not called practice");
   check(await page.getByRole("link", { name: /View on Solscan/ }).getAttribute("href") === `https://solscan.io/tx/${SIG}?cluster=devnet`, "to its devnet transaction");
   c.close();
   await page.close();
@@ -111,12 +115,25 @@ const banner = (page) => page.locator(".net-wrap");
   check(await visible(banner(page).getByText("Reconnecting to the lobby…")), "the server drops: Reconnecting to the lobby…");
   check(await visible(banner(page).getByText("Can’t reach the lobby server. Still trying."), 17000), "still gone after 15 s: it says so, calmly");
   check(await page.getByRole("status").filter({ hasText: "Can’t reach the lobby server" }).count() === 1, "in a status region, for screen readers");
+  check(await page.getByText("1,284 inside").count() === 0 && await page.getByText(/1 person inside/).count() >= 1, "the count stays the lobby's last, never the demo's crowd");
   server = await createServer({ port, auth, guests: true, batchMs: 30, lobbies: [{ id: 412, opensAt: Date.now() - 1452 * 1000, source }] });
   check(await visible(banner(page).getByText("Back online"), 35000), "back: Back online");
   check(await banner(page).getByText("Back online").waitFor({ state: "detached", timeout: 5000 }).then(() => true, () => false), "and the banner goes");
   check(page.errors.length === 0, `no script errors${page.errors.length ? `: ${page.errors.join(" | ")}` : ""}`);
   await page.close();
   await server.close();
+}
+{
+  // A pledge can't be confirmed while the lobby can't be reached, and says why.
+  const source = simulatedSource();
+  const server = await createServer({ guests: true, devSessions: true, batchMs: 30, lobbies: [{ id: 412, opensAt: Date.now() - 1452 * 1000, source }] });
+  const page = await open(`${app}?live=${encodeURIComponent(`http://localhost:${server.port}`)}&as=cleo#/lobby`);
+  await visible(page.getByText(/1 person inside/));
+  await page.getByRole("button", { name: /^Pledge/ }).first().click();
+  await server.close();
+  check(await visible(page.getByRole("dialog").getByRole("alert").filter({ hasText: "The lobby server can’t be reached. Confirm when it’s back." })), "the pledge sheet says the lobby can't be reached");
+  check(await page.getByRole("button", { name: "Confirm practice pledge" }).isDisabled(), "and Confirm waits for it");
+  await page.close();
 }
 {
   // The browser offline.
@@ -128,7 +145,8 @@ const banner = (page) => page.locator(".net-wrap");
   const box = await banner(page).locator(".net").boundingBox();
   check(box && box.x >= 0 && box.x + box.width <= 390, "the banner fits a phone");
   await context.setOffline(false);
-  check(await banner(page).getByText(/offline/).waitFor({ state: "detached", timeout: 3000 }).then(() => true, () => false), "online again: gone");
+  check(await visible(banner(page).getByText("Back online")), "online again: Back online, for a moment");
+  check(await banner(page).getByText(/offline|slow/).count() === 0, "never 'slow' for the queue an outage left");
   await context.close();
 }
 {

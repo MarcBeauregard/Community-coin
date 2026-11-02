@@ -99,8 +99,9 @@ function connect({ url, onMessage, WebSocketImpl }) {
     ws.onclose = (e) => {
       if (closed) return; // closed by the app (a new session replaced it): nothing was lost
       onMessage({ t: "closed", code: e.code, reason: e.reason });
-      // 44xx are the server's refusals (sign in, unknown lobby, flooding): retrying would not help.
-      if (!closed && !(e.code >= 4400 && e.code < 4500)) setTimeout(open, Math.min(30000, 500 * 2 ** retry++));
+      // 44xx are the server's refusals (sign in, unknown lobby): retrying would not help. Flooding (4408) cools down.
+      if (e.code === 4408) setTimeout(open, 5000);
+      else if (!(e.code >= 4400 && e.code < 4500)) setTimeout(open, Math.min(30000, 500 * 2 ** retry++));
     };
   }
   open();

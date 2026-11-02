@@ -69,6 +69,7 @@ const intro = (page) => page.getByRole("region", { name: "How a lobby works" });
   await intro(page).getByRole("button", { name: "Next" }).focus();
   await page.keyboard.press("Enter");
   check(await page.evaluate(() => document.activeElement?.textContent) === "Next", "keyboard: focus stays on Next");
+  check(await page.getByRole("status").filter({ hasText: "2 of 3: Lost? Refunded at the lock." }).count() === 1, "and the next card is read out");
   await page.keyboard.press("Enter");
   check(await page.evaluate(() => document.activeElement?.textContent) === "Got it", "and lands on Got it");
   await page.keyboard.press("Enter");

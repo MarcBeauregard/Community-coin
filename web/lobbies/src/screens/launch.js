@@ -49,7 +49,7 @@ export function Launch({ s, a, phone }) {
           </div>
         </div>
         <div class="launch-copy">
-          <span class="row" style="gap:8px"><${Chip} tone="lime" live>Just launched</${Chip}><${Chip} tone="amber">Practice launch</${Chip}></span>
+          <span class="row" style="gap:8px"><${Chip} tone="lime" live>Just launched</${Chip}>${!isAddress(l.mint) && html`<${Chip} tone="amber">Practice launch</${Chip}>`}</span>
           <h1 class="display">${ticker(win.ticker)}<br />is alive.</h1>
           <p class="t2" style=${{ fontSize: phone ? "15px" : "18px", lineHeight: 1.5, maxWidth: "500px" }}>
             ${win.name} beat ${s.ideas.length - 1} other ${s.ideas.length - 1 === 1 ? "idea" : "ideas"} in an hour of pitches. Its ${int(l.backers)} founders now share a clan that never closes.

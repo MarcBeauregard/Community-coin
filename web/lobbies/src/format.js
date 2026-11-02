@@ -6,6 +6,12 @@ export function sol(v) {
   return `${(Math.round(v * 10) / 10).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} SOL`;
 }
 
+/** SOL to the lamport that matters: up to 3 decimals, trailing zeros dropped ("0.05 SOL", "2.0 SOL"). */
+export function solExact(v) {
+  const t = (Math.round(v * 1000) / 1000).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 3 });
+  return `${t} SOL`;
+}
+
 export function int(v) {
   return Math.round(v).toLocaleString("en-US");
 }

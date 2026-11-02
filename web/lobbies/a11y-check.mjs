@@ -108,6 +108,8 @@ for (const [w, h, label] of [[390, 844, "phone"], [1440, 900, "desktop"]]) {
     await page.goto(`${base}?freeze&scene=${scene}`);
     // Measured once things have settled: sheets rise and buttons fade in when they become available.
     await page.waitForTimeout(350);
+    // The birth card is drawn on the device: its buttons turn on (and fade in) once the image is ready.
+    if (scene === "sheet-card") await page.locator(".card-preview img").waitFor({ timeout: 5000 }).catch(() => {});
     await page.waitForFunction(() => document.getAnimations().every((x) => x.playState !== "running" || x.effect?.getComputedTiming().iterations === Infinity), null, { timeout: 3000 }).catch(() => {});
     await page.waitForTimeout(250);
     const a = await page.evaluate(audit);

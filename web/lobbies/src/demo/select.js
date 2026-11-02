@@ -2,7 +2,7 @@
 
 import { PHASES, PROPOSALS_CLOSE, LOCK_AT, FINALE_AT, phaseAt, pledgedOn } from "./store.js";
 import { FEATURED, LOBBIES, CHANNELS, FOUNDERS, ME } from "./data.js";
-import { HOUR, clock, sol } from "../format.js";
+import { HOUR, clock, sol, solExact } from "../format.js";
 import { seriesOf, standingsAt } from "../race/curve.js";
 import { nextOpening, dayOf } from "../remind/remind.js";
 
@@ -56,8 +56,9 @@ export function finale(s, ideas) {
   const [lead, next] = ideas;
   const gap = lead.total - next.total;
   const left = LOCK_AT - s.elapsed;
-  const tied = Math.round(gap * 10) === 0;
-  const text = tied ? `$${lead.ticker} and $${next.ticker} are tied` : `$${lead.ticker} leads $${next.ticker} by ${sol(gap)}`;
+  // Tied only when equal to the lamport (the program then keeps the idea proposed first); a small gap is shown exactly.
+  const tied = Math.abs(gap) < 1e-9;
+  const text = tied ? `$${lead.ticker} and $${next.ticker} are tied: the idea proposed first wins a tie` : `$${lead.ticker} leads $${next.ticker} by ${gap < 0.1 ? solExact(gap) : sol(gap)}`;
   const mine = s.pledge && ideas.find((d) => d.ticker === s.pledge.symbol);
   const nudge = mine && mine.rank > 2 && s.nudgeOff !== s.pledge.symbol
     ? { from: mine, to: lead, amount: s.pledge.amount, text: `$${mine.ticker} is ${ordinal(mine.rank)}. Move your ${sol(s.pledge.amount)} to $${lead.ticker}?` }
@@ -138,7 +139,8 @@ export function allocation(l) {
 
 /** Who is in the featured lobby: the realtime server's count when connected, the demo's otherwise. */
 export function presence(s) {
-  if (s.live && s.live.connected) return { inside: s.live.inside, listening: s.live.listening };
+  // Live, always the server's last count (kept through a reconnection), never the demo's crowd.
+  if (s.live) return { inside: s.live.inside, listening: s.live.listening };
   return { inside: FEATURED.inside + (s.joined ?? 0), listening: FEATURED.listeners + (s.voice.listening ? 1 : 0) };
 }
 
@@ -179,6 +181,8 @@ export function voiceStatus(s) {
 export function trend(s, ticker) {
   if (!s.curve || s.curve.length < 2) return null;
   const points = seriesOf(s.curve, ticker);
+  // The line runs to now: nothing changed since the last sample.
+  if (s.elapsed > points[points.length - 1][0] && s.elapsed < 3300) points.push([s.elapsed, points[points.length - 1][1]]);
   const now = s.curve[s.curve.length - 1].t;
   const then = standingsAt(s.curve, now - 600).find((x) => x.ticker === ticker)?.sol ?? 0;
   const gained = points[points.length - 1][1] - then;
@@ -218,6 +222,7 @@ export function profile(s) {
 /** What the network banner says, the most pressing first; null when all is well. */
 export function netState(n) {
   if (n.offline) return "offline";
+  if (n.server === "gone") return "gone";
   if (n.server === "down") return "down";
   if (n.server === "reconnecting") return "reconnecting";
   if (n.solana === "down") return "solanaDown";

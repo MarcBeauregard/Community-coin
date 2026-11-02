@@ -86,7 +86,7 @@ for (const [w, h] of [[1440, 900], [390, 844]]) {
   await click("Join the lobby");
   check(await page.locator(".lobby").isVisible(), `@${w} joining opens the lobby`);
   // The main action is always whole on screen: nothing pushes it past the edge.
-  const pledgeBox = await page.getByRole("button", { name: phone ? "Pledge" : "Pledge 1.0 SOL", exact: true }).boundingBox();
+  const pledgeBox = await page.getByRole("button", { name: "Pledge 1.0 SOL", exact: true }).boundingBox();
   check(pledgeBox && pledgeBox.x >= 0 && pledgeBox.x + pledgeBox.width <= w, `@${w} the Pledge button is fully on screen`);
 
   await click(phone ? "Propose" : "Propose an idea");
@@ -99,7 +99,7 @@ for (const [w, h] of [[1440, 900], [390, 844]]) {
   check(await page.getByText("Lazy Llama").first().isVisible(), `@${w} the proposed idea joins the race`);
 
   await page.locator(".idea", { hasText: "dogwifhat" }).click();
-  await click(phone ? "Pledge" : "Pledge 1.0 SOL");
+  await click("Pledge 1.0 SOL");
   check(await page.getByText(/Full refund at the lock/).isVisible(), `@${w} the pledge sheet says what happens if it loses`);
   await click("Confirm practice pledge");
   await page.waitForTimeout(1500);
@@ -110,8 +110,8 @@ for (const [w, h] of [[1440, 900], [390, 844]]) {
   await click("Withdraw");
   check(await page.getByRole("dialog", { name: "Withdraw your pledge?" }).isVisible(), `@${w} withdrawing asks first`);
   await click("Withdraw 1.0 SOL");
-  check(await page.getByRole("button", { name: phone ? "Pledge" : "Pledge 1.0 SOL", exact: true }).isVisible(), `@${w} withdrawing frees the pledge`);
-  await click(phone ? "Pledge" : "Pledge 1.0 SOL");
+  check(await page.getByRole("button", { name: "Pledge 1.0 SOL", exact: true }).isVisible(), `@${w} withdrawing frees the pledge`);
+  await click("Pledge 1.0 SOL");
   await click("Confirm practice pledge");
   await page.waitForTimeout(1500);
   await click("Done");
