@@ -4,6 +4,14 @@
 //   node web/lobbies/server/server.mjs --port 8790 [--guests] [--dev-sessions] [--data <dir>] [--sfu <wss url>] [--welcome <text>]
 //          [--origins https://app.example] [--trust-proxy] [--max-per-ip 50] [--http-per-min 120] [--lobby 412 --opens-at <ms>]
 //          [--rpc <url> --program <id>]    (race from the chain through the indexer; else the simulated demo lobby)
+//          [--schedule hourly --host <wallet> [--name …] [--theme …] [--host-name …]] [--static web/dist/lobbies]
+//          (the closed beta: an empty practice lobby every hour, the app served from the same address)
+//   env: PORT, DATA_DIR, SESSION_SECRET (sessions survive restarts), STATS_TOKEN (GET /stats), LOBBY_HOST, …
+//
+//   GET  /health                      → { ok, lobbies }
+//   GET  /lobbies                     → { lobbies: [{ id, opensAt, name, theme, phase, inside, listening }], current }
+//   GET  /stats  (Bearer STATS_TOKEN) → the beta's counts per lobby, returning visitors, testers' feedback
+//   POST /feedback {text, rating, lobby, screen} → { ok }  (one a minute per address)
 //
 //   GET  /auth/nonce                  → { nonce, issuedAt, message(address) is signInMessage(...) }
 //   POST /auth/verify {address, nonce, signature(base64)} → { token }
@@ -22,14 +30,14 @@ import { randomUUID } from "node:crypto";
 import { WebSocketServer } from "ws";
 import { createAuth, signInMessage } from "./auth.mjs";
 import { createRoom, cleanText } from "./room.mjs";
-import { simulatedSource, chainSource } from "./sources.mjs";
+import { simulatedSource, chainSource, practiceSource } from "./sources.mjs";
 import { createCrank, stateOfRules, rulesExecutor } from "./crank.mjs";
 import { createClans } from "./clans.mjs";
 import { createClanRoom, fileStore } from "./clan-room.mjs";
 import { createMedia } from "./media.mjs";
 import { sfuToken, sfuAdmin } from "./voice.mjs";
-import { mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, existsSync, readFileSync, statSync } from "node:fs";
+import { join, normalize, extname } from "node:path";
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type, authorization" };
 const json = (res, status, body) => {
@@ -61,7 +69,7 @@ const readBytes = (req, max) => new Promise((resolve) => {
 const bearer = (req, url) => (req.headers.authorization ?? "").replace(/^Bearer /, "") || url.searchParams.get("token");
 
 export function createServer({ port = 0, guests = false, devSessions = false, dataDir = null, voice = null, lobbies, auth = createAuth(), now = () => Date.now(), batchMs = 250, maxPerRoom = 20000,
-  maxPerIp = 50, httpPerMin = 120, origins = null, trustProxy = false }) {
+  maxPerIp = 50, httpPerMin = 120, origins = null, trustProxy = false, staticDir = null, statsToken = null }) {
   // Abuse limits: sockets per address, HTTP requests per address and minute, and (in production) the app's origins.
   // Behind a proxy, `trustProxy` reads the client's address from X-Forwarded-For.
   const ipOf = (req) => (trustProxy && String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim()) || req.socket.remoteAddress;
@@ -78,7 +86,7 @@ export function createServer({ port = 0, guests = false, devSessions = false, da
   // to it at once; the next token carries the same right.
   const admin = voice ? sfuAdmin({ url: voice.adminUrl ?? voice.url.replace(/^ws/, "http"), apiKey: voice.apiKey, apiSecret: voice.apiSecret, fetchImpl: voice.fetch, now }) : null;
   const setPublish = (room) => (user, can) => admin?.setCanPublish(room, user, can).catch((e) => console.error(e.message));
-  const rooms = new Map(lobbies.map((l) => [String(l.id), createRoom({ ...l, now, onStage: setPublish(`lobby-${l.id}`) })]));
+  const rooms = new Map();
   // Clans are forever: with a data directory, the registry, every clan's channels and the media survive restarts.
   if (dataDir) mkdirSync(join(dataDir, "clans"), { recursive: true });
   const clans = createClans({ store: dataDir ? fileStore(join(dataDir, "clans.jsonl")) : null });
@@ -94,14 +102,38 @@ export function createServer({ port = 0, guests = false, devSessions = false, da
   };
   // A lobby played on the program's rules gets the crank on those rules; a lobby on a cluster brings its own
   // (`crank` built with a clusterExecutor). Either way its events go to the room and the clan registry.
-  for (const l of lobbies) {
-    const room = rooms.get(String(l.id));
+  // A lobby can join at any time (the hourly schedule adds the next one): its room, its crank, its events.
+  function addLobby(l) {
+    const room = createRoom({ ...l, now, onStage: setPublish(`lobby-${l.id}`) });
+    rooms.set(String(l.id), room);
     const onEvents = (events) => { clans.apply(events, now()); room.announce(events, clans); };
     // On a cluster the indexer reads every event of the lobby's transactions, whoever sent them (someone else may
     // crank first): those feed the room and the clans, and the crank's own results are not counted twice.
     if (l.source.onEvents) l.source.onEvents(onEvents);
     if (l.crank) room.setCrank(l.crank(l.source.onEvents ? () => {} : onEvents));
     else if (l.source.chain) room.setCrank(createCrank({ state: () => stateOfRules(l.source.chain), execute: rulesExecutor(l.source.chain), onEvents }));
+    return room;
+  }
+  for (const l of lobbies) addLobby(l);
+  // What testers say (the beta): kept with the data, read with the stats.
+  const feedback = [];
+  const feedbackStore = dataDir ? fileStore(join(dataDir, "feedback.jsonl")) : null;
+  for (const f of feedbackStore?.load?.() ?? []) feedback.push(f);
+  const lastFeedback = new Map(); // ip -> time
+  // The app itself, from this server: one address for the page and its lobby.
+  const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".webp": "image/webp", ".ico": "image/x-icon", ".json": "application/json" };
+  function serveStatic(url, res) {
+    const rel = decode(url.pathname) ?? "/";
+    const file = normalize(join(staticDir, rel.endsWith("/") ? `${rel}index.html` : rel));
+    if (!file.startsWith(normalize(staticDir)) || !existsSync(file) || !statSync(file).isFile()) return false;
+    let body = readFileSync(file);
+    const ext = extname(file);
+    // The page learns that its lobby server is this one (no ?live= needed).
+    if (ext === ".html") body = Buffer.from(body.toString().replace("</head>", '<meta name="lobby-server" content="same-origin"></head>'));
+    res.writeHead(200, { "content-type": TYPES[ext] ?? "application/octet-stream", "x-content-type-options": "nosniff",
+      "cache-control": ext === ".html" ? "no-cache" : rel.startsWith("/chunks/") || rel.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "public, max-age=300" });
+    res.end(body);
+    return true;
   }
   const server = http.createServer((req, res) => handle(req, res).catch((e) => {
     // A request that breaks something answers 500; it never takes the server down.
@@ -179,8 +211,46 @@ export function createServer({ port = 0, guests = false, devSessions = false, da
       const clan = clans.toJSON(decode(c[1]) ?? "");
       return json(res, clan ? 200 : 404, clan ?? { error: "No clan for this mint" });
     }
+    if (req.method === "GET" && url.pathname === "/health") return json(res, 200, { ok: true, lobbies: rooms.size });
+    if (req.method === "GET" && url.pathname === "/lobbies") {
+      // The lobbies on this server, and the one to join now: the latest that has opened and not ended long ago, else
+      // the next to open.
+      const list = [...rooms.values()].map((r) => r.summary()).sort((a, b) => a.opensAt - b.opensAt);
+      const t = now();
+      const open = list.filter((l) => l.opensAt <= t && t < l.opensAt + 3600_000 + 15 * 60_000);
+      const current = (open.at(-1) ?? list.find((l) => l.opensAt > t) ?? list.at(-1))?.id ?? null;
+      return json(res, 200, { lobbies: list, current });
+    }
+    if (req.method === "GET" && url.pathname === "/stats") {
+      // The beta's numbers, for whoever holds the stats token: counts per lobby, returning visitors, testers' words.
+      if (!statsToken || bearer(req, url) !== statsToken) return json(res, 404, { error: "Not found" });
+      const seen = new Set();
+      const lobbiesOut = [...rooms.values()].sort((a, b) => a.summary().opensAt - b.summary().opensAt).map((r) => {
+        const st = r.stats(seen);
+        for (const u of r.visitors()) seen.add(u);
+        return st;
+      });
+      return json(res, 200, { lobbies: lobbiesOut, people: seen.size, feedback: feedback.slice(-200) });
+    }
+    if (req.method === "POST" && url.pathname === "/feedback") {
+      // A tester's words: a rating (1 to 5) and up to 1000 characters; one a minute per address.
+      const ip = ipOf(req);
+      if (Date.now() - (lastFeedback.get(ip) ?? 0) < 60_000) return json(res, 429, { error: "One message a minute" });
+      const body = await readBody(req);
+      const text = cleanText(body.text, 1000);
+      const rating = Number.isInteger(body.rating) && body.rating >= 1 && body.rating <= 5 ? body.rating : null;
+      if (!text && !rating) return json(res, 400, { error: "Say something, or give a rating" });
+      const session = auth.session(bearer(req, url));
+      const entry = { at: now(), rating, text, lobby: typeof body.lobby === "number" ? body.lobby : null, signedIn: !!(session && !session.guest), screen: cleanText(body.screen, 20) };
+      feedback.push(entry);
+      if (feedback.length > 5000) feedback.shift();
+      feedbackStore?.append?.(entry);
+      lastFeedback.set(ip, Date.now());
+      return json(res, 200, { ok: true });
+    }
     const m = /^\/lobbies\/(\d+)$/.exec(url.pathname);
     if (req.method === "GET" && m && rooms.has(m[1])) return json(res, 200, rooms.get(m[1]).snapshot());
+    if (req.method === "GET" && staticDir && serveStatic(url, res)) return;
     json(res, 404, { error: "Not found" });
   }
 
@@ -234,7 +304,9 @@ export function createServer({ port = 0, guests = false, devSessions = false, da
   }
   const timer = setInterval(() => { for (const r of rooms.values()) r.tick(); }, batchMs);
   return new Promise((resolve) => server.listen(port, () => resolve({
-    port: server.address().port, rooms, auth, clans, clanRoom, media,
+    port: server.address().port, rooms, auth, clans, clanRoom, media, addLobby, feedback,
+    /** Takes a finished lobby off this server (its clan stays: clans are forever). */
+    removeLobby: (id) => rooms.delete(String(id)),
     close: () => new Promise((r) => { clearInterval(timer); for (const c of wss.clients) c.terminate(); wss.close(); server.close(r); }),
   })));
 }
@@ -243,13 +315,37 @@ export { signInMessage };
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const arg = (n) => { const i = process.argv.indexOf(`--${n}`); return i < 0 ? undefined : process.argv[i + 1]; };
-  const id = Number(arg("lobby") ?? 412);
-  const opensAt = Number(arg("opens-at") ?? Date.now() - 1452 * 1000);
-  const source = arg("rpc") ? chainSource({ rpc: arg("rpc"), programId: arg("program"), lobby: id }) : simulatedSource();
-  const s = await createServer({ port: Number(arg("port") ?? 8790), guests: process.argv.includes("--guests"), devSessions: process.argv.includes("--dev-sessions"),
-    maxPerIp: Number(arg("max-per-ip") ?? 50), httpPerMin: Number(arg("http-per-min") ?? 120), origins: arg("origins")?.split(","), trustProxy: process.argv.includes("--trust-proxy"),
-    dataDir: arg("data"), lobbies: [{ id, opensAt, source, welcome: arg("welcome") ?? null }],
+  const flag = (n) => process.argv.includes(`--${n}`);
+  // Sessions survive a restart when the signing key does: SESSION_SECRET (32 bytes or more, hex or text).
+  const secret = process.env.SESSION_SECRET ? Buffer.from(process.env.SESSION_SECRET) : undefined;
+  if (secret && secret.length < 32) throw new Error("SESSION_SECRET must be 32 characters or more");
+  const common = { port: Number(process.env.PORT ?? arg("port") ?? 8790), guests: flag("guests"), devSessions: flag("dev-sessions"),
+    maxPerIp: Number(arg("max-per-ip") ?? 50), httpPerMin: Number(arg("http-per-min") ?? 120), origins: arg("origins")?.split(","), trustProxy: flag("trust-proxy"),
+    dataDir: arg("data") ?? process.env.DATA_DIR, staticDir: arg("static") ?? null, statsToken: process.env.STATS_TOKEN ?? null,
+    auth: secret ? createAuth({ secret }) : undefined,
     // --sfu wss://… with LIVEKIT_API_KEY and LIVEKIT_API_SECRET in the environment
-    voice: arg("sfu") ? { url: arg("sfu"), apiKey: process.env.LIVEKIT_API_KEY, apiSecret: process.env.LIVEKIT_API_SECRET } : null });
-  console.log(`lobby ${id} live on :${s.port} (${arg("rpc") ? "race from the chain" : "simulated race"})`);
+    voice: arg("sfu") ? { url: arg("sfu"), apiKey: process.env.LIVEKIT_API_KEY, apiSecret: process.env.LIVEKIT_API_SECRET } : null };
+  if (arg("schedule") === "hourly") {
+    // The closed beta: a real practice lobby every hour, on the hour, empty at its opening; the next one is listed an
+    // hour ahead, finished ones leave the server three hours after they opened (their clans stay).
+    const host = arg("host") ?? process.env.LOBBY_HOST;
+    if (!host) throw new Error("--schedule hourly needs --host <the host's wallet address> (or LOBBY_HOST)");
+    const lobby = (opensAt) => ({ id: Math.floor(opensAt / 3_600_000), opensAt, source: practiceSource({ id: Math.floor(opensAt / 3_600_000), host }),
+      name: arg("name") ?? process.env.LOBBY_NAME ?? "Social Launch hour", theme: arg("theme") ?? process.env.LOBBY_THEME ?? null,
+      hostName: arg("host-name") ?? process.env.LOBBY_HOST_NAME ?? null, welcome: arg("welcome") ?? process.env.LOBBY_WELCOME ?? null });
+    const hour = () => Math.floor(Date.now() / 3_600_000) * 3_600_000;
+    const s = await createServer({ ...common, lobbies: [lobby(hour()), lobby(hour() + 3_600_000)] });
+    setInterval(() => {
+      const next = hour() + 3_600_000;
+      if (!s.rooms.has(String(Math.floor(next / 3_600_000)))) s.addLobby(lobby(next));
+      for (const [id, r] of s.rooms) if (r.summary().opensAt < Date.now() - 3 * 3_600_000) s.removeLobby(id);
+    }, 60_000);
+    console.log(`Social Launch beta on :${s.port}: a practice lobby every hour (host ${host})${common.staticDir ? `, app from ${common.staticDir}` : ""}`);
+  } else {
+    const id = Number(arg("lobby") ?? 412);
+    const opensAt = Number(arg("opens-at") ?? Date.now() - 1452 * 1000);
+    const source = arg("rpc") ? chainSource({ rpc: arg("rpc"), programId: arg("program"), lobby: id }) : simulatedSource();
+    const s = await createServer({ ...common, lobbies: [{ id, opensAt, source, welcome: arg("welcome") ?? null }] });
+    console.log(`lobby ${id} live on :${s.port} (${arg("rpc") ? "race from the chain" : "simulated race"})`);
+  }
 }

@@ -5,8 +5,8 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { html, Button, IconButton, Segmented, Chip, Coin, Avatar, Bar, Spark, GestationTimeline, Equalizer, Composer } from "../ui.js";
 import * as I from "../icons.js";
 import { person, coin, FEATURED, SPEAKERS, MUTED_SPEAKERS, CROWD, PEOPLE, ME } from "../demo/data.js";
-import { race, timeline, lobbyClock, dock, presence, voiceStatus, finale, trend } from "../demo/select.js";
-import { sol, int, ticker } from "../format.js";
+import { race, timeline, lobbyClock, dock, presence, voiceStatus, finale, trend, lobbyInfo } from "../demo/select.js";
+import { sol, int, ticker, HOUR } from "../format.js";
 import { WalletPill } from "./discover.js";
 import { NetBanner } from "./net.js";
 import { AUDIO_ERRORS } from "../voice/audio.js";
@@ -215,6 +215,14 @@ function Dock({ s, a, ideas, phone }) {
     if (before.current && before.current !== d.mode && d.mode === "closed" && (!at || at === document.body) && inDock.current) (document.querySelector(".finale.locked") ?? ref.current?.querySelector(".dock-chip-wrap"))?.focus();
     before.current = d.mode;
   }, [d.mode]);
+  const t0 = lobbyClock(s);
+  // No idea in the race yet: the dock invites the first one.
+  if (d.mode === "empty") {
+    return html`<section class="dock glass" aria-label="Pledge">
+      <div class="who" style="min-width:0;flex:1"><span style="font-size:16px;font-weight:600">No idea in the race yet</span><span class="t2" style="font-size:13px">${t0.canPropose ? "Propose the first one: a ticker, a name, a line." : "Proposals are closed for this lobby."}</span></div>
+      ${t0.canPropose && html`<${Button} variant="prim" onClick=${() => a.openSheet("propose")}><${I.Plus} size=${15} />Propose</${Button}>`}
+    </section>`;
+  }
   const t = lobbyClock(s);
   const amounts = AMOUNTS.map((v) => ({ id: v, label: String(v), disabled: v > s.balance }));
   let action;
@@ -359,7 +367,7 @@ function useFinaleWords(f, locked, lockWords) {
 }
 
 // The lock, marked: who won, when it launches, and what it means for the person.
-function Locked({ s, t }) {
+function Locked({ s, a, t }) {
   const k = s.locked;
   const mine = s.pledge && k.winner && s.pledge.symbol === k.winner;
   return html`<section class="finale locked glass" tabIndex="-1" aria-label="Pledges locked">
@@ -368,6 +376,9 @@ function Locked({ s, t }) {
     <span class="t2 num" style="font-size:14px;line-height:1.45">${k.winner && !k.voided
       ? `${mine ? `You’re on the winner: your ${sol(s.pledge.amount)} makes you a founder at the launch.` : "Losing pledges are back in their wallets."} Launch in ${t.launchIn}.`
       : "Everyone’s SOL is back in their wallets."}</span>
+    ${s.live && (!k.winner || k.voided) && (s.elapsed >= HOUR
+      ? html`<${Button} variant="white" size="sm" style="align-self:flex-start" onClick=${a.nextLobby}>Join the next lobby</${Button}>`
+      : html`<span class="t2" style="font-size:13px">The next lobby opens on the hour.</span>`)}
   </section>`;
 }
 
@@ -390,7 +401,7 @@ function Ideas({ s, a, phone }) {
       ${phone && html`<h2 class="sr">${ideas.length} ideas</h2>`}
       <span class="sr" role="status">${finaleWords}</span>
       ${f && html`<${Finale} f=${f} a=${a} phone=${phone} />`}
-      ${!f && s.locked && !s.launched && html`<${Locked} s=${s} t=${t} />`}
+      ${!f && s.locked && !s.launched && html`<${Locked} s=${s} a=${a} t=${t} />`}
       ${manages(s) && Object.keys(s.live.reports ?? {}).some((k) => s.live.reports[k] > 0 && ideas.some((d) => d.ticker === k)) && html`<div class="reported glass" role="group" aria-label="Reported ideas">
         <span class="t2" style="font-size:13px;font-weight:600">Reported</span>
         ${ideas.filter((d) => s.live.reports[d.ticker] > 0).map((d) => html`<button key=${d.id} type="button" class="chip amber" aria-pressed=${String(s.selected === d.id)} onClick=${() => a.select(d.id)}>$${d.ticker} · ${s.live.reports[d.ticker]}</button>`)}
@@ -442,9 +453,9 @@ function Chat({ s, a, phone }) {
   return html`<aside class="chat" aria-label="Lobby chat">
     ${!phone && html`<div class="chat-head"><h2 style="font-size:15px;font-weight:600">Chat</h2><span class="t2" style="font-size:12px">Slow mode · 3 s</span></div>`}
     ${s.welcome && !s.welcomeOff && html`<div class="welcome" role="note" aria-label="The host’s welcome">
-      <${Avatar} person=${person(s.welcome.from ?? FEATURED.host)} size=${28} />
+      <${Avatar} person=${person(s.welcome.from ?? lobbyInfo(s).hostKey)} size=${28} />
       <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0">
-        <span style="font-size:12px;font-weight:600">${person(s.welcome.from ?? FEATURED.host).name} <span class="t2" style="font-weight:500">· host · pinned</span></span>
+        <span style="font-size:12px;font-weight:600">${person(s.welcome.from ?? lobbyInfo(s).hostKey).name} <span class="t2" style="font-weight:500">· host · pinned</span></span>
         <span style="font-size:13px;line-height:1.45">${s.welcome.text}</span>
       </div>
       <${IconButton} label="Hide the welcome" size="sm" onClick=${() => { a.hideWelcome(); requestAnimationFrame(() => document.querySelector(".chat input, .chat textarea")?.focus()); }}><${I.Close} size=${12} /></${IconButton}>
@@ -460,15 +471,17 @@ function Chat({ s, a, phone }) {
 export function Lobby({ s, a, phone }) {
   const t = lobbyClock(s);
   const f = finale(s, race(s));
-  const sel = race(s).find((d) => d.id === s.selected) || race(s)[0];
+  const sel = race(s).find((d) => d.id === s.selected) || race(s)[0] || { hue: 150 };
+  const info = lobbyInfo(s);
   const head = html`<header class="lobby-head">
     <${IconButton} label="Back to lobbies" size=${phone ? "sm" : undefined} onClick=${() => a.go({ screen: "discover" })}><${I.Back} size=${15} /></${IconButton}>
     <div class="title" style=${phone ? "flex:1" : ""}>
-      <h1 class="ellipsis">${FEATURED.name}</h1>
-      <span class="t2 num" style="font-size:13px">${phone ? t.label : `Hosted by ${FEATURED.host} · ${int(presence(s).inside)} inside${s.live && !s.live.connected ? " (last count)" : ""}`}</span>
+      <h1 class="ellipsis">${info.name}</h1>
+      <span class="t2 num" style="font-size:13px">${phone ? t.label : `Hosted by ${info.host} · ${int(presence(s).inside)} inside${s.live && !s.live.connected ? " (last count)" : ""}`}</span>
     </div>
     ${!phone && html`<div class="tl"><${GestationTimeline} phases=${timeline(s.elapsed)} /></div>`}
     <div class="row" style="flex-wrap:nowrap;gap:14px">
+      ${s.live && html`<${IconButton} label="Beta feedback" class="feedback-open" size=${phone ? "sm" : undefined} onClick=${() => a.openSheet("feedback")}><${I.Chat} size=${15} /></${IconButton}>`}
       ${!phone && !s.live && html`<${Button} variant="ghost" size="sm" disabled=${s.elapsed >= 3594} title="Prototype only: jump to the last seconds before launch" onClick=${a.skipToLock}>Demo · skip to lock</${Button}>`}
       <div class=${`clock${f ? " finale-clock" : ""}${f?.urgent ? " urgent" : ""}`}>
         <span class="t2" style="font-size:12px;font-weight:600">${f ? "Locks in" : "Launch in"}</span>

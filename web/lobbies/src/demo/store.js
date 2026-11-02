@@ -158,7 +158,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
     const key = st.live ? `${st.live.lobby}-${st.live.opensAt}` : `demo-${FEATURED.number}-${st.runs ?? 0}`;
     const win = st.ideas.find((d) => d.id === l.id);
     const backed = l.myId ? st.ideas.find((d) => d.id === l.myId) : null;
-    const entry = { key, name: FEATURED.name, at: Date.now(), ticker: win?.ticker ?? l.id.toUpperCase(), pledged: backed?.ticker ?? null, amount: l.myAmount ?? 0,
+    const entry = { key, name: st.live?.info?.name ?? FEATURED.name, at: Date.now(), ticker: win?.ticker ?? l.id.toUpperCase(), pledged: backed?.ticker ?? null, amount: l.myAmount ?? 0,
       founder: !!l.founder, rank: l.rank ?? null, proposed: st.ideas.filter((d) => d.by === you).map((d) => ({ ticker: d.ticker, name: d.name, won: d.id === l.id })) };
     const history = [entry, ...st.history.filter((h) => h.key !== key)].slice(0, 100);
     if (st.live && st.wallet.address) { try { localStorage.setItem(historyKey(st.wallet.address), JSON.stringify(history)); } catch {} }
@@ -240,7 +240,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
     switch (m.t) {
       case "hello":
         linkBack();
-        set({ live: { connected: true, reports: m.reports ?? {}, lobby: m.lobby, inside: m.inside, listening: m.listening, people: m.people ?? [], opensAt: m.opensAt, you: m.you, guest: m.guest, race: m.race, stage: m.stage },
+        set({ live: { connected: true, info: m.info ?? null, reports: m.reports ?? {}, lobby: m.lobby, inside: m.inside, listening: m.listening, people: m.people ?? [], opensAt: m.opensAt, you: m.you, guest: m.guest, race: m.race, stage: m.stage },
           welcome: m.welcome ?? null, welcomeOff: hiddenWelcome(m.welcome?.text), ...(m.cheers ? { cheerCount: { fire: m.cheers.fire | 0, skull: m.cheers.skull | 0 } } : {}),
           elapsed: Math.floor((m.now - m.opensAt) / 1000), ideas: raceIdeas(m.race, s.meta), curve: Array.isArray(m.curve) ? m.curve : [], chat: m.chat.map((l) => lineToChat(l, m.you)), voice: { ...s.voice, onStage: !!m.stage?.speakers.includes(m.you) } });
         // A practice lobby: this wallet's pledge and practice SOL, as the server keeps them (across reloads).
@@ -548,6 +548,27 @@ export function createStore({ scene, freeze, live = false } = {}) {
       }
     },
     openSheet(sheet) { set({ sheet, signing: false, sheetAt: Date.now() }); },
+    // An hour that ended without a winner: on to the lobby the server has open now.
+    async nextLobby() {
+      if (!server) return;
+      try {
+        const j = await (await fetch(`${server.base}/lobbies`)).json();
+        if (j.current != null && String(j.current) !== String(server.lobby)) {
+          set({ locked: null, launched: null, pledge: null, selected: null, ideas: [], curve: [], chat: [] });
+          actions.goLive({ base: server.base, lobby: j.current, token: server.token });
+        } else toast("The next lobby isn’t open yet", "white");
+      } catch { toast("Couldn’t reach the server", "white"); }
+    },
+    // A beta tester's words, to the server that serves the lobby (POST /feedback). Resolves to null, or the reason it failed.
+    async sendFeedback({ rating, text }) {
+      if (!server) return "Feedback goes to a live lobby only";
+      try {
+        const r = await fetch(`${server.base}/feedback`, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${server.token}` },
+          body: JSON.stringify({ rating, text, lobby: Number(server.lobby), screen: state.route.screen }) });
+        if (r.ok) return null;
+        return (await r.json().catch(() => ({}))).error ?? "Couldn’t send it. Try again in a minute.";
+      } catch { return "Couldn’t reach the server. Try again in a minute."; }
+    },
 
     // Wallet. Connecting shares only the address; on a live server the wallet also signs a one-time message so the
     // server knows it is really this address (free, no transaction).

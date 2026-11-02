@@ -9,7 +9,7 @@ import { nextOpening, icsFor, googleCalendarUrl, calendarFileName, LEAD_MS, hhmm
 import { prepareReplay, playReplay, recordReplay, drawFrame, replayStory, videoType, replayFileName, SIZE as REPLAY_SIZE, LENGTH_MS } from "../race/replay.js";
 import { addressPerson, shortAddress, WALLET_TINT, isAddress, txUrl } from "../wallet/wallets.js";
 import { drawBirthCard, cardCaption, cardFileName, cardText, FORMATS } from "../card/birthcard.js";
-import { race, dock, lobbyClock, profile } from "../demo/select.js";
+import { race, dock, lobbyClock, profile, lobbyInfo } from "../demo/select.js";
 import { PROPOSE_BOND } from "../demo/store.js";
 import { sol, ticker, initials } from "../format.js";
 
@@ -266,7 +266,7 @@ function ReplaySheet({ s, a }) {
   useEffect(() => {
     let live = true;
     const coins = Object.fromEntries(s.ideas.map((d) => [d.ticker, { hue: d.hue, name: d.name, logo: coin(d).logo }]));
-    prepareReplay({ curve: s.curve, coins, winner: winner?.ticker ?? null, pot: l?.sol ?? 0, lobby: FEATURED.name, practice: !isAddress(l?.mint) }).then((x) => {
+    prepareReplay({ curve: s.curve, coins, winner: winner?.ticker ?? null, pot: l?.sol ?? 0, lobby: lobbyInfo(s).name, practice: !isAddress(l?.mint) }).then((x) => {
       if (!live) return;
       setR(x);
       const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -525,6 +525,32 @@ function ReceiptSheet({ s, a }) {
     <${Button} variant="white" size="lg" onClick=${a.closeSheet}>Done</${Button}>`;
 }
 
+// The beta's feedback: a rating and a few words, sent to the server that runs the lobby.
+function FeedbackSheet({ a }) {
+  const [rating, setRating] = useState(null);
+  const [text, setText] = useState("");
+  const [state, setState] = useState({ sending: false, error: null, sent: false });
+  if (state.sent) return html`<div style="display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;padding-top:8px">
+      <h2 id="feedback-title" class="display" style="font-size:22px">Thank you</h2>
+      <p class="t2" role="status" style="font-size:14px">Your feedback reached the team.</p>
+    </div>
+    <${Button} variant="white" size="lg" onClick=${a.closeSheet}>Done</${Button}>`;
+  const send = async () => {
+    setState({ sending: true, error: null, sent: false });
+    const error = await a.sendFeedback({ rating, text: text.trim() });
+    setState({ sending: false, error, sent: !error });
+  };
+  return html`<p class="t2" style="font-size:14px;line-height:1.5">This is a closed beta. What worked, what confused you, what you missed: every word is read.</p>
+    <div role="group" aria-label="Your rating, 1 to 5" class="row" style="gap:8px">
+      ${[1, 2, 3, 4, 5].map((n) => html`<${Button} key=${n} size="sm" aria-pressed=${rating === n} variant=${rating === n ? "white" : undefined} onClick=${() => setRating(n)}>${n}</${Button}>`)}
+    </div>
+    <label style="display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600">Your words
+      <textarea maxlength="1000" rows="4" value=${text} onInput=${(e) => setText(e.currentTarget.value)} style="font:inherit;font-weight:400;font-size:15px;padding:10px;border-radius:12px;background:var(--surface-2, #1a1a1a);color:inherit;border:1px solid rgba(255,255,255,.15);resize:vertical"></textarea>
+    </label>
+    ${state.error && html`<p role="alert" style="color:#ff6961;font-size:13px">${state.error}</p>`}
+    <${Button} variant="white" size="lg" data-primary disabled=${state.sending || (!rating && !text.trim())} onClick=${send}>${state.sending ? "Sending…" : "Send feedback"}</${Button}>`;
+}
+
 const SHEETS = {
   pledge: { title: null, Body: PledgeSheet },
   propose: { title: "Propose an idea", Body: ProposeSheet },
@@ -541,6 +567,7 @@ const SHEETS = {
   sibling: { title: "A sibling lobby", Body: SiblingSheet, refocus: ".sibling", refocusFirst: true }, // to the new lobby, pinned in the clan
   profile: { title: "Founder profile", Body: ProfileSheet, refocus: ".profile-open" },
   replay: { title: "The hour in 30 seconds", Body: ReplaySheet, refocus: ".replay-open" },
+  feedback: { title: "Beta feedback", Body: FeedbackSheet, refocus: ".feedback-open" },
 };
 
 export function Sheets({ s, a }) {

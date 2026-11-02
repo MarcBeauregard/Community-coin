@@ -5,7 +5,7 @@
 import { render } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { html, IconButton, Avatar, Toast } from "./ui.js";
-import { netState } from "./demo/select.js";
+import { netState, lobbyInfo } from "./demo/select.js";
 import { NetBanner } from "./screens/net.js";
 import * as I from "./icons.js";
 import { phoneBreakpoint } from "./tokens.js";
@@ -19,25 +19,37 @@ import { Clan } from "./screens/clan.js";
 import { Sheets } from "./screens/sheets.js";
 
 const params = new URLSearchParams(location.search);
-const store = createStore({ scene: params.get("scene"), freeze: params.has("freeze"), live: !!params.get("live") });
+// A server that serves the app itself says so (`<meta name="lobby-server" content="same-origin">`): the app plays live there.
+const served = document.querySelector('meta[name="lobby-server"]')?.content === "same-origin" ? location.origin : null;
+const liveBase = params.get("live") || served;
+const store = createStore({ scene: params.get("scene"), freeze: params.has("freeze"), live: !!liveBase });
 // A link to a screen opens on it (#/lobby, #/clan); #/launch only once there is a launch to show.
 {
   const screen = location.hash.replace("#/", "");
   if (screen === "lobby" || (screen === "launch" && store.get().launched)) store.actions.go({ screen });
-  else if (screen === "launch" && params.get("live")) { store.actions.go({ screen: "lobby" }); store.actions.wantScreen("launch"); }
+  else if (screen === "launch" && liveBase) { store.actions.go({ screen: "lobby" }); store.actions.wantScreen("launch"); }
   // Live, the clan is known only once the server has answered: it opens then (store.js), never the demo's first.
-  else if (screen === "clan" && params.get("live")) store.actions.wantScreen("clan");
+  else if (screen === "clan" && liveBase) store.actions.wantScreen("clan");
   else if (screen === "clan") store.actions.openClan(store.get().clan);
 }
 // ?live=<server> joins the realtime server as a guest; connecting a wallet signs in with it (Sign-In With Solana).
 // `?rpc=<url>` reads the connected wallet's real balance from that cluster.
 if (params.get("rpc")) store.actions.setRpc(params.get("rpc"));
-if (params.get("live")) {
-  const base = params.get("live");
+// The lobby: `&lobby=<id>`, else the one the server says is on now, else the demo's.
+async function pickLobby(base) {
+  if (params.get("lobby")) return params.get("lobby");
+  try {
+    const r = await fetch(`${base}/lobbies`);
+    if (r.ok) { const j = await r.json(); if (j.current != null) return j.current; }
+  } catch {}
+  return FEATURED.id === "fnd" ? 412 : FEATURED.id;
+}
+if (liveBase) {
+  const base = liveBase;
   // `&as=<name>` signs in as that wallet on a server started with --dev-sessions (tests, local development).
   (params.get("as") ? devSession(base, params.get("as")) : guestSession(base))
-    .then((token) => {
-      store.actions.goLive({ base, lobby: FEATURED.id === "fnd" ? 412 : FEATURED.id, token });
+    .then(async (token) => {
+      store.actions.goLive({ base, lobby: await pickLobby(base), token });
       if (!params.get("as")) store.actions.restoreWallet();
     })
     .catch((e) => console.error(e.message));
@@ -65,7 +77,7 @@ function MiniPlayer({ s, a }) {
       <${Avatar} person=${person(spk)} size=${40} speaking />
       <span style="flex:1;min-width:0;display:flex;flex-direction:column">
         <span class="ellipsis" style="font-size:14px;font-weight:600">${spk} is speaking</span>
-        <span style="font-size:12px;color:var(--sky)">${FEATURED.name} · stage · tap to open</span>
+        <span style="font-size:12px;color:var(--sky)">${lobbyInfo(s).name} · stage · tap to open</span>
       </span>
     </button>
     <${IconButton} label="Stop listening" tone="danger" size="sm" onClick=${a.toggleListen}><${I.Close} size=${14} /></${IconButton}>
@@ -100,7 +112,7 @@ function App() {
   // The tab's title says where the person is.
   useEffect(() => {
     const clan = s.clans.find((c) => c.id === s.clan);
-    const where = { discover: "Lobbies", lobby: FEATURED.name, launch: s.launched ? `$${s.launched.id.toUpperCase()} launched` : "Launch", clan: clan ? `$${clan.ticker} clan` : "Clans" }[s.route.screen];
+    const where = { discover: "Lobbies", lobby: lobbyInfo(s).name, launch: s.launched ? `$${s.launched.id.toUpperCase()} launched` : "Launch", clan: clan ? `$${clan.ticker} clan` : "Clans" }[s.route.screen];
     document.title = `${where} · Social Launch`;
   }, [s.route.screen, s.clan, !!s.launched]);
   // The address follows the screen, and the back button walks it.

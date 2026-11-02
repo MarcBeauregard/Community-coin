@@ -37,7 +37,8 @@
     "test:remind": "node web/lobbies/remind-check.mjs",
     "test:profile": "node web/lobbies/profile-check.mjs",
     "test:moderate": "node web/lobbies/moderate-check.mjs",
-    "test:net": "node web/lobbies/net-check.mjs"
+    "test:net": "node web/lobbies/net-check.mjs",
+    "test:beta": "node web/lobbies/beta-check.mjs"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-chai-matchers": "2.1.2",

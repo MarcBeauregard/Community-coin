@@ -26,7 +26,7 @@ export function cleanText(text, max) {
 // Tickers of coins everyone knows: a practice idea can't borrow them.
 const RESERVED = new Set(["SOL", "WSOL", "MSOL", "USDC", "USDT", "PYUSD", "BTC", "WBTC", "ETH", "WETH", "XRP", "BNB", "JUP", "JTO", "PYTH", "RAY", "ORCA", "BONK", "PUMP", "TRUMP", "MELANIA", "PEPE", "DOGE", "SHIB", "PENGU", "FARTCO", "GOAT", "PNUT", "MOODEN"]);
 
-export function createRoom({ id, opensAt, source, host = null, welcome = null, onStage = null, crank = null, now = () => Date.now(), chatSlowMs = 3000, chatMax = 200, historySize = 200, rate = { burst: 20, perSec: 2 } }) {
+export function createRoom({ id, opensAt, source, host = null, welcome = null, name = null, theme = null, hostName = null, onStage = null, crank = null, now = () => Date.now(), chatSlowMs = 3000, chatMax = 200, historySize = 200, rate = { burst: 20, perSec: 2 } }) {
   const conns = new Map(); // connId -> { session, send, listening, lastChat, tokens, at }
   const history = [];
   let sent = { phase: null, race: new Map(), inside: -1, listening: -1, clockAt: 0 };
@@ -34,7 +34,9 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
   const settled = new Map(); // user -> their settled message, for when they come back
   let seq = 0;
   const cheers = { fire: 0, skull: 0 }; // reactions since the last batch
-  const cheerTotal = { fire: 0, skull: 0 }; // the lobby's, the same for everyone (late joiners get it in the hello)
+  const cheerTotal = { fire: 0, skull: 0 };
+  // What the beta wants to know: who came, who signed in, who took part, who stayed to the lock.
+  const stats = { visitors: new Set(), signedIn: new Set(), pledgers: new Set(), proposers: new Set(), chatters: new Set(), peakInside: 0, chats: 0, pledges: 0, atLock: null, launched: null }; // the lobby's, the same for everyone (late joiners get it in the hello)
   // Ideas reported to the host (who reported each), and the ones the host took out of the race.
   const reports = new Map();
   const removed = new Set(); // keys, as the program reads a ticker (case and look-alike digits folded)
@@ -122,10 +124,12 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
     size: () => conns.size,
     join(connId, session, send) {
       const first = ![...conns.values()].some((x) => x.session.sub === session.sub);
+      stats.visitors.add(session.sub);
+      if (!session.guest) stats.signedIn.add(session.sub);
       conns.set(connId, { session, send, listening: false, lastChat: -Infinity, tokens: rate.burst, at: now() });
       if (first && stage.isSpeaker(session.sub)) queueMicrotask(() => broadcast({ t: "stage", ...stageView() })); // back on stage
       if (settled.has(session.sub)) queueMicrotask(() => send(settled.get(session.sub))); // after the hello
-      return { t: "hello", lobby: id, now: now(), opensAt, phase: phaseAt(elapsed()), race: raceRows(), ...presence(), chat: history.slice(-50), curve, welcome: welcomeLine(), ...(manages(session.sub) ? { reports: reportCounts() } : {}), you: session.sub, guest: !!session.guest, stage: stageView(), cheers: { ...cheerTotal }, ...outcome,
+      return { t: "hello", lobby: id, now: now(), opensAt, phase: phaseAt(elapsed()), race: raceRows(), ...presence(), chat: history.slice(-50), curve, welcome: welcomeLine(), ...(manages(session.sub) ? { reports: reportCounts() } : {}), you: session.sub, guest: !!session.guest, stage: stageView(), cheers: { ...cheerTotal }, info: { name, theme, host: host?.() ?? source.host?.() ?? null, hostName }, ...outcome,
         practice: !!source.practice, ...(source.practice && !session.guest ? practiceOf(session.sub) : {}) };
     },
     leave(connId) {
@@ -142,6 +146,16 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
     },
     stage,
     setCrank(c) { crank = c; },
+    /** The lobby's numbers for the beta: counts only, no names. `seen`: users already met in earlier lobbies. */
+    stats(seen = new Set()) {
+      const returning = [...stats.visitors].filter((u) => seen.has(u)).length;
+      return { id, opensAt, name, phase: phaseAt(elapsed()), visitors: stats.visitors.size, signedIn: stats.signedIn.size, returning,
+        proposers: stats.proposers.size, pledgers: stats.pledgers.size, pledges: stats.pledges, chatters: stats.chatters.size, chats: stats.chats,
+        cheers: cheerTotal.fire + cheerTotal.skull, peakInside: stats.peakInside, insideAtLock: stats.atLock, launched: stats.launched,
+        ideas: source.ideas().length };
+    },
+    visitors: () => stats.visitors,
+    summary() { const p = presence(); return { id, opensAt, name, theme, phase: phaseAt(elapsed()), inside: p.inside, listening: p.listening }; },
     snapshot() { return { lobby: id, now: now(), opensAt, phase: phaseAt(elapsed()), race: raceRows(), ...presence(), chat: history.slice(-50) }; },
 
     /** Handles one message from a connection. Returns an error message to send back, `"close"` to drop it, or null. */
@@ -197,6 +211,8 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
           if (!text) return { t: "error", code: "EmptyMessage" };
           c.lastChat = t;
           const line = { id: ++seq, from: c.session.sub, text, at: t };
+          stats.chats++;
+          stats.chatters.add(c.session.sub);
           history.push(line);
           if (history.length > historySize) history.shift();
           broadcast({ t: "chat", line });
@@ -276,6 +292,8 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
           const r = source.chain.apply(op, args, elapsed());
           // The person's other tabs follow (their pledge and practice SOL), the asking one gets the answer.
           if (r.ok) toOthers(connId, me, { t: "mine", ...practiceOf(me) });
+          if (r.ok && msg.t === "pledge") { stats.pledges++; stats.pledgers.add(me); }
+          if (r.ok && msg.t === "propose") stats.proposers.add(me);
           const sym = args.symbol ?? args.to;
           const held = source.chain.ideas.find((d) => d.symbol === sym)?.pledged;
           return { t: "practice", op: msg.t, ok: r.ok, error: r.error ?? null, ...practiceOf(me), ...(held !== undefined ? { holds: String(held) } : {}) };
@@ -314,6 +332,7 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
           outcome.locked = { ...outcome.locked, voided: true };
           broadcast({ t: "voided", idea: e.idea });
         } else if (e.event === "LobbyLaunched") {
+          stats.launched = names[e.mint]?.symbol ?? null;
           outcome.launch = { mint: e.mint, idea: e.idea, pot: String(e.pot), founders: e.founders, symbol: names[e.mint]?.symbol, name: names[e.mint]?.name, cluster: source.practice ? null : source.cluster ?? null };
           broadcast({ t: "launch", ...outcome.launch });
         } else if (e.event === "PledgeRefunded" || e.event === "FounderJoined") {
@@ -363,6 +382,8 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
         cheers.skull = 0;
       }
       const p = presence();
+      stats.peakInside = Math.max(stats.peakInside, p.inside);
+      if (stats.atLock === null && elapsed() >= 3300) stats.atLock = p.inside;
       const faces = p.people.join();
       if (p.inside !== sent.inside || p.listening !== sent.listening || faces !== sent.faces) {
         broadcast({ t: "presence", ...p });

@@ -4,7 +4,7 @@
 import { html, Button, IconButton, Chip, Coin, Orbit } from "../ui.js";
 import * as I from "../icons.js";
 import { person, coin, PEOPLE, FEATURED } from "../demo/data.js";
-import { allocation } from "../demo/select.js";
+import { allocation, lobbyInfo } from "../demo/select.js";
 import { sol, int, ticker } from "../format.js";
 import { isAddress, explorerUrl, shortAddress, txUrl } from "../wallet/wallets.js";
 
@@ -38,7 +38,7 @@ export function Launch({ s, a, phone }) {
         ${phone
           ? html`<${IconButton} label="Back to lobbies" size="sm" onClick=${() => a.go({ screen: "discover" })}><${I.Back} size=${15} /></${IconButton}>`
           : html`<${Button} variant="ghost" size="sm" aria-label="Back to lobbies" onClick=${() => a.go({ screen: "discover" })}><${I.Back} size=${14} />Lobbies</${Button}>`}
-        <span class="t2 num" style="font-size:13px;font-weight:600">Lobby #${FEATURED.number} · launched at 01:00</span>
+        <span class="t2 num" style="font-size:13px;font-weight:600">Lobby #${lobbyInfo(s).number} · launched at 01:00</span>
       </div>
       <div class="launch-main">
         <div class="launch-art">

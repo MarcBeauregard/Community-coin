@@ -5,7 +5,7 @@ import { html, Button, IconButton, Segmented, Chip, Coin, Avatar, Bar, Gestation
 import * as I from "../icons.js";
 import { ambient } from "../tokens.js";
 import { person, coin, PEOPLE, FEATURED } from "../demo/data.js";
-import { race, timeline, lobbyClock, lobbyCards, presence } from "../demo/select.js";
+import { lobbyInfo, race, timeline, lobbyClock, lobbyCards, presence } from "../demo/select.js";
 import { addressPerson, shortAddress } from "../wallet/wallets.js";
 import { sol, int, signedPct, ticker } from "../format.js";
 
@@ -44,9 +44,13 @@ export function heroGlow(hue) {
   return `radial-gradient(70% 90% at 82% 45%, hsla(${hue},90%,58%,.30), transparent 62%), radial-gradient(50% 70% at 0% 100%, hsla(${(hue + 140) % 360},80%,55%,.12), transparent 60%), #0b0b0d`;
 }
 
+// A lobby with no idea yet still has a face: a neutral coin, and the invitation to propose the first.
+const NO_IDEA = { id: "none", ticker: "?", name: "No idea yet", hue: 150, total: 0 };
+
 function Hero({ s, a, phone }) {
   const ideas = race(s);
-  const lead = ideas[0];
+  const lead = ideas[0] ?? NO_IDEA;
+  const info = lobbyInfo(s);
   const t = lobbyClock(s);
   const pres = presence(s);
   return html`<section class="hero" aria-labelledby="hero-title" style=${{ background: heroGlow(lead.hue) }}>
@@ -54,15 +58,15 @@ function Hero({ s, a, phone }) {
       <div class="row">
         <${Chip} tone="lime" live>Live</${Chip}>
         <${Chip} tone="neutral">${t.label}</${Chip}>
-        ${!phone && html`<span class="t2" style="font-size:13px">Hosted by ${FEATURED.host}</span>`}
+        ${!phone && html`<span class="t2" style="font-size:13px">Hosted by ${info.host}</span>`}
       </div>
       <div class="row" style="gap:14px;flex-wrap:nowrap">
         ${phone && html`<${Coin} coin=${coin(lead)} size=${68} class="glow" />`}
         <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
-          ${phone ? html`<h2 id="hero-title" class="display">Friday Night Degens</h2>` : html`<h1 id="hero-title" class="display">Friday Night<br />Degens</h1>`}
+          ${phone ? html`<h2 id="hero-title" class="display">${info.name}</h2>` : html`<h1 id="hero-title" class="display">${info.name}</h1>`}
           ${phone
-            ? html`<span class="t2" style="font-size:13px;margin-top:-8px">${FEATURED.host} · ${FEATURED.theme}</span>`
-            : html`<p class="lede t2">Theme tonight: ${FEATURED.theme}. ${s.ideas.length} ideas are fighting for one launch.</p>`}
+            ? html`<span class="t2" style="font-size:13px;margin-top:-8px">${info.host}${info.theme ? ` · ${info.theme}` : ""}</span>`
+            : html`<p class="lede t2">${info.theme ? `Theme tonight: ${info.theme}. ` : ""}${ideas.length === 0 ? "No idea in the race yet: propose the first one." : ideas.length === 1 ? "One idea in the race so far." : `${ideas.length} ideas are fighting for one launch.`}</p>`}
         </div>
       </div>
       <div style="display:flex;flex-direction:column;gap:10px;max-width:520px">
@@ -93,7 +97,7 @@ function Hero({ s, a, phone }) {
     <div class="hero-art">
       <div class="ring"><${Orbit} people=${s.live ? [] : ROOM} base=${40} /></div>
       <${Coin} coin=${coin(lead)} size=${196} big class="glow" />
-      <span class="leading glass">Leading · ${ticker(lead.ticker)} <span class="num t2">${sol(lead.total)}</span></span>
+      ${ideas.length > 0 && html`<span class="leading glass">Leading · ${ticker(lead.ticker)} <span class="num t2">${sol(lead.total)}</span></span>`}
     </div>
   </section>`;
 }
@@ -225,7 +229,7 @@ function YourClans({ s, a, phone }) {
 }
 
 export function Discover({ s, a, phone }) {
-  const lead = race(s)[0];
+  const lead = race(s)[0] ?? NO_IDEA;
   return html`<div class="screen">
     <div class="ambient" style=${{ background: ambient(lead.hue) }} />
     ${phone
@@ -245,6 +249,7 @@ export function Discover({ s, a, phone }) {
       <footer class="t2" style="position:relative;font-size:12px;line-height:1.5;padding:8px 4px 32px;display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center">
         <span>Memecoins are speculative and can lose all their value. Not investment advice.</span>
         <button type="button" class="link" onClick=${() => a.openSheet("terms")}>Risks and terms</button>
+        ${s.live && html`<button type="button" class="link feedback-open" onClick=${() => a.openSheet("feedback")}>Beta feedback</button>`}
       </footer>
     </main>
   </div>`;

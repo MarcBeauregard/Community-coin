@@ -5,6 +5,7 @@ import { FEATURED, LOBBIES, CHANNELS, FOUNDERS, ME } from "./data.js";
 import { HOUR, clock, sol, solExact } from "../format.js";
 import { seriesOf, standingsAt } from "../race/curve.js";
 import { nextOpening, dayOf } from "../remind/remind.js";
+import { shortAddress } from "../wallet/wallets.js";
 
 export const PHASE_LABEL = { gather: "Gathering", floor: "Proposing & pledging", pledge: "Pledging", lock: "Locked", done: "Launched" };
 
@@ -19,6 +20,7 @@ export function timeline(elapsed) {
 
 export function race(s) {
   const ranked = s.ideas.map((d) => ({ ...d, total: pledgedOn(s, d) })).sort((a, b) => b.total - a.total);
+  if (!ranked.length) return []; // a lobby that just opened: no idea yet
   const max = ranked[0].total || 1;
   return ranked.map((d, i) => ({
     ...d,
@@ -69,6 +71,7 @@ export function finale(s, ideas) {
 // What the pledge dock shows for the selected idea.
 export function dock(s, ideas) {
   const sel = ideas.find((d) => d.id === s.selected) || ideas[0];
+  if (!sel) return { sel: null, mode: "empty", sub: "", mine: 0, shareIfWins: 0 };
   const { canPledge } = lobbyClock(s);
   const mine = s.pledge ? s.pledge.amount : 0;
   const shareIfWins = (s.amount / (sel.total + s.amount)) * 100;
@@ -103,6 +106,13 @@ export function lobbyCards(s) {
 }
 
 export function featured() { return FEATURED; }
+
+/** The lobby on screen: live, what its server says (name, host, theme); the demo's otherwise. */
+export function lobbyInfo(s) {
+  const i = s.live?.info;
+  return i ? { name: i.name, host: i.hostName ?? shortAddress(i.host), hostKey: i.host, theme: i.theme, number: String(s.live.lobby).padStart(4, "0") }
+    : { name: FEATURED.name, host: FEATURED.host, hostKey: FEATURED.host, theme: FEATURED.theme, number: FEATURED.number };
+}
 
 export function channels(s) {
   const live = s.live && s.clan === "new";
@@ -212,7 +222,7 @@ export function profile(s) {
   const past = s.history.flatMap((h) => (h.proposed ?? []).map((p) => ({ ticker: p.ticker, name: p.name, hue: s.ideas.find((d) => d.ticker === p.ticker)?.hue ?? 200,
     status: p.won ? "Won · launched" : "Didn’t win · bond returned", tone: p.won ? "lime" : "neutral" })));
   const lobbies = [
-    ...(open ? [{ key: "open", name: FEATURED.name, when: "Now", text: `${sol(s.pledge.amount)} on $${open.ticker} · racing`, tone: "sky" }] : []),
+    ...(open ? [{ key: "open", name: lobbyInfo(s).name, when: "Now", text: `${sol(s.pledge.amount)} on $${open.ticker} · racing`, tone: "sky" }] : []),
     ...s.history.map((h) => ({ key: h.key, name: h.name, when: new Date(h.at).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
       text: h.founder ? `Founder #${Number(h.rank).toLocaleString("en-US")} of $${h.ticker}` : h.pledged ? `Backed $${h.pledged} · refunded · $${h.ticker} won` : `Watched · $${h.ticker} won`,
       tone: h.founder ? "lime" : "neutral" })),

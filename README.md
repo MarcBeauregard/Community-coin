@@ -82,6 +82,45 @@ du programme, s'engage dans une ouverture, lance un meme et retire son allocatio
 chaque push sur `main`. Il faut l'activer une fois : *Settings → Pages → Build and deployment → Source :
 GitHub Actions*.
 
+## Héberger la bêta fermée
+
+Une bêta d'entraînement : un lobby par heure, à l'heure pile, avec du SOL d'entraînement (rien ne bouge on-chain).
+Un seul serveur sert l'application et ses lobbies ; la page n'a besoin d'aucun paramètre.
+
+1. **Construire l'image** (depuis la racine du dépôt) :
+
+   ```bash
+   docker build -f web/lobbies/Dockerfile -t social-launch-beta .
+   ```
+
+2. **La lancer** sur n'importe quel hébergeur de conteneurs (Fly.io, Railway, Render, un VPS…), derrière HTTPS :
+
+   ```bash
+   docker run -d -p 8790:8790 -v sl-data:/data -e SESSION_SECRET="$(openssl rand -hex 32)" -e STATS_TOKEN="$(openssl rand -hex 16)" -e LOBBY_HOST=<ton adresse de wallet> -e ORIGINS=https://beta.exemple.com social-launch-beta
+   ```
+
+   | Variable | Rôle |
+   |---|---|
+   | `SESSION_SECRET` | 32 caractères ou plus. Garde les testeurs connectés après un redémarrage. |
+   | `STATS_TOKEN` | Ouvre `GET /stats` (en-tête `Authorization: Bearer …`). Sans lui, `/stats` n'existe pas. |
+   | `LOBBY_HOST` | Le wallet de l'hôte : lui seul retire une idée. |
+   | `LOBBY_NAME`, `LOBBY_THEME`, `LOBBY_HOST_NAME`, `LOBBY_WELCOME` | Le nom, le thème, le nom affiché de l'hôte, le mot d'accueil. |
+   | `ORIGINS` | L'adresse publique de la page (connexion par wallet liée à ce site). |
+   | `/data` | Le volume : clans, médias, retours des testeurs. |
+
+3. **Suivre la bêta** : `GET /health` (sonde), `GET /lobbies` (le lobby en cours), et :
+
+   ```bash
+   curl -H "Authorization: Bearer $STATS_TOKEN" https://beta.exemple.com/stats
+   ```
+
+   Par lobby : visiteurs, connectés, pledgers, proposeurs, pic de présence, messages ; les personnes revenues d'une
+   heure à l'autre ; les retours (note de 1 à 5 et texte, envoyés depuis le bouton « Beta feedback »). Aucun nom.
+
+Sans Docker : `npm run build:lobbies` puis
+`node web/lobbies/server/server.mjs --schedule hourly --host <wallet> --guests --static web/dist/lobbies`.
+Le test de bout en bout : `npm run test:beta`.
+
 ## Déployer sur Solana (devnet)
 
 À faire depuis ton ordinateur (macOS ou Linux ; sous Windows, dans WSL). Le devnet est le réseau de test de

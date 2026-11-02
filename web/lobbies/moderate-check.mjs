@@ -1,6 +1,6 @@
 // Checks reporting and removing an idea: anyone signed in reports an idea to the host (once, counted, not named);
 // the host or a co-host removes it, in a practice lobby, before the lock; everyone on it gets their practice SOL back
-// at once, its proposer the bond; it can't be backed again. The lobby program has no such instruction yet (PLAN.md).
+// at once, its proposer the bond; it can't be backed again. On Solana, the program's remove_idea and refund_removed do the same.
 // Usage: node web/lobbies/moderate-check.mjs   (after npm run build:lobbies)
 
 import { createRequire } from "node:module";
