@@ -50,8 +50,12 @@ pub const MAX_IDEAS: u8 = 16;
 pub const NO_WINNER: u8 = u8::MAX;
 /// The longest a lobby can last, from opening to launch.
 pub const MAX_LOBBY_LENGTH: i64 = 4 * 3600;
-/// The smallest pledge: above the rent-exempt minimum of a wallet, so a refund to an emptied wallet always lands.
-pub const MIN_PLEDGE: u64 = 1_000_000;
+/// The smallest pledge: above the rent-exempt minimum of a wallet (a refund to an emptied wallet always lands), and
+/// well above the rent of the accounts a pledge makes others pay for, so dust pledges can't drain the crank.
+pub const MIN_PLEDGE: u64 = 10_000_000;
+/// The host may remove an idea until this long before the lock: never in the final minutes, where it would pick the
+/// winner.
+pub const REMOVE_CUTOFF: i64 = 300;
 /// The smallest proposal bond a lobby may ask: holding a ticker for a day is not free.
 pub const MIN_BOND: u64 = 10_000_000;
 /// How long after a lobby's launch time its ideas' tickers stay held: time for anyone to crank the launch.
@@ -616,6 +620,7 @@ pub mod community_coin {
         let l = &ctx.accounts.lobby;
         require!(t >= l.opens_at, CoinError::LobbyNotOpen);
         require!(t < l.lock_at, CoinError::PledgesLocked);
+        require!(!ctx.accounts.idea.removed, CoinError::IdeaRemoved);
         let p = &ctx.accounts.pledge;
         require!(p.amount == 0 || p.idea == ctx.accounts.idea.index, CoinError::OnAnotherIdea);
         let user_total = p.amount.checked_add(amount).ok_or(CoinError::MathOverflow)?;
@@ -663,6 +668,8 @@ pub mod community_coin {
             i.backers -= 1;
         }
         emit!(Withdrawn { lobby: lobby_key, user: p.user, idea: i.index, amount, user_total: p.amount, idea_total: i.pledged, lobby_total: l.total });
+        // Withdrawn in full, the account stays: it keeps the wallet's place in line (its founder rank). It closes
+        // when the lobby settles (`refund`), its rent back to its owner.
         Ok(())
     }
 
@@ -673,6 +680,7 @@ pub mod community_coin {
         let (from, to, p) = (&mut ctx.accounts.from, &mut ctx.accounts.to, &mut ctx.accounts.pledge);
         require!(p.amount > 0, CoinError::ZeroAmount);
         require!(from.index != to.index, CoinError::OnAnotherIdea);
+        require!(!to.removed, CoinError::IdeaRemoved);
         from.pledged -= p.amount;
         from.backers -= 1;
         to.pledged = to.pledged.checked_add(p.amount).ok_or(CoinError::MathOverflow)?;
@@ -698,6 +706,9 @@ pub mod community_coin {
             require_keys_eq!(i.lobby, lobby_key, CoinError::BadIdeas);
             require!(i.index < l.idea_count && seen & (1 << i.index) == 0, CoinError::BadIdeas);
             seen |= 1 << i.index;
+            if i.removed {
+                continue; // taken out of the race by the host: it can't win
+            }
             if i.pledged > pot || (i.pledged == pot && i.pledged > 0 && i.index < best) {
                 best = i.index;
                 pot = i.pledged;
@@ -763,20 +774,71 @@ pub mod community_coin {
         Ok(())
     }
 
-    /// Refunds a pledge that did not back the winner. Anyone can call it for anyone: the lamports go to the
-    /// pledger.
+    /// Refunds a pledge that did not back the winner, and closes its account (its rent back to the pledger too). An
+    /// emptied pledge just closes. Anyone can call it for anyone: the lamports go to the pledger.
     pub fn refund(ctx: Context<Refund>) -> Result<()> {
         let l = &ctx.accounts.lobby;
         let p = &ctx.accounts.pledge;
         require!(l.finalized, CoinError::NotFinalized);
         require!(!p.settled, CoinError::PledgeSettled);
-        require!(p.amount > 0, CoinError::ZeroAmount);
+        if p.amount == 0 {
+            // Withdrawn in full before the lock: nothing to refund, only its rent to give back. The event (of 0) tells
+            // indexers the pledge is settled, so no crank tries it again.
+            emit!(PledgeRefunded { lobby: p.lobby, user: p.user, amount: 0 });
+            return ctx.accounts.pledge.close(ctx.accounts.user.to_account_info());
+        }
         require!(l.winner == NO_WINNER || p.idea != l.winner, CoinError::WinnerNoRefund);
         let amount = p.amount;
         pay_lamports(&ctx.accounts.lobby.to_account_info(), &ctx.accounts.user.to_account_info(), amount)?;
         let p = &mut ctx.accounts.pledge;
         p.settled = true;
         emit!(PledgeRefunded { lobby: p.lobby, user: p.user, amount });
+        // Settled: the pledge account closes, its rent back to the pledger.
+        ctx.accounts.pledge.close(ctx.accounts.user.to_account_info())?;
+        Ok(())
+    }
+
+    /// The host takes an idea out of the race, until a few minutes before the lock: its bond goes back to its
+    /// proposer at once, nobody can pledge on it or move to it, it can't win, and every pledge on it can be refunded
+    /// right away with `refund_removed`.
+    pub fn remove_idea(ctx: Context<RemoveIdea>) -> Result<()> {
+        let t = now()?;
+        let l = &ctx.accounts.lobby;
+        require!(t < l.lock_at - REMOVE_CUTOFF, CoinError::TooLateToRemove);
+        require!(!ctx.accounts.idea.removed, CoinError::IdeaRemoved);
+        let lobby_key = ctx.accounts.lobby.key();
+        let amount = if ctx.accounts.idea.bond_returned { 0 } else { ctx.accounts.lobby.bond };
+        pay_lamports(&ctx.accounts.lobby.to_account_info(), &ctx.accounts.proposer.to_account_info(), amount)?;
+        let i = &mut ctx.accounts.idea;
+        i.removed = true;
+        emit!(IdeaRemoved { lobby: lobby_key, idea: i.index });
+        if amount > 0 {
+            i.bond_returned = true;
+            emit!(BondReturned { lobby: lobby_key, idea: i.index, proposer: i.proposer, amount });
+        }
+        Ok(())
+    }
+
+    /// Refunds a pledge on an idea the host removed, before the lock: it leaves the race's totals, and its account
+    /// closes with its rent. (After the lock, `refund` returns it like any losing pledge.) Anyone can call it for
+    /// anyone: the lamports go to the pledger.
+    pub fn refund_removed(ctx: Context<RefundRemoved>) -> Result<()> {
+        let i = &ctx.accounts.idea;
+        let p = &ctx.accounts.pledge;
+        require!(!ctx.accounts.lobby.finalized, CoinError::AlreadyFinalized);
+        require!(i.removed, CoinError::NotRemoved);
+        require!(!p.settled, CoinError::PledgeSettled);
+        require!(p.amount > 0, CoinError::ZeroAmount);
+        let amount = p.amount;
+        pay_lamports(&ctx.accounts.lobby.to_account_info(), &ctx.accounts.user.to_account_info(), amount)?;
+        let lobby_key = ctx.accounts.lobby.key();
+        let user = p.user;
+        let (l, i) = (&mut ctx.accounts.lobby, &mut ctx.accounts.idea);
+        i.pledged -= amount;
+        i.backers -= 1;
+        l.total -= amount;
+        emit!(PledgeRefunded { lobby: lobby_key, user, amount });
+        ctx.accounts.pledge.close(ctx.accounts.user.to_account_info())?;
         Ok(())
     }
 
@@ -795,6 +857,9 @@ pub mod community_coin {
         ctx.accounts.pledge.settled = true;
         emit!(Committed { mint, user, quote: amount });
         emit!(FounderJoined { lobby: ctx.accounts.lobby.key(), user, mint, amount, seq });
+        // The pledge account closes and its rent goes to whoever paid for the commitment: claiming founders never
+        // costs the crank.
+        ctx.accounts.pledge.close(ctx.accounts.payer.to_account_info())?;
         Ok(())
     }
 
@@ -1286,6 +1351,31 @@ pub struct VoidWinner<'info> {
 pub struct Refund<'info> {
     #[account(mut, seeds = [b"lobby", lobby.id.to_le_bytes().as_ref()], bump = lobby.bump)]
     pub lobby: Box<Account<'info, Lobby>>,
+    #[account(mut, seeds = [b"pledge", lobby.key().as_ref(), user.key().as_ref()], bump = pledge.bump)]
+    pub pledge: Box<Account<'info, Pledge>>,
+    #[account(mut)]
+    pub user: SystemAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct RemoveIdea<'info> {
+    #[account(constraint = host.key() == lobby.host @ CoinError::HostOnly)]
+    pub host: Signer<'info>,
+    #[account(mut, seeds = [b"lobby", lobby.id.to_le_bytes().as_ref()], bump = lobby.bump)]
+    pub lobby: Box<Account<'info, Lobby>>,
+    #[account(mut, seeds = [b"idea", lobby.key().as_ref(), idea.key.as_slice()], bump = idea.bump)]
+    pub idea: Box<Account<'info, Idea>>,
+    /// CHECK: the idea's proposer, who gets the bond back.
+    #[account(mut, address = idea.proposer @ CoinError::BadIdeas)]
+    pub proposer: UncheckedAccount<'info>,
+}
+
+#[derive(Accounts)]
+pub struct RefundRemoved<'info> {
+    #[account(mut, seeds = [b"lobby", lobby.id.to_le_bytes().as_ref()], bump = lobby.bump)]
+    pub lobby: Box<Account<'info, Lobby>>,
+    #[account(mut, seeds = [b"idea", lobby.key().as_ref(), idea.key.as_slice()], bump = idea.bump, constraint = idea.index == pledge.idea @ CoinError::OnAnotherIdea)]
+    pub idea: Box<Account<'info, Idea>>,
     #[account(mut, seeds = [b"pledge", lobby.key().as_ref(), user.key().as_ref()], bump = pledge.bump)]
     pub pledge: Box<Account<'info, Pledge>>,
     #[account(mut)]

@@ -217,17 +217,21 @@ Sheets: propose (invalid, valid, ticker taken), pledge (idle, signing), host, wa
 - Notifications from a closed tab need a push service (Web Push and a service worker); until then the calendar is
   the reminder that always works.
 
-# Before real SOL: who pays the network's costs (to do when lobbies move on chain)
+# Before real SOL: who pays the network's costs
 
-Found while reviewing the program (`solana/programs/community-coin/src/lib.rs`); nothing is at risk while lobbies
-are practice lobbies.
-- A user's own withdraw costs us nothing: the signer pays the fee and gets back exactly what they pledged. Spam
-  clicking costs the spammer.
-- The crank pays a fee per refund (≈ 0.000005 SOL); fine, the pledger paid more to pledge.
-- `claim_founder`: whoever calls it pays the founder's Commitment rent (≈ 0.001 SOL). Thousands of 0.001 SOL pledges
-  on the winner would cost the crank about as much as they pledged. Fix: close the Pledge account there and send its
-  rent (≈ 0.0015 SOL, paid by the user at their first pledge) to the payer.
-- Pledge accounts are never closed: their rent stays locked. Close them on a full withdraw and on refund, rent back
-  to the user.
-- Consider a higher MIN_PLEDGE (0.01–0.05 SOL).
-Each is a program change: Rust tests, the security review (SECURITY.md) and the external audit before mainnet.
+Found while reviewing the program; done in the program, its Rust tests, the JavaScript rules and the cross-check.
+- A user's own withdraw costs us nothing: the signer pays the fee and gets back exactly what they pledged.
+- Pledge accounts no longer lock their rent: `refund` closes the account (the pledge and its rent back to the
+  pledger, an emptied pledge just closes, with an event of 0 so indexers don't retry it); `claim_founder` closes it
+  and its rent (≈ 0.0015 SOL) goes to whoever paid the Commitment (≈ 0.001 SOL): claiming founders costs the crank
+  nothing. A pledge withdrawn in full keeps its account until the lock: it holds the wallet's place in line.
+- MIN_PLEDGE is 0.01 SOL (was 0.001): far above the rent a pledge makes anyone pay.
+- `remove_idea` (host only, until 5 minutes before the lock): the bond goes back at once, the idea can't be pledged on,
+  moved to or win; `refund_removed` (anyone, before the lock) returns each pledge on it and its rent, and takes it out
+  of the totals. The practice server now uses these instead of its own workaround, and the final minutes allow no
+  removal at all. A removed idea's slot is not freed (16 ideas at most per lobby, removed ones included).
+- Checks: `cargo test --test lobby` (two new tests: removal, and rent back at the lock), the random walk now removes
+  an idea and refunds its backers, `chain-check.mjs` replays it identically on the JavaScript rules, wire and indexer.
+
+## Left
+- The security review (SECURITY.md) and the external audit cover these instructions before mainnet.

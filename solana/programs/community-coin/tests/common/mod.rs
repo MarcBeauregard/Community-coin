@@ -783,6 +783,29 @@ impl Hub {
         self.send_as(i, vec![ix]).await
     }
 
+    /// User `i` (the host, or not) takes `symbol` out of the race.
+    pub async fn remove_idea(&mut self, i: usize, id: u64, symbol: &str) -> Result<(), BanksClientError> {
+        let host = self.user(i).pubkey();
+        let lobby = lobby_pda(id);
+        let proposer = self.idea(id, symbol).await.proposer;
+        let ix = Self::ix(
+            community_coin::accounts::RemoveIdea { host, lobby, idea: idea_pda(&lobby, symbol), proposer }.to_account_metas(None),
+            community_coin::instruction::RemoveIdea {}.data(),
+        );
+        self.send_as(i, vec![ix]).await
+    }
+
+    /// User `i` refunds user `of`'s pledge on a removed idea.
+    pub async fn refund_removed(&mut self, i: usize, id: u64, symbol: &str, of: usize) -> Result<(), BanksClientError> {
+        let user = self.user(of).pubkey();
+        let lobby = lobby_pda(id);
+        let ix = Self::ix(
+            community_coin::accounts::RefundRemoved { lobby, idea: idea_pda(&lobby, symbol), pledge: pledge_pda(&lobby, &user), user }.to_account_metas(None),
+            community_coin::instruction::RefundRemoved {}.data(),
+        );
+        self.send_as(i, vec![ix]).await
+    }
+
     pub async fn return_bond(&mut self, i: usize, id: u64, symbol: &str) -> Result<(), BanksClientError> {
         let lobby = lobby_pda(id);
         let proposer = self.idea(id, symbol).await.proposer;

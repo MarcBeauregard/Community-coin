@@ -187,3 +187,10 @@ pub struct BondReturned {
     pub proposer: Pubkey,
     pub amount: u64,
 }
+
+/// The host took an idea out of the race; pledges on it can be refunded at once.
+#[event]
+pub struct IdeaRemoved {
+    pub lobby: Pubkey,
+    pub idea: u8,
+}

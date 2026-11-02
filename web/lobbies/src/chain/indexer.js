@@ -21,7 +21,8 @@ export function apply(view, e) {
       view.ideas[e.index] = { index: e.index, name: e.name, symbol: e.symbol, proposer: e.proposer, pledged: 0n, backers: 0 };
       break;
     case "Pledged": {
-      const prev = view.pledges.get(e.user);
+      const found = view.pledges.get(e.user);
+      const prev = found && !found.closed ? found : null; // a pledge refunded off a removed idea starts anew
       if (!prev) view.order.push(e.user);
       if (!prev || prev.amount === 0n) view.ideas[e.idea].backers += 1;
       view.pledges.set(e.user, { idea: e.idea, amount: e.user_total });
@@ -54,8 +55,22 @@ export function apply(view, e) {
       view.launched = true;
       view.mint = e.mint;
       break;
-    case "PledgeRefunded":
+    case "PledgeRefunded": {
       view.refunded.add(e.user);
+      // Before the lock, a refund is a pledge on an idea the host removed: it leaves the race (refund_removed).
+      const p = view.pledges.get(e.user);
+      if (!view.finalized && p && !p.closed) {
+        const i = view.ideas[p.idea];
+        i.pledged -= e.amount;
+        i.backers -= 1;
+        view.lobby.total -= e.amount;
+        p.amount = 0n;
+        p.closed = true;
+      }
+      break;
+    }
+    case "IdeaRemoved":
+      view.ideas[e.idea].removed = true;
       break;
     case "FounderJoined":
       view.founders.push({ user: e.user, amount: e.amount, rank: e.seq + 1 });
@@ -76,7 +91,7 @@ export function fold(events, view = emptyView()) {
 
 /** A wallet's founder rank: its place among everyone who pledged in the lobby, first pledge first. */
 export function rankOf(view, user) {
-  const i = view.order.indexOf(user);
+  const i = view.order.lastIndexOf(user); // a wallet that pledged anew after a removal is ranked at its new pledge
   return i < 0 ? null : i + 1;
 }
 

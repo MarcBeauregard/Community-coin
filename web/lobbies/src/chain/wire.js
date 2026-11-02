@@ -16,6 +16,7 @@ export const IX = {
   create_lobby: "74374a302833879b", propose_idea: "4d2b59c508c68343", pledge: "eb2f9cfe0058d48e", withdraw: "b712469c946da122",
   move_pledge: "4c2c5007184b833a", finalize: "ab3dda387f730cd9", launch_winner: "e3b596c4349a8926", void_winner: "e27a8e87f6ace064",
   refund: "0260b7fb3fd02e2e", claim_founder: "c191d74dd2d68700", return_bond: "94423e08ceb80a49",
+  remove_idea: "24bda7052dfad0d3", refund_removed: "9465677438b137a5",
 };
 export const ACCOUNT = { Lobby: "a7c2d9a35c5c6731", Idea: "59dc53d6fce4247b", Pledge: "a1c5792e634ba983" };
 
@@ -26,7 +27,7 @@ export const ERRORS = [
   "ReserveInvariant", "InvalidConfig", "BadLineage", "Unauthorized", "MathOverflow",
   "InvalidLobby", "LobbyNotOpen", "ProposalsClosed", "PledgesLocked", "StillPledging", "AlreadyFinalized", "NotFinalized", "TooManyIdeas",
   "OnAnotherIdea", "PledgeCap", "NotLaunchTime", "NoWinner", "AlreadyLaunched", "NotLaunched", "PledgeSettled", "NotTheWinner",
-  "WinnerNoRefund", "BadIdeas", "TickerFree", "TickerHeld", "PledgeTooSmall",
+  "WinnerNoRefund", "BadIdeas", "TickerFree", "TickerHeld", "PledgeTooSmall", "IdeaRemoved", "TooLateToRemove", "HostOnly", "NotRemoved",
 ];
 // An address that is already in use when `init` creates it (the system program's error 0), and an account that
 // does not exist yet (Anchor's AccountNotInitialized).
@@ -49,7 +50,7 @@ export const ERROR_TEXT = {
   LobbyNotOpen: "The lobby is not open yet.", ProposalsClosed: "Proposals are closed.", PledgesLocked: "Pledges are locked.",
   OnAnotherIdea: "Your pledge is on another idea: move it instead.", PledgeCap: "That is above this lobby's pledge limit.",
   MemeExists: "This ticker already exists on the launchpad.", AccountInUse: "This ticker is already in the race.", ZeroAmount: "Enter an amount above zero.",
-  TooManyIdeas: "This lobby is full.", PledgeSettled: "Already refunded or committed.", TickerHeld: "Another lobby is racing this ticker right now.", PledgeTooSmall: "A pledge is at least 0.001 SOL, or withdrawn in full.", WinnerNoRefund: "A pledge on the winner becomes your founder allocation.",
+  TooManyIdeas: "This lobby is full.", PledgeSettled: "Already refunded or committed.", TickerHeld: "Another lobby is racing this ticker right now.", PledgeTooSmall: "A pledge is at least 0.01 SOL, or withdrawn in full.", IdeaRemoved: "The host removed this idea from the race.", TooLateToRemove: "Too late to remove an idea: the final minutes belong to the race.", HostOnly: "Only the host can do this.", WinnerNoRefund: "A pledge on the winner becomes your founder allocation.",
 };
 
 // ------------------------------------------------------------------ addresses
@@ -147,6 +148,10 @@ export function lobbyInstruction(addr, op, a) {
       return { keys: [signer(a.payer), r(lobby), w(addr.pledge(lobby, a.user)), w(addr.commit(a.mint, a.user)), r(SYSTEM)], data: d.done() };
     case "return_bond":
       return { keys: [w(lobby), w(addr.idea(lobby, a.symbol)), w(a.proposer)], data: d.done() };
+    case "remove_idea":
+      return { keys: [[a.host, true, false], w(lobby), w(addr.idea(lobby, a.symbol)), w(a.proposer)], data: d.done() };
+    case "refund_removed":
+      return { keys: [w(lobby), w(addr.idea(lobby, a.symbol)), w(addr.pledge(lobby, a.user)), w(a.user)], data: d.done() };
     default:
       throw new Error(`unknown lobby instruction ${op}`);
   }
@@ -180,12 +185,13 @@ const FIELDS = {
   BondReturned: [["lobby", "key"], ["idea", "u8"], ["proposer", "key"], ["amount", "u64"]],
   Launched: [["mint", "key"], ["parent", "key"], ["creator", "key"], ["name", "string"], ["symbol", "string"]],
   Committed: [["mint", "key"], ["user", "key"], ["quote", "u64"]],
+  IdeaRemoved: [["lobby", "key"], ["idea", "u8"]],
 };
 export const EVENT = {
   LobbyCreated: "6da91032a9f2ed41", IdeaProposed: "9662096d37181a16", Pledged: "629a44e318301a10", Withdrawn: "1459dfc6c27cdb0d",
   PledgeMoved: "0bf5fbf439f4bdac", LobbyFinalized: "8c19981cf961cdcb", WinnerVoided: "e16cb974cc298701", LobbyLaunched: "0bc57740fd2d2604",
   PledgeRefunded: "51813ab1cbe046bf", FounderJoined: "9c4a560f55ba5aed", BondReturned: "295596f7d296a076", Launched: "d17f1d9881d4bdb7",
-  Committed: "469ea2561d6f8fe2",
+  Committed: "469ea2561d6f8fe2", IdeaRemoved: "ea3587e4087c7c64",
 };
 const EVENT_BY_DISC = Object.fromEntries(Object.entries(EVENT).map(([n, d]) => [d, n]));
 
@@ -226,7 +232,7 @@ export function decodeLobby(data) {
 export function decodeIdea(data) {
   const r = account(data, "Idea");
   return { lobby: r.key(), index: r.u8(), proposer: r.key(), key: new TextDecoder().decode(r.bytes()), name: r.string(), symbol: r.string(), uri: r.string(),
-    pledged: r.u64(), backers: r.u32(), bond_returned: r.bool() };
+    pledged: r.u64(), backers: r.u32(), bond_returned: r.bool(), bump: r.u8(), removed: r.bool() };
 }
 
 export function decodePledge(data) {

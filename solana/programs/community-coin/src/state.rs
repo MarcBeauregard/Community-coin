@@ -138,6 +138,8 @@ pub struct Idea {
     pub backers: u32,
     pub bond_returned: bool,
     pub bump: u8,
+    /// Taken out of the race by the host (`remove_idea`).
+    pub removed: bool,
 }
 
 /// One wallet's pledge in a lobby: on one idea at a time.

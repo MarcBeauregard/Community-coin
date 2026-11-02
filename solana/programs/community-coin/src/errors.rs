@@ -88,6 +88,14 @@ pub enum CoinError {
     TickerFree,
     #[msg("This ticker is held by a lobby's race")]
     TickerHeld,
-    #[msg("A pledge is at least 0.001 SOL (or withdrawn in full)")]
+    #[msg("A pledge is at least 0.01 SOL (or withdrawn in full)")]
     PledgeTooSmall,
+    #[msg("The host removed this idea from the race")]
+    IdeaRemoved,
+    #[msg("Too late to remove an idea: the final minutes belong to the race")]
+    TooLateToRemove,
+    #[msg("Only the lobby's host can do this")]
+    HostOnly,
+    #[msg("This idea is still in the race")]
+    NotRemoved,
 }

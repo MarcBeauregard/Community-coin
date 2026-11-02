@@ -215,23 +215,23 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
           return { t: "reported", symbol: canon };
         }
         case "remove": {
-          // The host (or a co-host) takes an idea out of the race: every pledge on it comes back now, and its bond.
-          // Practice lobbies only: the lobby program has no such instruction yet (PLAN.md).
+          // The host (or a co-host) takes an idea out of the race: every pledge on it comes back now, and its bond, through
+          // the program's own remove_idea and refund_removed. Practice lobbies only here (on a cluster the host signs it).
           if (!manages(c.session.sub)) return { t: "error", code: "HostOnly" };
           if (!source.practice) return { t: "error", code: "NotPractice" };
           if (phaseAt(elapsed()) === "lock" || phaseAt(elapsed()) === "done") return { t: "error", code: "PledgesLocked" };
           const ch = source.chain;
           const idea = ch.ideas.find((d) => keyOf(d.symbol) !== null && keyOf(d.symbol) === keyOf(msg.symbol));
           if (!idea || isRemoved(idea.symbol)) return { t: "error", code: "UnknownIdea" };
-          // In the last five minutes the host can't swing the race: only an idea people reported can go.
-          if (elapsed() >= 3000 && !(reports.get(idea.symbol)?.size > 0)) return { t: "error", code: "FinalMinutesNeedReport" };
+          // In the last five minutes nobody can swing the race: the program refuses any removal then.
+          const done = ch.apply("remove_idea", { host: ch.lobby.host, symbol: idea.symbol }, elapsed());
+          if (!done.ok) return { t: "error", code: done.error };
           const back = [];
           for (const [user, p] of ch.pledges) {
-            if (p.idea !== idea.index || p.settled || p.amount === 0n) continue;
+            if (p.idea !== idea.index || p.settled || p.closed || p.amount === 0n) continue;
             const amount = p.amount;
-            if (ch.apply("withdraw", { user, symbol: idea.symbol, amount }, elapsed()).ok) back.push([user, amount]);
+            if (ch.apply("refund_removed", { user, symbol: idea.symbol }, elapsed()).ok) back.push([user, amount]);
           }
-          idea.bond_returned = true; // the proposer's practice bond (src/chain/rules.js has no instruction for this)
           removed.add(keyOf(idea.symbol));
           removedLooks.add(looks(idea.symbol));
           // The race over the hour forgets it too: a replay never tells the story of a removed idea.

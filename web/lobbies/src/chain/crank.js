@@ -13,6 +13,8 @@ export function planCrank(state, now) {
   const ops = [];
   if (!l.finalized) {
     if (now >= l.lockAt) ops.push({ op: "finalize", args: { symbols: ideas.map((d) => d.symbol) } });
+    // An idea the host removed: its pledges go back at once (before the lock; after it, refund does it).
+    else for (const p of pledges) if (!p.settled && p.amount > 0n && ideas[p.idea]?.removed) ops.push({ op: "refund_removed", args: { user: p.user, symbol: ideas[p.idea].symbol } });
     return ops;
   }
   const hasWinner = l.winner !== NO_WINNER;
@@ -25,7 +27,9 @@ export function planCrank(state, now) {
   // From the lock, a pledge that did not back the winner goes back at once, and the bonds too; a winning pledge
   // becomes its founder's commitment once the coin exists.
   for (const p of pledges) {
-    if (p.settled || p.amount === 0n) continue;
+    if (p.settled) continue;
+    // A pledge withdrawn in full still has its account: refund closes it and gives its rent back.
+    if (p.amount === 0n) { ops.push({ op: "refund", args: { user: p.user } }); continue; }
     if (!hasWinner || p.idea !== l.winner) ops.push({ op: "refund", args: { user: p.user } });
     else if (launched) ops.push({ op: "claim_founder", args: { user: p.user } });
   }
@@ -38,7 +42,7 @@ export function stateOfRules(chain) {
   const l = chain.lobby;
   return {
     lobby: { lockAt: Number(l.lock_at), launchAt: Number(l.launch_at), finalized: l.finalized, launched: l.launched, winner: l.winner },
-    ideas: chain.ideas.map((d) => ({ symbol: d.symbol, bondReturned: d.bond_returned })),
+    ideas: chain.ideas.map((d) => ({ symbol: d.symbol, bondReturned: d.bond_returned, removed: !!d.removed })),
     pledges: [...chain.pledges.values()].map((p) => ({ user: p.user, idea: p.idea, amount: p.amount, settled: p.settled })),
     winnerTaken: l.finalized && l.winner !== NO_WINNER && !l.launched && chain.taken(chain.ideas[l.winner].key),
   };

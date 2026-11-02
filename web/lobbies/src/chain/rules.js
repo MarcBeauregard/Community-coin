@@ -9,8 +9,10 @@ export const NO_WINNER = 255;
 export const MAX_IDEAS = 16;
 export const MAX_LOBBY_LENGTH = 4 * 3600;
 export const LAMPORTS = 1_000_000_000n;
-/** The program's MIN_PLEDGE (above a wallet's rent-exempt minimum) and MIN_BOND. */
-export const MIN_PLEDGE = 1_000_000n;
+/** The program's MIN_PLEDGE (above a wallet's rent-exempt minimum, and the rent of what a pledge costs others) and MIN_BOND. */
+export const MIN_PLEDGE = 10_000_000n;
+/** How long before the lock the host can still remove an idea (the program's REMOVE_CUTOFF). */
+export const REMOVE_CUTOFF = 300n;
 export const MIN_BOND = 10_000_000n;
 
 export class RuleError extends Error {
@@ -49,7 +51,8 @@ export class LobbyRules {
   }
   pledgeOf(user) {
     const p = this.pledges.get(user);
-    if (!p) throw new RuleError("AccountNotInitialized");
+    // A closed pledge account is gone on chain; the rules keep it (marked) for the app's own reading.
+    if (!p || p.closed) throw new RuleError("AccountNotInitialized");
     return p;
   }
   taken(key) {
@@ -83,7 +86,7 @@ export class LobbyRules {
     // Another lobby racing this ticker holds it (the program's Hold account); `env.isHeld` answers for the others.
     require(!this.env.isHeld?.(key, t), "TickerHeld");
     this.balance += l.bond;
-    const idea = { index: l.idea_count, proposer, key, name, symbol, uri, pledged: 0n, backers: 0, bond_returned: false };
+    const idea = { index: l.idea_count, proposer, key, name, symbol, uri, pledged: 0n, backers: 0, bond_returned: false, removed: false };
     this.ideas.push(idea);
     l.idea_count += 1;
     return [{ event: "IdeaProposed", lobby: this.env.lobbyKey, index: idea.index, proposer, name, symbol }];
@@ -97,7 +100,9 @@ export class LobbyRules {
     require(a > 0n, "ZeroAmount");
     require(t >= l.opens_at, "LobbyNotOpen");
     require(t < l.lock_at, "PledgesLocked");
-    const existing = this.pledges.get(user);
+    require(!i.removed, "IdeaRemoved");
+    const found = this.pledges.get(user);
+    const existing = found && !found.closed ? found : null; // a closed account is made anew
     const current = existing ? existing.amount : 0n;
     require(current === 0n || existing.idea === i.index, "OnAnotherIdea");
     const userTotal = current + a;
@@ -144,6 +149,7 @@ export class LobbyRules {
     require(BigInt(now) < l.lock_at, "PledgesLocked");
     require(p.amount > 0n, "ZeroAmount");
     require(f.index !== tIdea.index, "OnAnotherIdea");
+    require(!tIdea.removed, "IdeaRemoved");
     f.pledged -= p.amount;
     f.backers -= 1;
     tIdea.pledged += p.amount;
@@ -164,6 +170,7 @@ export class LobbyRules {
     for (const i of passed) {
       require(i.index < l.idea_count && (seen & (1 << i.index)) === 0, "BadIdeas");
       seen |= 1 << i.index;
+      if (i.removed) continue; // taken out of the race by the host: it can't win
       if (i.pledged > pot || (i.pledged === pot && i.pledged > 0n && i.index < best)) {
         best = i.index;
         pot = i.pledged;
@@ -211,10 +218,16 @@ export class LobbyRules {
     const p = this.pledgeOf(user);
     require(l.finalized, "NotFinalized");
     require(!p.settled, "PledgeSettled");
-    require(p.amount > 0n, "ZeroAmount");
+    if (p.amount === 0n) {
+      // Withdrawn in full before the lock: the account just closes (its rent back), with an event of 0.
+      p.settled = true;
+      p.closed = true;
+      return [{ event: "PledgeRefunded", lobby: this.env.lobbyKey, user, amount: 0n }];
+    }
     require(l.winner === NO_WINNER || p.idea !== l.winner, "WinnerNoRefund");
     this.balance -= p.amount;
     p.settled = true;
+    p.closed = true;
     return [{ event: "PledgeRefunded", lobby: this.env.lobbyKey, user, amount: p.amount }];
   }
 
@@ -226,6 +239,7 @@ export class LobbyRules {
     require(p.amount > 0n, "ZeroAmount");
     require(p.idea === l.winner, "NotTheWinner");
     p.settled = true;
+    p.closed = true; // its rent pays for the commitment
     return [
       { event: "Committed", mint: l.mint, user, quote: p.amount },
       { event: "FounderJoined", lobby: this.env.lobbyKey, user, mint: l.mint, amount: p.amount, seq: p.seq },
@@ -242,12 +256,48 @@ export class LobbyRules {
     return [{ event: "BondReturned", lobby: this.env.lobbyKey, idea: i.index, proposer: i.proposer, amount: l.bond }];
   }
 
+  removeIdea({ host, symbol }, now) {
+    const l = this.lobby;
+    const i = this.idea(symbol);
+    require(host === l.host, "HostOnly");
+    require(BigInt(now) < l.lock_at - REMOVE_CUTOFF, "TooLateToRemove");
+    require(!i.removed, "IdeaRemoved");
+    i.removed = true;
+    const events = [{ event: "IdeaRemoved", lobby: this.env.lobbyKey, idea: i.index }];
+    if (!i.bond_returned) {
+      this.balance -= l.bond;
+      i.bond_returned = true;
+      events.push({ event: "BondReturned", lobby: this.env.lobbyKey, idea: i.index, proposer: i.proposer, amount: l.bond });
+    }
+    return events;
+  }
+
+  refundRemoved({ user, symbol }) {
+    const l = this.lobby;
+    const i = this.idea(symbol);
+    const p = this.pledgeOf(user);
+    require(i.index === p.idea, "OnAnotherIdea");
+    require(!l.finalized, "AlreadyFinalized");
+    require(i.removed, "NotRemoved");
+    require(!p.settled, "PledgeSettled");
+    require(p.amount > 0n, "ZeroAmount");
+    const a = p.amount;
+    this.balance -= a;
+    i.pledged -= a;
+    i.backers -= 1;
+    l.total -= a;
+    p.settled = true;
+    p.closed = true;
+    return [{ event: "PledgeRefunded", lobby: this.env.lobbyKey, user, amount: a }];
+  }
+
   /** Runs one operation; on failure nothing changes (as a failed transaction) and the error is returned. */
   apply(op, args, now) {
     const snapshot = structuredClone({ lobby: this.lobby, ideas: this.ideas, pledges: this.pledges, balance: this.balance, minted: this.minted });
     try {
       const fn = { create_lobby: "create", propose_idea: "propose", pledge: "pledge", withdraw: "withdraw", move_pledge: "move", finalize: "finalize",
-        launch_winner: "launch", void_winner: "voidWinner", refund: "refund", claim_founder: "claimFounder", return_bond: "returnBond" }[op];
+        launch_winner: "launch", void_winner: "voidWinner", refund: "refund", claim_founder: "claimFounder", return_bond: "returnBond",
+        remove_idea: "removeIdea", refund_removed: "refundRemoved" }[op];
       return { ok: true, events: this[fn](args, now) };
     } catch (e) {
       if (!(e instanceof RuleError)) throw e;

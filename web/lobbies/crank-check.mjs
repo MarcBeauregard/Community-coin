@@ -32,18 +32,21 @@ const ops = (list) => list.map((o) => o.op).join(",");
   check(planCrank({ lobby, ideas, pledges }, 3299).length === 0, "nothing before the lock");
   check(ops(planCrank({ lobby, ideas, pledges }, 3300)) === "finalize", "at the lock: finalize, nothing else");
   const fin = { ...lobby, finalized: true, winner: 0 };
-  check(ops(planCrank({ lobby: fin, ideas, pledges }, 3301)) === "refund,return_bond,return_bond", "right after the lock: losing pledges and bonds go back (an emptied pledge is skipped)");
-  const afterLock = { lobby: fin, ideas: ideas.map((d) => ({ ...d, bondReturned: true })), pledges: [pledges[0], { ...pledges[1], settled: true }, pledges[2]] };
+  check(ops(planCrank({ lobby: fin, ideas, pledges }, 3301)) === "refund,refund,return_bond,return_bond", "right after the lock: losing pledges and bonds go back, and an emptied pledge closes (its rent back)");
+  const afterLock = { lobby: fin, ideas: ideas.map((d) => ({ ...d, bondReturned: true })), pledges: [pledges[0], { ...pledges[1], settled: true }, { ...pledges[2], settled: true }] };
   check(planCrank(afterLock, 3599).length === 0, "then nothing until 01:00: winning pledges wait for their coin");
   check(ops(planCrank(afterLock, 3600)) === "launch_winner,claim_founder", "at 01:00: the coin, then each founder's commitment");
   check(ops(planCrank({ lobby: fin, ideas, pledges, winnerTaken: true }, 3600)) === "void_winner", "a winner whose ticker was taken meanwhile is voided first");
   const none = { ...lobby, finalized: true, winner: NO_WINNER };
-  check(ops(planCrank({ lobby: none, ideas, pledges }, 3600)) === "refund,refund,return_bond,return_bond", "no winner: everyone refunded, bonds back");
+  check(ops(planCrank({ lobby: none, ideas, pledges }, 3600)) === "refund,refund,refund,return_bond,return_bond", "no winner: everyone refunded, bonds back");
   const done = { ...fin, launched: true };
   const settled = pledges.map((p) => ({ ...p, settled: true }));
   check(planCrank({ lobby: done, ideas: ideas.map((d) => ({ ...d, bondReturned: true })), pledges: settled }, 9999).length === 0, "a settled lobby needs nothing");
   check(ops(planCrank({ lobby: done, ideas, pledges: [settled[0], pledges[1]] }, 3700)) === "refund,return_bond,return_bond", "a crank cut short resumes where it stopped");
-  check(ops(planCrank({ lobby: fin, ideas, pledges, winnerTaken: true }, 3400)) === "refund,return_bond,return_bond", "a taken ticker is only voided at 01:00; the losers are refunded before");
+  check(ops(planCrank({ lobby: fin, ideas, pledges, winnerTaken: true }, 3400)) === "refund,refund,return_bond,return_bond", "a taken ticker is only voided at 01:00; the losers are refunded before");
+  // An idea the host removed: its pledges go back at once, before the lock.
+  const removed = [{ symbol: "A", bondReturned: false }, { symbol: "B", bondReturned: true, removed: true }];
+  check(ops(planCrank({ lobby, ideas: removed, pledges }, 1000)) === "refund_removed", "a removed idea's pledges go back at once, before the lock");
 }
 
 // ------------------------------------------------------------------ an hour on the server, on a fake clock
@@ -87,7 +90,7 @@ const place = [...chain.pledges.values()].filter((p) => p.idea === winner.index 
 check(a.kind === "founder" && a.amount === "2000000000" && a.rank === place && a.mint === launch.mint, `Alice, on the winner, is a founder; her rank (#${a.rank}) is her place among its backers`);
 const b = inbox.bob.find((m) => m.t === "settled");
 check(b && b.kind === "refund" && b.amount === "1500000000", "Bob, on another idea, is refunded to the lamport");
-check(!inbox.carol.some((m) => m.t === "settled"), "Carol, who withdrew, has nothing to settle");
+check(!inbox.carol.some((m) => m.t === "settled" && m.amount !== "0"), "Carol, who withdrew, has nothing to settle (her emptied pledge just closes)");
 check(!inbox.alice.some((m) => m.t === "settled" && m.kind === "refund") && !inbox.bob.some((m) => m.t === "settled" && m.kind === "founder"), "each wallet hears only about its own pledge");
 
 const clan = await (await fetch(`${base}/clans/${encodeURIComponent(launch.mint)}`)).json();

@@ -142,7 +142,7 @@ check(!late.last("hello").race.some((r) => r.symbol === "PIGW"), "and a late joi
   await wait(150);
   h.remove("WIF");
   await wait(150);
-  check(got.some((m) => m.code === "FinalMinutesNeedReport") && !got.some((m) => m.t === "removed"), "in the final minutes the host can't remove an idea nobody reported (not the leader, not anyone)");
+  check(got.some((m) => m.code === "TooLateToRemove") && !got.some((m) => m.t === "removed"), "in the final minutes nobody can remove an idea (the program's rule)");
   h.close();
   await late.close();
 }

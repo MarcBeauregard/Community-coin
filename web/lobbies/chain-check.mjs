@@ -65,6 +65,8 @@ function translate(op, a) {
     case "refund": return { id: walk.id, user: u(a.of) };
     case "claim_founder": return { payer: u(a.user), id: walk.id, user: u(a.of), mint: rules.lobby.mint };
     case "return_bond": return { id: walk.id, symbol: a.symbol, proposer: rules.ideas.find((d) => d.key === symbolKey(a.symbol))?.proposer };
+    case "remove_idea": return { host: u(a.user), id: walk.id, symbol: a.symbol, proposer: rules.ideas.find((d) => d.key === symbolKey(a.symbol))?.proposer };
+    case "refund_removed": return { id: walk.id, symbol: a.symbol, user: u(a.of) };
     default: throw new Error(op);
   }
 }
@@ -101,7 +103,7 @@ for (const [n, step] of walk.steps.entries()) {
   if (!same(mine, s.lobby)) fail(`step ${n} ${op}: lobby\n  rules   ${show(mine)}\n  program ${show(s.lobby)}`);
   const ideas = rules.ideas.map((d) => ({ symbol: d.symbol, index: d.index, pledged: Number(d.pledged), backers: d.backers, bond_returned: d.bond_returned }));
   if (!same(ideas, s.ideas)) fail(`step ${n} ${op}: ideas\n  rules   ${show(ideas)}\n  program ${show(s.ideas)}`);
-  const pledges = [...rules.pledges.values()].map((p) => ({ user: users.indexOf(p.user), seq: p.seq, idea: p.idea, amount: Number(p.amount), settled: p.settled })).sort((a, b) => a.user - b.user);
+  const pledges = [...rules.pledges.values()].filter((p) => !p.closed).map((p) => ({ user: users.indexOf(p.user), seq: p.seq, idea: p.idea, amount: Number(p.amount), settled: p.settled })).sort((a, b) => a.user - b.user);
   if (!same(pledges, s.pledges)) fail(`step ${n} ${op}: pledges\n  rules   ${show(pledges)}\n  program ${show(s.pledges)}`);
   if (Number(rules.balance) !== s.balance) fail(`step ${n} ${op}: balance ${rules.balance} ≠ ${s.balance}`);
   // The indexer, fed the program's events so far, sees the same race.
@@ -133,7 +135,7 @@ for (const [key, a] of Object.entries(walk.accounts)) {
   } else if (k === "Idea") {
     const i = decodeIdea(data);
     const want = rules.ideas[i.index];
-    if (!same(strip(i, ["index", "proposer", "key", "name", "symbol", "uri", "pledged", "backers", "bond_returned"]), strip(want, ["index", "proposer", "key", "name", "symbol", "uri", "pledged", "backers", "bond_returned"]))) fail(`decodeIdea ${show(i)}`);
+    if (!same(strip(i, ["index", "proposer", "key", "name", "symbol", "uri", "pledged", "backers", "bond_returned", "removed"]), strip(want, ["index", "proposer", "key", "name", "symbol", "uri", "pledged", "backers", "bond_returned", "removed"]))) fail(`decodeIdea ${show(i)}`);
   } else if (k === "Pledge") {
     const p = decodePledge(data);
     const want = rules.pledges.get(p.user);
@@ -204,7 +206,7 @@ if (!cl || cl.total !== rules.lobby.total || cl.winner !== rules.lobby.winner ||
 const ci = await client.ideas(walk.id);
 if (!same(ci.map((d) => [d.index, d.symbol, d.pledged, d.backers]), rules.ideas.map((d) => [d.index, d.symbol, d.pledged, d.backers]))) fail(`client ideas ${show(ci)}`);
 const cp = await client.pledge(walk.id);
-const rp = rules.pledges.get(users[1]);
+const rp = rules.pledges.get(users[1])?.closed ? null : rules.pledges.get(users[1]);
 if (!same(cp && [cp.idea, cp.amount, cp.settled, cp.seq], rp && [rp.idea, rp.amount, rp.settled, rp.seq])) fail(`client pledge ${show(cp)}`);
 if (programError({ InstructionError: [0, { Custom: 6032 }] }) !== "PledgeCap" || programError({ InstructionError: [0, { Custom: 0 }] }) !== "AccountInUse") fail("client error names");
 server.close();

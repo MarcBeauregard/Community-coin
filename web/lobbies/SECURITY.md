@@ -64,3 +64,13 @@ lobby set (several instances need a pub/sub between them).
   sheet says what happens on a win, a loss, a change of mind and what it costs, before signing.
 - Losing pledges are refunded at the lock (00:55), as the copy says; the crank does it at once.
 - Nothing here is fake in live mode: the demo's crowd and clock stop when the app is connected to a server.
+
+## Lobby changes before real SOL (to review in the external audit)
+- `remove_idea`: signed by the lobby's host (`HostOnly`), refused in the last 5 minutes before the lock
+  (`TooLateToRemove`) so a host can't pick the winner; the bond is paid once (`bond_returned`); `finalize` skips
+  removed ideas. Pledging or moving onto a removed idea fails (`IdeaRemoved`).
+- `refund_removed`: anyone, before the lock only (after it, `refund` applies), the PDA seeds tie the pledge to its
+  owner, so lamports and rent can only go to the pledger; the idea's and lobby's totals go down by exactly the amount.
+- Accounts closed by `refund`, `refund_removed` and `claim_founder` (Anchor `close`): a closed pledge can't be
+  re-created after the lock (`pledge` requires the lobby open), so no double refund or double claim; the walk tries
+  both and gets `AccountNotInitialized`.

@@ -197,7 +197,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
   // ------------------------------------------------------------------ live (realtime server)
   // When connected, the server owns the clock, the race, the chat and the presence; the demo's crowd stops.
   let link = null;
-  const LIVE_ERRORS = { FinalMinutesNeedReport: "In the final minutes, only an idea people reported can be removed.", HostOnly: "Only the host can remove an idea.", SignInToReport: "Connect a wallet to report an idea.", UnknownIdea: "That idea is no longer in the race.", PledgesLocked: "Pledges are locked.", SlowMode: "Slow mode: one message every 3 seconds.", SignInToChat: "Connect a wallet to chat.", EmptyMessage: "Write something first.", LobbyNotOpen: "The lobby is not open yet." };
+  const LIVE_ERRORS = { TooLateToRemove: "Too late to remove an idea: the final minutes belong to the race.", HostOnly: "Only the host can remove an idea.", SignInToReport: "Connect a wallet to report an idea.", UnknownIdea: "That idea is no longer in the race.", PledgesLocked: "Pledges are locked.", SlowMode: "Slow mode: one message every 3 seconds.", SignInToChat: "Connect a wallet to chat.", EmptyMessage: "Write something first.", LobbyNotOpen: "The lobby is not open yet." };
   const short = (who) => (who.length > 20 ? `${who.slice(0, 4)}…${who.slice(-4)}` : who);
   // Live, everyone is who the server says, the person included (their wallet), with `mine` to say "you".
   const lineToChat = (line, you) => ({ who: line.from, mine: line.from === you, text: line.text });
@@ -273,6 +273,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
         break;
       case "settled": {
         const amount = toSol(BigInt(m.amount));
+        if (m.kind === "refund" && amount === 0) break; // an emptied pledge closing (its rent back): nothing to say
         const l = s.launched;
         // The settlement's receipt: verifiable on Solana when it has a transaction there, practice otherwise.
         const proof = m.signature ? { signature: m.signature, cluster: m.cluster ?? null, practice: false } : { practice: true };

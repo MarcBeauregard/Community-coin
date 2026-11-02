@@ -55,8 +55,10 @@ async fn the_winner_launches_with_its_pot_and_every_backer_gets_the_same_price()
     let k3 = hub.user(3).pubkey();
     let before = hub.lamports(&k3).await;
     hub.refund(4, ID, 3).await.unwrap();
-    assert_eq!(hub.lamports(&k3).await - before, 3 * SOL);
-    expect_err(hub.refund(2, ID, 3).await, CoinError::PledgeSettled);
+    let back = hub.lamports(&k3).await - before;
+    assert!(back > 3 * SOL && back - 3 * SOL < SOL / 100, "the pledge and its account's rent come back: {back}");
+    assert!(hub.pledge_of(ID, 3).await.is_none(), "a refunded pledge's account is closed");
+    assert!(hub.refund(2, ID, 3).await.is_err(), "and can't be refunded twice");
     expect_err(hub.refund(4, ID, 1).await, CoinError::WinnerNoRefund);
 
     expect_err(hub.launch_winner(4, ID, "WIF").await, CoinError::NotLaunchTime);
@@ -69,10 +71,16 @@ async fn the_winner_launches_with_its_pot_and_every_backer_gets_the_same_price()
     assert_eq!(m.parent, Pubkey::default());
     assert!(hub.launch_winner(4, ID, "WIF").await.is_err(), "the winner launches once (its mint now exists)");
 
+    // Claiming a founder closes the pledge: its rent pays for the commitment account, so the claimer is not out of
+    // pocket.
+    let k4 = hub.user(4).pubkey();
+    let before = hub.lamports(&k4).await;
     hub.claim_founder(4, ID, 1).await.unwrap();
+    assert!(hub.lamports(&k4).await + 10_000 >= before, "a claim costs the claimer at most the fee");
     hub.claim_founder(4, ID, 2).await.unwrap();
-    expect_err(hub.claim_founder(3, ID, 2).await, CoinError::PledgeSettled);
-    expect_err(hub.claim_founder(4, ID, 3).await, CoinError::PledgeSettled);
+    assert!(hub.pledge_of(ID, 1).await.is_none() && hub.pledge_of(ID, 2).await.is_none(), "claimed pledges are closed");
+    assert!(hub.claim_founder(3, ID, 2).await.is_err(), "a founder is claimed once");
+    assert!(hub.claim_founder(4, ID, 3).await.is_err(), "a refunded pledge is no founder");
     hub.warp(OPEN).await;
     hub.claim(1, mint).await.unwrap();
     hub.claim(2, mint).await.unwrap();
@@ -226,4 +234,58 @@ async fn lobby_windows_are_checked() {
     for (p, l, n, m) in [(0, 10, 20, SOL), (30, 20, 40, SOL), (10, 20, 15, SOL), (10, 20, 5 * 3600, SOL), (10, 20, 30, 0)] {
         expect_err(hub.send_as(0, vec![bad(p, l, n, m)]).await, CoinError::InvalidLobby);
     }
+}
+
+#[tokio::test]
+async fn the_host_removes_an_idea_its_backers_are_refunded_and_it_cannot_win() {
+    let mut hub = Hub::start(Params::default(), 5).await;
+    open_lobby(&mut hub, &[(1, "WIF"), (2, "RUG")]).await;
+    hub.pledge(3, ID, "RUG", 4 * SOL).await.unwrap();
+    hub.pledge(4, ID, "WIF", SOL).await.unwrap();
+    // Only the host, and never the same idea twice.
+    expect_err(hub.remove_idea(3, ID, "RUG").await, CoinError::HostOnly);
+    let k2 = hub.user(2).pubkey();
+    let before = hub.lamports(&k2).await;
+    hub.remove_idea(0, ID, "RUG").await.unwrap();
+    assert_eq!(hub.lamports(&k2).await - before, BOND, "the proposer's bond comes back at once");
+    assert!(hub.idea(ID, "RUG").await.removed && hub.idea(ID, "RUG").await.bond_returned);
+    expect_err(hub.remove_idea(0, ID, "RUG").await, CoinError::IdeaRemoved);
+    // Nobody can back it any more, under any spelling, nor move to it.
+    expect_err(hub.pledge(1, ID, "RUG", SOL).await, CoinError::IdeaRemoved);
+    expect_err(hub.move_pledge(4, ID, "WIF", "RUG").await, CoinError::IdeaRemoved);
+    // Its backers are refunded right away, by anyone, and leave the totals.
+    expect_err(hub.refund_removed(1, ID, "WIF", 4).await, CoinError::NotRemoved);
+    let k3 = hub.user(3).pubkey();
+    let before = hub.lamports(&k3).await;
+    hub.refund_removed(1, ID, "RUG", 3).await.unwrap();
+    assert!(hub.lamports(&k3).await - before > 4 * SOL, "the pledge and its rent come back");
+    assert!(hub.pledge_of(ID, 3).await.is_none());
+    let (rug, l) = (hub.idea(ID, "RUG").await, hub.lobby(ID).await);
+    assert_eq!((rug.pledged, rug.backers, l.total), (0, 0, SOL));
+    // The final minutes belong to the race: no removal then.
+    hub.warp(LOCK - 299).await;
+    expect_err(hub.remove_idea(0, ID, "WIF").await, CoinError::TooLateToRemove);
+    // The removed idea can't win, even with the most SOL ever pledged on it.
+    hub.warp(299).await;
+    hub.finalize(4, ID, &["WIF", "RUG"]).await.unwrap();
+    assert_eq!(hub.lobby(ID).await.winner, 0, "WIF wins: RUG was removed");
+    hub.return_bond(4, ID, "WIF").await.unwrap();
+    expect_err(hub.return_bond(4, ID, "RUG").await, CoinError::PledgeSettled);
+}
+
+#[tokio::test]
+async fn an_emptied_pledge_keeps_its_place_then_closes_at_the_lock() {
+    let mut hub = Hub::start(Params::default(), 3).await;
+    open_lobby(&mut hub, &[(0, "WIF"), (0, "MEW")]).await;
+    hub.pledge(1, ID, "WIF", SOL).await.unwrap();
+    hub.withdraw(1, ID, "WIF", SOL).await.unwrap();
+    assert!(hub.pledge_of(ID, 1).await.is_some(), "kept: it holds the wallet's place in line");
+    hub.warp(LOCK).await;
+    hub.finalize(2, ID, &["WIF", "MEW"]).await.unwrap();
+    let k1 = hub.user(1).pubkey();
+    let before = hub.lamports(&k1).await;
+    hub.refund(2, ID, 1).await.unwrap();
+    let back = hub.lamports(&k1).await - before;
+    assert!(back > 0 && back < SOL / 100, "an emptied pledge gives its rent back: {back}");
+    assert!(hub.pledge_of(ID, 1).await.is_none());
 }

@@ -148,9 +148,27 @@ async fn random_walk_keeps_the_books_and_writes_the_cross_check() {
             hub.warp(PROPOSE).await;
             step!("propose", json!({ "user": 6, "symbol": "FLOKI" }), hub.propose(6, ID, "FLOKI"));
         }
+        if n == 100 {
+            // Someone backs BRETT, then the host takes it out of the race (a guest can't); its backers are refunded
+            // at once, and can pledge again elsewhere.
+            match hub.pledge_of(ID, 1).await.map(|p| (p.amount, IDEAS[p.idea as usize])) {
+                Some((a, on)) if a > 0 && on != "BRETT" => step!("move_pledge", json!({ "user": 1, "from": on, "to": "BRETT" }), hub.move_pledge(1, ID, on, "BRETT")),
+                Some((a, _)) if a > 0 => {}
+                _ => step!("pledge", json!({ "user": 1, "symbol": "BRETT", "amount": SOL }), hub.pledge(1, ID, "BRETT", SOL)),
+            }
+            step!("remove_idea", json!({ "user": 3, "symbol": "BRETT" }), hub.remove_idea(3, ID, "BRETT"));
+            step!("remove_idea", json!({ "user": 0, "symbol": "BRETT" }), hub.remove_idea(0, ID, "BRETT"));
+            step!("remove_idea", json!({ "user": 0, "symbol": "BRETT" }), hub.remove_idea(0, ID, "BRETT"));
+            for u in 0..USERS {
+                step!("refund_removed", json!({ "user": 7, "symbol": "BRETT", "of": u }), hub.refund_removed(7, ID, "BRETT", u));
+            }
+            step!("pledge", json!({ "user": 1, "symbol": "WIF", "amount": SOL }), hub.pledge(1, ID, "WIF", SOL));
+        }
     }
 
-    hub.warp(LOCK - PROPOSE).await;
+    hub.warp(LOCK - PROPOSE - 200).await;
+    step!("remove_idea", json!({ "user": 0, "symbol": "MEW" }), hub.remove_idea(0, ID, "MEW"));
+    hub.warp(200).await;
     step!("pledge", json!({ "user": 1, "symbol": "WIF", "amount": SOL }), hub.pledge(1, ID, "WIF", SOL));
     step!("finalize", json!({ "user": 7, "symbols": ["WIF", "POPCAT", "MEW"] }), hub.finalize(7, ID, &["WIF", "POPCAT", "MEW"]));
     step!("finalize", json!({ "user": 7, "symbols": IDEAS }), hub.finalize(7, ID, &IDEAS));
