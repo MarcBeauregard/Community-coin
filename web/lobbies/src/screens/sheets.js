@@ -37,7 +37,8 @@ function PledgeSheet({ s, a }) {
     <div class="sheet-actions">
       <${Button} size="lg" disabled=${s.signing} onClick=${a.closeSheet}>Cancel</${Button}>
       ${unreachable && html`<span class="remind-error" role="alert" style="flex-basis:100%"><${I.Alert} size=${14} />${s.net.offline ? "You’re offline. Confirm when you’re back online." : "The lobby server can’t be reached. Confirm when it’s back."}</span>`}
-      <${Button} variant="prim" size="lg" style="flex:1.4" disabled=${s.signing || unreachable} onClick=${a.confirmPledge}>
+      <span class="sr" role="status">${s.signing ? "Confirming your pledge" : ""}</span>
+      <${Button} variant="prim" size="lg" style="flex:1.4" disabled=${unreachable} aria-disabled=${s.signing ? "true" : undefined} onClick=${() => { if (!s.signing) a.confirmPledge(); }}>
         ${s.signing ? html`<span class="spin" aria-hidden="true" />Confirming` : "Confirm practice pledge"}
       </${Button}>
     </div>`;
@@ -315,7 +316,7 @@ function ReplaySheet({ s, a }) {
         ? html`<${Button} size="lg" onClick=${save}>Save video</${Button}>
             ${canShare && html`<${Button} variant="prim" size="lg" style="flex:1.4" onClick=${share}><${I.Share} size=${17} />Share…</${Button}>`}`
         : html`${!recording && html`<${Button} size="lg" disabled=${!r} onClick=${toggle}>${playing ? html`Pause` : html`<${I.Play} size=${15} />${progress > 0 && progress < 1 ? "Resume" : "Play"}`}</${Button}>`}
-            ${canRecord && html`<${Button} variant="prim" size="lg" style="flex:1.4" disabled=${!r || recording} onClick=${record}>${recording ? `Recording… ${left} s` : "Make a video"}</${Button}>`}`}
+            ${canRecord && html`<${Button} variant="prim" size="lg" style="flex:1.4;white-space:nowrap" disabled=${!r} aria-disabled=${recording ? "true" : undefined} onClick=${() => { if (!recording) record(); }}>${recording ? `Recording… ${left} s` : "Make a video"}</${Button}>`}`}
     </div>`;
 }
 
@@ -357,7 +358,7 @@ function RemindSheet({ s, a }) {
       </div>
       ${on
         ? html`<${Button} size="sm" onClick=${() => a.stopReminder(lobby.id)}>Turn off</${Button}>`
-        : html`<${Button} size="sm" variant="prim" disabled=${blocked && !!s.remindError} onClick=${() => a.notifyMe(lobby)}>Notify me</${Button}>`}
+        : html`<${Button} size="sm" variant="prim" aria-disabled=${blocked && s.remindError ? "true" : undefined} onClick=${() => { if (!(blocked && s.remindError)) a.notifyMe(lobby); }}>Notify me</${Button}>`}
     </div>
     <div class="remind-option">
       <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0">
@@ -529,7 +530,7 @@ const SHEETS = {
   withdraw: { title: "Withdraw your pledge?", Body: WithdrawSheet },
   card: { title: "Your birth card", Body: BirthCardSheet },
   remind: { title: "Remind me", Body: RemindSheet },
-  report: { title: "Report this idea?", Body: ReportSheet, refocus: ".idea[aria-pressed=true]" }, // back to the idea
+  report: { title: "Report this idea?", Body: ReportSheet, refocus: ".idea[aria-pressed=true]", refocusFirst: true }, // its button turns into "reported" // back to the idea
   remove: { title: "Remove this idea?", Body: RemoveSheet, refocus: ".idea[aria-pressed=true]", refocusFirst: true }, // to the idea now selected
   sibling: { title: "A sibling lobby", Body: SiblingSheet, refocus: ".sibling-open" },
   profile: { title: "Founder profile", Body: ProfileSheet, refocus: ".profile-open" },

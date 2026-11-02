@@ -789,7 +789,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
     hideWelcome() { set({ welcomeOff: true }); try { localStorage.setItem("lobbies.welcomeOff", state.welcome?.text ?? ""); } catch {} },
     introNext() { set((s) => ({ intro: s.intro === null ? null : s.intro + 1 })); },
     introDone() { set({ intro: null }); try { localStorage.setItem(INTRO, "1"); } catch {} },
-    dismissNudge() { set((s) => ({ nudgeOff: s.pledge?.symbol ?? null })); },
+    dismissNudge() { set((s) => ({ nudgeOff: s.pledge?.symbol ?? null })); if (state.pledge) toast(`Keeping your ${sol(state.pledge.amount)} on $${state.pledge.symbol}`, "white"); },
     skipToLock() { set((s) => ({ elapsed: Math.max(s.elapsed, HOUR - 6), sheet: null })); set(settle(state)); },
     replay() {
       const chain = createDemoLobby();

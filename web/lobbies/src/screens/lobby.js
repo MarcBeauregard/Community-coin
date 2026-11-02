@@ -69,14 +69,19 @@ function Stage({ s, a, phone }) {
   const settling = s.live && v.listening && !["live", "reconnecting"].includes(s.audio.status) && !s.audio.error;
   const key = `${v.listening}|${v.onStage}|${v.invited}|${vs.needsTap}|${vs.micBlocked}|${v.hand}|${settling}`;
   const first = useRef(true);
+  const inPanel = useRef(false);
   const [mounted, setMounted] = useState(false); // the status region is in the page empty first, so its words are read
+  // "Not listening" is news only after listening (not each time the Stage tab is opened).
+  const wasActive = useRef(false);
+  if (v.listening || v.onStage) wasActive.current = true;
   useEffect(() => { setMounted(true); }, []);
   useEffect(() => {
     if (first.current) { first.current = false; return; }
     if (settling) return; // move once, when the voice's state is known (not "Raise hand", then "Turn on sound")
     const el = panel.current;
     const at = document.activeElement;
-    if (el && (!at || at === document.body || el.contains(at))) el.querySelector("[data-primary]")?.focus();
+    // Only for someone whose focus was in the panel (the pressed button just went away): never on a page load.
+    if (el && (el.contains(at) || ((!at || at === document.body) && inPanel.current))) el.querySelector("[data-primary]")?.focus();
   }, [key]);
   const help = s.live && s.audio.error && AUDIO_ERRORS[s.audio.error];
   return html`<section class=${phone ? "scroll" : "stage scroll"} style=${phone ? "padding:8px 16px 24px;display:flex;flex-direction:column;gap:20px" : ""} aria-label="Voice stage">
@@ -96,11 +101,11 @@ function Stage({ s, a, phone }) {
       <button type="button" class="cheer-btn" aria-label=${`Skull: not this one, ${int(s.cheerCount.skull)}`} onClick=${() => a.cheer("skull")}><span aria-hidden="true">💀</span><span class="num t2" aria-hidden="true">${int(s.cheerCount.skull)}</span></button>
       <span class="t2" style="font-size:12px">Everyone on the stage sees them</span>
     </div>
-    <div class="panel" ref=${panel} style="padding:14px;display:flex;flex-direction:column;gap:12px">
+    <div class="panel" ref=${panel} onFocusIn=${() => { inPanel.current = true; }} onFocusOut=${(e) => { if (e.relatedTarget) inPanel.current = panel.current?.contains(e.relatedTarget) ?? false; }} style="padding:14px;display:flex;flex-direction:column;gap:12px">
       ${!v.listening && !v.onStage && html`<span class="t2" style="font-size:13px;line-height:1.45">Pitches happen out loud. Listen in, or raise your hand to pitch your idea on stage.</span>`}
       <span role="status" style="display:flex;flex-direction:column;gap:4px">${mounted && html`
         ${(v.listening || v.onStage) && html`<span style=${{ fontSize: "13px", fontWeight: 600, color: TONE_COLOR[vs.tone] }}>${vs.text}</span>`}
-        ${!v.listening && !v.onStage && html`<span class="sr">${vs.text}</span>`}
+        ${!v.listening && !v.onStage && wasActive.current && html`<span class="sr">${vs.text}</span>`}
         ${vs.link && html`<span style=${{ fontSize: "12px", fontWeight: 600, color: TONE_COLOR[vs.link.tone] }}>${vs.link.text}</span>`}
         ${v.onStage && v.invited && html`<span class="t2" style="font-size:13px;line-height:1.45;font-weight:400">Your microphone stays off until you choose Speak now.</span>`}
         ${help && html`<span class="wallet-error" style="font-size:13px;font-weight:400">${help}</span>`}`}
@@ -198,6 +203,14 @@ function IdeaCard({ d, s, a, phone }) {
 
 function Dock({ s, a, ideas, phone }) {
   const d = dock(s, ideas);
+  const ref = useRef(null);
+  const before = useRef(null);
+  useEffect(() => {
+    // The lock takes the Pledge button away: someone who was on it lands on what the dock now says.
+    const at = document.activeElement;
+    if (before.current && before.current !== d.mode && d.mode === "closed" && (!at || at === document.body)) ref.current?.querySelector("[role=status]")?.focus();
+    before.current = d.mode;
+  }, [d.mode]);
   const t = lobbyClock(s);
   const amounts = AMOUNTS.map((v) => ({ id: v, label: String(v), disabled: v > s.balance }));
   let action;
@@ -219,15 +232,15 @@ function Dock({ s, a, ideas, phone }) {
     const text = !k ? `Pledges locked · launch in ${t.launchIn}`
       : k.winner && !k.voided ? `${ticker(k.winner)} won · launch in ${t.launchIn}`
       : `No winner · every pledge refunded`;
-    action = html`<${Chip} tone="amber" class="dock-chip" role="status">${text}</${Chip}>`;
+    action = html`<span class="dock-chip-wrap" tabIndex="-1" role="status"><${Chip} tone="amber" class="dock-chip">${text}</${Chip}></span>`;
   }
   // The host removes an idea; anyone else can report one (not their own), once.
   const host = manages(s) && s.live?.practice && t.canPledge;
   const reported = !!s.reported[d.sel.ticker];
   const flag = host
     ? html`<${IconButton} label=${`Remove ${ticker(d.sel.ticker)} from the race`} tone="danger" size="sm" class="dock-flag" onClick=${() => a.askRemove(d.sel.id)}><${I.Close} size=${13} /></${IconButton}>`
-    : !d.sel.yours && t.canPledge && html`<${IconButton} label=${reported ? `${ticker(d.sel.ticker)} reported` : `Report ${ticker(d.sel.ticker)}`} size="sm" class="dock-flag" pressed=${reported} disabled=${reported} onClick=${() => a.askReport(d.sel.id)}><${I.Alert} size=${14} /></${IconButton}>`;
-  return html`<section class="dock glass" aria-label="Your pledge">
+    : !d.sel.yours && t.canPledge && html`<${IconButton} label=${reported ? `${ticker(d.sel.ticker)} reported` : `Report ${ticker(d.sel.ticker)}`} size="sm" class="dock-flag" aria-haspopup=${reported ? undefined : "dialog"} disabled=${reported} onClick=${() => a.askReport(d.sel.id)}><${I.Alert} size=${14} /></${IconButton}>`;
+  return html`<section class="dock glass" ref=${ref} aria-label="Your pledge">
     <div class="row" style="flex-wrap:nowrap;gap:12px;flex:1 1 260px;min-width:0">
       <${Coin} coin=${coin(d.sel)} size=${phone ? 40 : 48} />
       <div class="who" style="min-width:0;flex:1"><span style="font-size:16px;font-weight:600">${d.sel.name}</span><span class="t2 num ellipsis" style="font-size:13px">${d.sub}</span></div>
@@ -316,15 +329,17 @@ function Intro({ step, a }) {
 
 // What a screen reader hears of the final minutes, in one region that is always in the page: their start (with the
 // offer to move a pledge, if any), each change of leader, and the lock. Never every pledge.
-function useFinaleWords(f, locked) {
+function useFinaleWords(f, locked, lockWords) {
   const [words, setWords] = useState("");
+  // Said, then cleared: a status line left in the page would show yesterday's numbers to someone browsing.
+  useEffect(() => { if (!words) return undefined; const t = setTimeout(() => setWords(""), 6000); return () => clearTimeout(t); }, [words]);
   const was = useRef({ on: false, lead: null, nudge: false });
   useEffect(() => {
     const w = was.current;
     if (f && !w.on) setWords(`Final minutes: pledges lock in ${f.lockIn.replace(/^0/, "")}. ${f.text}.${f.nudge ? ` ${f.nudge.text}` : ""}`);
     else if (f && w.lead !== f.lead.id) setWords(`$${f.lead.ticker} takes the lead. ${f.text}.`);
     else if (f && f.nudge && !w.nudge) setWords(f.nudge.text);
-    else if (!f && w.on && locked) setWords("Pledges are locked.");
+    else if (!f && w.on && locked) setWords(lockWords || "Pledges are locked.");
     was.current = { on: !!f, lead: f?.lead.id ?? null, nudge: !!f?.nudge };
   }, [!!f, f?.lead.id, !!f?.nudge, locked]);
   return words;
@@ -347,7 +362,8 @@ function Ideas({ s, a, phone }) {
   const ideas = race(s);
   const t = lobbyClock(s);
   const f = finale(s, ideas);
-  const finaleWords = useFinaleWords(f, !t.canPledge);
+  const k = s.locked;
+  const finaleWords = useFinaleWords(f, !t.canPledge, k ? (k.winner && !k.voided ? `Pledges are locked. $${k.winner} wins with ${sol(k.pot)}.${s.pledge?.symbol === k.winner ? " You’re on the winner." : ""}` : "Pledges are locked. No winner: every pledge is refunded.") : "");
   return html`<main class="ideas-col">
     <div class="list scroll">
       <span class="sr" role="status">${finaleWords}</span>

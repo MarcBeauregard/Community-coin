@@ -507,3 +507,6 @@ button.profile-row:hover { background: rgba(255, 255, 255, 0.04); }
 .dock-flag { flex: none; }
 .app.phone:has(.lobby) .toast { top: calc(112px + env(safe-area-inset-top)); }
 .app.phone.net-on:has(.lobby) .toast { top: calc(160px + env(safe-area-inset-top)); }
+.btn[aria-disabled="true"] { opacity: 0.6; cursor: default; }
+.dock-chip-wrap { display: inline-flex; border-radius: 999px; }
+.dock-chip-wrap:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
