@@ -338,13 +338,20 @@ function useFinaleWords(f, locked, lockWords) {
   // Said, then cleared: a status line left in the page would show yesterday's numbers to someone browsing.
   useEffect(() => { if (!words) return undefined; const t = setTimeout(() => setWords(""), 6000); return () => clearTimeout(t); }, [words]);
   const was = useRef({ on: false, lead: null, nudge: false });
+  const latest = useRef(f);
+  latest.current = f;
   useEffect(() => {
     const w = was.current;
-    if (f && !w.on) setWords(`Final minutes: pledges lock in ${f.lockIn.replace(/^0/, "")}. ${f.text}.${f.nudge ? ` ${f.nudge.text}` : ""}`);
-    else if (f && w.lead !== f.lead.id && Date.now() - (w.saidLeadAt ?? 0) > 10000) { setWords(f.tied ? `${f.text}.` : `${f.text.replace(" leads ", " takes the lead from ")}.`); was.current.saidLeadAt = Date.now(); }
+    if (f && !w.on) { setWords(`Final minutes: pledges lock in ${f.lockIn.replace(/^0/, "")}. ${f.text}.${f.nudge ? ` ${f.nudge.text}` : ""}`); was.current.saidLead = f.lead.id; }
+    else if (f && w.lead !== f.lead.id && Date.now() - (w.saidLeadAt ?? 0) <= 10000) {
+      // Too soon after the last one: said when the quiet window ends, if the lead is still new by then.
+      clearTimeout(w.later);
+      was.current.later = setTimeout(() => { const g = latest.current; if (g && g.lead.id !== was.current.saidLead) { setWords(g.tied ? `${g.text}.` : `${g.text.replace(" leads ", " takes the lead from ")}.`); was.current.saidLeadAt = Date.now(); was.current.saidLead = g.lead.id; } }, 10000 - (Date.now() - w.saidLeadAt));
+    }
+    else if (f && w.lead !== f.lead.id) { setWords(f.tied ? `${f.text}.` : `${f.text.replace(" leads ", " takes the lead from ")}.`); was.current.saidLeadAt = Date.now(); was.current.saidLead = f.lead.id; }
     else if (f && f.nudge && !w.nudge) setWords(f.nudge.text);
     else if (!f && w.on && locked) setWords(lockWords || "Pledges are locked.");
-    was.current = { on: !!f, lead: f?.lead.id ?? null, nudge: !!f?.nudge, saidLeadAt: was.current.saidLeadAt };
+    was.current = { ...was.current, on: !!f, lead: f?.lead.id ?? null, nudge: !!f?.nudge };
   }, [!!f, f?.lead.id, !!f?.nudge, locked]);
   return words;
 }
@@ -462,7 +469,7 @@ export function Lobby({ s, a, phone }) {
     <div class="row" style="flex-wrap:nowrap;gap:14px">
       ${!phone && !s.live && html`<${Button} variant="ghost" size="sm" disabled=${s.elapsed >= 3594} title="Prototype only: jump to the last seconds before launch" onClick=${a.skipToLock}>Demo · skip to lock</${Button}>`}
       <div class=${`clock${f ? " finale-clock" : ""}${f?.urgent ? " urgent" : ""}`}>
-        <span class="t2" style="font-size:12px;font-weight:600">${f ? "Pledges lock in" : "Launch in"}</span>
+        <span class="t2" style="font-size:12px;font-weight:600">${f ? "Locks in" : "Launch in"}</span>
         <span class="value display num" style=${{ color: f ? (f.urgent ? "#ffb340" : "var(--lime)") : t.phase === "lock" ? "#ffb340" : "var(--text)" }} role="timer" aria-label=${f ? `Pledges lock in ${f.lockIn}` : `Launch in ${t.launchIn}`}>${f ? f.lockIn : t.launchIn}</span>
       </div>
       <${WalletPill} s=${s} a=${a} compact=${phone} />

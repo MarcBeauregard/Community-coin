@@ -91,7 +91,7 @@ export function lobbyCards(s) {
     .map((l) => {
       if (l.opens) {
         const on = !!s.reminders[l.id];
-        return { ...l, live: false, tone: l.mine ? "sky" : "neutral", phase: l.mine ? "Hosted by you" : `Opens ${l.opens}`, when: `${l.opens} ${dayOf(nextOpening(l.opens))}`, progress: 0,
+        return { ...l, live: false, tone: l.mine ? "sky" : "neutral", phase: l.mine ? `Hosted by you · ${l.opens}` : `Opens ${l.opens}`, when: dayOf(nextOpening(l.opens)), progress: 0,
           meta: `${l.waiting + (on ? 1 : 0)} waiting`, meta2: l.clan ? `$${s.clans.find((c) => c.id === l.clan)?.ticker ?? ""} clan · you host` : l.mine ? "you host" : `@${l.host}`, reminder: on };
       }
       const e = (((s.elapsed + l.offset) % HOUR) + HOUR) % HOUR;

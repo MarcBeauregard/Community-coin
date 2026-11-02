@@ -368,7 +368,7 @@ function RemindSheet({ s, a }) {
     </div>
     <div class="sheet-actions">
       <a class="btn fill lg" style="flex:1" href=${googleCalendarUrl(lobby, at, url)} target="_blank" rel="noopener">Google Calendar<span class="sr"> (opens in a new tab)</span></a>
-      <${Button} size="lg" variant="white" style="flex:1" onClick=${download}>Other calendars</${Button}>
+      <${Button} size="lg" style="flex:1" onClick=${download}>Other calendars</${Button}>
     </div>`;
 }
 

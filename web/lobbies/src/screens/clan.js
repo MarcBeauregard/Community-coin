@@ -29,11 +29,11 @@ function Sibling({ s, a, k }) {
     const on = !!s.reminders[lobby.id]?.notify;
     return html`<div class="sibling" role="group" aria-label="Sibling lobby">
       <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span class="t2" style="font-size:12px;font-weight:600">Sibling lobby · opens ${lobby.opens}</span><span class="ellipsis" style="font-size:14px;font-weight:600">${lobby.name}</span></span>
-      <${Button} size="sm" class=${on ? "remind-on" : ""} aria-haspopup="dialog" aria-label=${on ? `Reminder on for ${lobby.name}` : `Remind me when ${lobby.name} opens`} onClick=${() => a.openReminder(lobby)}><${I.Bell} size=${13} />${on ? "On" : "Remind"}</${Button}>
+      ${lobby.mine ? html`<${Chip} tone="sky">You host</${Chip}>` : html`<${Button} size="sm" class=${on ? "remind-on" : ""} aria-haspopup="dialog" aria-label=${on ? `Reminder on for ${lobby.name}` : `Remind me when ${lobby.name} opens`} onClick=${() => a.openReminder(lobby)}><${I.Bell} size=${13} />${on ? "On" : "Remind"}</${Button}>
     </div>`;
   }
   if (s.live) return null;
-  return html`<${Button} size="sm" class="sibling-open" style="align-self:stretch" onClick=${() => a.openSheet("sibling")}><${I.Plus} size=${14} />Open a sibling lobby</${Button}>`;
+  return html`<${Button} size="sm" class="sibling-open" style="align-self:stretch" onClick=${() => a.openSheet("sibling")}><${I.Plus} size=${14} />Open a sibling lobby</${Button}>`}`;
 }
 
 function campfirePeople(s) {
