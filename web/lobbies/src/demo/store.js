@@ -115,6 +115,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
     state = { ...state, ...(typeof patch === "function" ? patch(state) : patch) };
     if (state.pledge) lastBacked = state.pledge.symbol;
     if (state.sheet === "withdraw" && !state.pledge) state = { ...state, sheet: null };
+    if (state.pledge && !before.pledge && state.intro !== null) { state = { ...state, intro: null }; try { localStorage.setItem(INTRO, "1"); } catch {} } // a pledge says it was understood
     // Live, the history is the signed-in wallet's, from this device (none for a guest).
     const who = state.wallet.address;
     if (state.live && (!before.live || who !== before.wallet.address)) state = { ...state, history: who ? loadHistory(who) : [] };
@@ -314,7 +315,9 @@ export function createStore({ scene, freeze, live = false } = {}) {
           toast(`${sol(op.amount)} of practice SOL back`, "white");
         } else if (op?.op === "move") {
           set(patch);
-          toast(`Moved your ${sol(op.amount)} to $${op.symbol}`);
+          // Withdrawn in another tab meanwhile: say what is true now.
+          if (!patch.pledge) toast("Your pledge was withdrawn in another tab: nothing to move.", "white");
+          else toast(`Moved your ${sol(op.amount)} to $${op.symbol}`);
         } else if (op?.op === "propose") {
           set({ ...patch, meta: { ...state.meta, [op.ticker]: { id: op.ticker.toLowerCase(), hue: op.hue, pitch: op.pitch } }, selected: op.ticker.toLowerCase(), sheet: null });
           toast(`$${op.ticker} is in the race. Back it to give it a start.`, "sky");

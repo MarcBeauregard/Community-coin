@@ -180,7 +180,10 @@ export function createServer({ port = 0, guests = false, devSessions = false, da
   }
 
   const wss = new WebSocketServer({ server, maxPayload: 2048 });
+  // A socket's error (a frame over the limit, a broken peer) ends that socket, never the server.
+  wss.on("error", (e) => console.error(`ws server: ${e.message}`));
   wss.on("connection", (ws, req) => {
+    ws.on("error", () => ws.terminate());
     const ip = ipOf(req);
     if (!originOk(req)) return ws.close(4403, "Unknown origin");
     if ((sockets.get(ip) ?? 0) >= maxPerIp) return ws.close(4429, "Too many connections from this address");

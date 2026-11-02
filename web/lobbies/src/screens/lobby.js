@@ -453,7 +453,7 @@ export function Lobby({ s, a, phone }) {
     <${IconButton} label="Back to lobbies" size=${phone ? "sm" : undefined} onClick=${() => a.go({ screen: "discover" })}><${I.Back} size=${15} /></${IconButton}>
     <div class="title" style=${phone ? "flex:1" : ""}>
       <h1 class="ellipsis">${FEATURED.name}</h1>
-      <span class="t2 num" style="font-size:13px">${phone ? t.label : `Hosted by ${FEATURED.host} · ${int(presence(s).inside)} inside`}</span>
+      <span class="t2 num" style="font-size:13px">${phone ? t.label : `Hosted by ${FEATURED.host} · ${int(presence(s).inside)} inside${s.live && !s.live.connected ? " (last count)" : ""}`}</span>
     </div>
     ${!phone && html`<div class="tl"><${GestationTimeline} phases=${timeline(s.elapsed)} /></div>`}
     <div class="row" style="flex-wrap:nowrap;gap:14px">

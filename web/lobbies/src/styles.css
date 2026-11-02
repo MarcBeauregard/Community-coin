@@ -522,3 +522,9 @@ button.profile-row:hover { background: rgba(255, 255, 255, 0.04); }
 .app.phone .dock > .row:first-child { max-width: 100%; }
 .dock .who { flex: 1 1 0; }
 .net-wrap { width: max-content; }
+
+/* A sheet's actions stay one line each; too narrow for both side by side, they stack. */
+.sheet-actions { flex-wrap: wrap; }
+.sheet-actions > .btn { white-space: nowrap; flex: 1 1 auto; }
+/* While a sheet is open, its own words speak for the network (the line would cover it). */
+.app:has(.sheet-bg) .net-wrap { display: none; }

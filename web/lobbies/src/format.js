@@ -8,6 +8,7 @@ export function sol(v) {
 
 /** SOL to the lamport that matters: up to 3 decimals, trailing zeros dropped ("0.05 SOL", "2.0 SOL"). */
 export function solExact(v) {
+  if (v > 0 && v < 0.0005) return "less than 0.001 SOL"; // a lamport or a few: still a lead, never "0.0"
   const t = (Math.round(v * 1000) / 1000).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 3 });
   return `${t} SOL`;
 }

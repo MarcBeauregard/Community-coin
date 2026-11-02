@@ -21,6 +21,9 @@ export function cleanText(text, max) {
   return String(text ?? "").replace(CONTROL, " ").replace(/\s+/g, " ").trim().slice(0, max);
 }
 
+// Tickers of coins everyone knows: a practice idea can't borrow them.
+const RESERVED = new Set(["SOL", "WSOL", "USDC", "USDT", "BTC", "ETH", "JUP", "BONK"]);
+
 export function createRoom({ id, opensAt, source, host = null, welcome = null, onStage = null, crank = null, now = () => Date.now(), chatSlowMs = 3000, chatMax = 200, historySize = 200, rate = { burst: 20, perSec: 2 } }) {
   const conns = new Map(); // connId -> { session, send, listening, lastChat, tokens, at }
   const history = [];
@@ -228,6 +231,13 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
             : msg.t === "move" ? { user: me, from: text(msg.from, 12), to: text(msg.to, 12) }
             : { proposer: me, symbol: text(msg.symbol, 12), name: text(msg.name, 40) };
           if (Object.values(args).some((v) => v === null)) return { t: "error", code: "BadMessage" };
+          // An idea as the app lets anyone write one: a ticker of 2 to 6 capitals or digits, a plain name, not a
+          // coin everyone knows.
+          if (msg.t === "propose") {
+            args.name = cleanText(args.name, 24);
+            if (!/^[A-Z0-9]{2,6}$/.test(args.symbol) || args.name.length < 2 || /[<>]/.test(args.name)) return { t: "practice", op: msg.t, ok: false, error: "BadIdea", ...practiceOf(me) };
+            if (RESERVED.has(args.symbol)) return { t: "practice", op: msg.t, ok: false, error: "MemeExists", ...practiceOf(me) };
+          }
           if (removed.has(args.symbol) || removed.has(args.to)) return { t: "practice", op: msg.t, ok: false, error: "IdeaRemoved", ...practiceOf(me) };
           if ((msg.t === "pledge" || msg.t === "propose") && practiceBalance(me) < (msg.t === "pledge" ? args.amount : source.chain.lobby.bond)) {
             return { t: "practice", op: msg.t, ok: false, error: "NotEnoughPractice", ...practiceOf(me) };

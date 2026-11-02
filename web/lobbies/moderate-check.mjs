@@ -80,6 +80,25 @@ const late = conn("late");
 await wait(150);
 check(!late.last("hello").race.some((r) => r.symbol === "PIGW"), "and a late joiner never sees it");
 
+// ------------------------------------------------------------------ what a raw client can't do
+{
+  // An oversized frame ends that socket, never the server (it once killed the process).
+  const { WebSocket } = await import("ws");
+  const tok = server.auth.issue("big");
+  const raw = new WebSocket(`${base.replace("http", "ws")}/ws?lobby=412&token=${encodeURIComponent(tok)}`);
+  await new Promise((r) => raw.on("open", r));
+  raw.send(JSON.stringify({ t: "chat", text: "x".repeat(3000) }));
+  await wait(300);
+  const alive = await fetch(`${base}/lobbies/412`).then((r) => r.ok, () => false);
+  check(alive && raw.readyState !== 1, "an oversized frame closes that socket; the server lives on");
+  // Ideas as the app lets anyone write them.
+  for (const [symbol, name] of [["<IMG>", "x"], ["SOL", "Solana"], ["TOOLONGX", "Long"], ["OK", "<script>x</script>"]]) ben.c.practice("propose", { symbol, name });
+  await wait(300);
+  const refused = ben.got.filter((m) => m.t === "practice" && m.op === "propose" && !m.ok).map((m) => m.error);
+  check(refused.length === 4 && refused.filter((e) => e === "BadIdea").length === 3 && refused.includes("MemeExists"), `bad tickers, markup in names and well-known coins are refused (${refused.join(", ")})`);
+  check(!source.chain.ideas.some((d) => ["<IMG>", "SOL", "TOOLONGX", "OK"].includes(d.symbol)), "and none of them is in the race");
+}
+
 // ------------------------------------------------------------------ the lock's settlements carry the practice SOL
 {
   const room = server.rooms.get("412");
