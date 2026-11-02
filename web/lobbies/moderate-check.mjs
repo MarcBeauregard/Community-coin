@@ -122,6 +122,7 @@ check(!late.last("hello").race.some((r) => r.symbol === "PIGW"), "and a late joi
   for (const p of [hostPage, cleoPage]) { p.errors = []; p.on("pageerror", (e) => p.errors.push(e.message)); await p.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort()); await p.addInitScript(() => localStorage.setItem("lobbies.intro", "1")); }
   await hostPage.goto(`${app}?live=${encodeURIComponent(base)}&as=mira.sol#/lobby`);
   await cleoPage.goto(`${app}?live=${encodeURIComponent(base)}&as=cleo#/lobby`);
+  check(await hostPage.getByRole("button", { name: /from the race$/ }).count() === 0 || await hostPage.locator(".idea[aria-pressed=true]", { hasText: "Frog Prince" }).count() === 1, "the host sees no Remove on the leader by default");
   const card = hostPage.locator(".idea", { hasText: "Frog Prince" });
   check(await visible(card.getByText("Reported · 1")), "the host sees the report on the idea's card");
   await card.click();

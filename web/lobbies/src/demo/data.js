@@ -144,6 +144,6 @@ export function coin(c) {
 // numbers the clans show. A live wallet's history is its own (src/demo/store.js).
 export const DEMO_HISTORY = [
   { key: "0409", name: "Bark After Dark", at: Date.UTC(2026, 9, 24, 1), ticker: "BONK", pledged: "BONK", amount: 1, founder: true, rank: 212, proposed: [] },
-  { key: "0398", name: "Shiba Sunday", at: Date.UTC(2026, 9, 19, 1), ticker: "SHIB", pledged: "SHIB", amount: 2, founder: true, rank: 212, proposed: [{ ticker: "KABOSU", name: "Kabosu", won: false }] },
-  { key: "0371", name: "Founders’ First Hour", at: Date.UTC(2026, 9, 11, 1), ticker: "DOGE", pledged: "DOGE", amount: 0.5, founder: true, rank: 212, proposed: [] },
+  { key: "0398", name: "Shiba Sunday", at: Date.UTC(2026, 9, 19, 1), ticker: "SHIB", pledged: "SHIB", amount: 2, founder: true, rank: 87, proposed: [{ ticker: "KABOSU", name: "Kabosu", won: false }] },
+  { key: "0371", name: "Founders’ First Hour", at: Date.UTC(2026, 9, 11, 1), ticker: "DOGE", pledged: "DOGE", amount: 0.5, founder: true, rank: 1048, proposed: [] },
 ];

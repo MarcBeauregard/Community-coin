@@ -308,7 +308,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
         }
         if (op?.op === "pledge") {
           const total = patch.pledge?.amount ?? op.amount;
-          const r = liveReceipt(`Practice pledge · ${sol(op.amount)} on $${op.symbol}`, [["Pledged", op.amount], ...(total !== op.amount ? [["Your pledge on $" + op.symbol, total]] : []), ["Practice SOL left", patch.balance]]);
+          const r = liveReceipt(`Pledged ${sol(op.amount)} to $${op.symbol}`, [["Pledged", op.amount], ...(total !== op.amount ? [["Your pledge on $" + op.symbol, total]] : []), ["Practice SOL left", patch.balance]]);
           set({ ...patch, sheet: "receipt", receipt: r, receipts: [r, ...state.receipts] });
         } else if (op?.op === "withdraw") {
           set({ ...patch, sheet: null });
@@ -713,7 +713,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
     setLobbyTab(lobbyTab) { set({ lobbyTab }); },
 
     // The race.
-    select(id) { set({ selected: id }); },
+    select(id) { set({ selected: id, pickedIdea: true }); }, // picked by the person (the host's Remove waits for it)
     setAmount(amount) { set({ amount }); },
     proposeIdea({ name, ticker, pitch, hue }) {
       const pl = practiceLive(); if (pl === null) return; if (pl) {

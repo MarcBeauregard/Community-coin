@@ -53,7 +53,7 @@ async function open(url, { context } = {}) {
   await page.goto(url);
   return page;
 }
-const banner = (page) => page.locator(".net-wrap");
+const banner = (page) => page.locator(".net-wrap, .net-inline");
 
 // ------------------------------------------------------------------ receipts
 {
@@ -97,7 +97,7 @@ const banner = (page) => page.locator(".net-wrap");
 {
   const page = await open(`${app}?freeze&scene=sheet-receipt`);
   const dlg = page.getByRole("dialog");
-  check(await dlg.getByText(/no SOL moved, so there is no transaction to look up/).isVisible() && await dlg.getByRole("link", { name: /Solscan/ }).count() === 0, "a practice receipt says there is nothing to look up, and links nothing");
+  check(await dlg.getByText(/no real SOL moved, so there is no transaction to look up/).isVisible() && await dlg.getByRole("link", { name: /Solscan/ }).count() === 0, "a practice receipt says there is nothing to look up, and links nothing");
   await page.close();
 }
 
@@ -113,6 +113,8 @@ const banner = (page) => page.locator(".net-wrap");
   check(await banner(page).textContent() === "", "connected: no banner");
   await server.close();
   check(await visible(banner(page).getByText("Reconnecting to the lobby…")), "the server drops: Reconnecting to the lobby…");
+  const [line, head] = [await banner(page).locator(".net").boundingBox(), await page.locator(".lobby-head").boundingBox()];
+  check(line && head && line.y >= head.y + head.height - 1, "in a lobby the line sits under the header, never over the title or the clock");
   check(await visible(banner(page).getByText("Can’t reach the lobby server. Still trying."), 17000), "still gone after 15 s: it says so, calmly");
   check(await page.getByRole("status").filter({ hasText: "Can’t reach the lobby server" }).count() === 1, "in a status region, for screen readers");
   check(await page.getByText("1,284 inside").count() === 0 && await page.getByText(/1 person inside/).count() >= 1, "the count stays the lobby's last, never the demo's crowd");

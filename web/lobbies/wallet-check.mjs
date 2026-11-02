@@ -144,7 +144,7 @@ const live = `${app}?live=${encodeURIComponent(base)}#/lobby`;
   await page.locator(".idea", { hasText: "dogwifhat" }).first().click();
   await page.getByRole("button", { name: /^Pledge/ }).first().click();
   await page.getByRole("button", { name: "Confirm practice pledge" }).click();
-  check(await page.getByText(/^Practice pledge · 1\.0 SOL on \$WIF/).waitFor({ timeout: 4000 }).then(() => true, () => false), "a practice pledge gets its receipt");
+  check(await page.getByText(/^Pledged 1\.0 SOL to \$WIF/).waitFor({ timeout: 4000 }).then(() => true, () => false), "a practice pledge gets its receipt");
   check(practice.chain.pledges.get(keys[0].address)?.amount === 1_000_000_000n, "and is in the lobby's server, under the wallet's address");
   await page.close();
   page = await open(live, { context });

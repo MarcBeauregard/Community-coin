@@ -6,6 +6,7 @@ import { render } from "preact";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { html, IconButton, Avatar, Toast } from "./ui.js";
 import { netState } from "./demo/select.js";
+import { NetBanner } from "./screens/net.js";
 import * as I from "./icons.js";
 import { phoneBreakpoint } from "./tokens.js";
 import { createStore } from "./demo/store.js";
@@ -129,28 +130,9 @@ function App() {
     ${s.voice.listening && screen !== "lobby" && s.live && html`<${VoicePill} s=${s} a=${a} onOpen=${() => { a.go({ screen: "lobby" }); a.setLobbyTab("stage"); }} />`}
     ${showTabs && html`<${TabBar} s=${s} a=${a} />`}
     <${Sheets} s=${s} a=${a} />
-    <${NetBanner} net=${s.net} pledged=${!!s.pledge} />
+    ${screen !== "lobby" && html`<${NetBanner} net=${s.net} pledged=${!!s.pledge} />`}
     <${Toast} toast=${s.toast} />
   </div>`;
-}
-
-// The network, said calmly at the top while something is off (the most pressing thing only), and "Back online" for
-// a moment after. One status region, always in the page, so a screen reader hears each change once.
-const NET = {
-  offline: ["amber", "You’re offline. The lobby catches up when you’re back."],
-  down: ["amber", "Can’t reach the lobby server. Still trying."],
-  gone: ["amber", "The lobby closed this connection. Reload the page to come back in."],
-  reconnecting: ["sky", "Reconnecting to the lobby…"],
-  solanaDown: ["amber", "Solana isn’t answering. Your balance may be out of date."],
-  slow: ["sky", "The lobby is slow right now. Numbers may lag a few seconds."],
-  solanaSlow: ["sky", "Solana is slow right now. Your balance may lag."],
-  back: ["lime", "Back online"],
-};
-function NetBanner({ net, pledged }) {
-  const k = netState(net);
-  // Someone with a pledge hears that it is safe: it is kept by the lobby, not by this page.
-  const text = k === "down" && pledged ? "Can’t reach the lobby server. Still trying; your pledge is safe on it." : k && NET[k][1];
-  return html`<div role="status" class="net-wrap">${k && html`<div class=${`net glass ${NET[k][0]}`}><span class="dot" aria-hidden="true" />${text}</div>`}</div>`;
 }
 
 render(html`<${App} />`, document.getElementById("app"));

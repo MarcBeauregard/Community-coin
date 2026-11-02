@@ -123,13 +123,15 @@ export function founders(s, clan) {
     return (s.liveClan.founders ?? []).map((f) => ({ who: f.user, me: f.user === s.liveClan.you, amount: Number(f.amount) / 1e9, rank: f.rank, online: f.user === s.liveClan.you }));
   }
   const fresh = clan.fresh && s.launched && s.launched.founder;
-  return [...FOUNDERS, [ME, fresh ? s.launched.myAmount : 1, fresh ? s.launched.rank : 212]].map(([who, amount, rank], i) => ({
+  return [...FOUNDERS, [ME, fresh ? s.launched.myAmount : 1, myFounderRank(s, clan)]].map(([who, amount, rank], i) => ({
     who, amount, rank, online: i < 4 || who === ME,
   }));
 }
 
+// The demo's own founder numbers, one per demo clan (the demo history says the same).
+const DEMO_RANKS = { bonk: 212, doge: 1048, shib: 87 };
 export function myFounderRank(s, clan) {
-  return clan.fresh && s.launched ? s.launched.rank : 212;
+  return clan.fresh && s.launched ? s.launched.rank : DEMO_RANKS[clan.id] ?? 212;
 }
 
 // A founder's tokens: their share of the opening batch, as the program's claim computes it (demo/lobby.js).

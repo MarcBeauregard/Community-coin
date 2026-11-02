@@ -8,6 +8,7 @@ import { person, coin, FEATURED, SPEAKERS, MUTED_SPEAKERS, CROWD, PEOPLE, ME } f
 import { race, timeline, lobbyClock, dock, presence, voiceStatus, finale, trend } from "../demo/select.js";
 import { sol, int, ticker } from "../format.js";
 import { WalletPill } from "./discover.js";
+import { NetBanner } from "./net.js";
 import { AUDIO_ERRORS } from "../voice/audio.js";
 
 const AMOUNTS = [0.5, 1, 2, 5];
@@ -236,7 +237,8 @@ function Dock({ s, a, ideas, phone }) {
     action = html`<span class="dock-chip-wrap" tabIndex="-1"><${Chip} tone="amber" class="dock-chip">${text}</${Chip}></span>`;
   }
   // The host removes an idea; anyone else can report one (not their own), once.
-  const host = manages(s) && s.live?.practice && t.canPledge;
+  // The host's Remove shows once they picked an idea, or for one people reported: never on the leader by default.
+  const host = manages(s) && s.live?.practice && t.canPledge && (s.pickedIdea || (s.live.reports?.[d.sel.ticker] ?? 0) > 0);
   const reported = !!s.reported[d.sel.ticker];
   const flag = host
     ? html`<${IconButton} label=${`Remove ${ticker(d.sel.ticker)} from the race`} size="sm" class="dock-flag" aria-haspopup="dialog" onClick=${() => a.askRemove(d.sel.id)}><${I.Close} size=${13} /></${IconButton}>`
@@ -296,7 +298,7 @@ function Finale({ f, a, phone }) {
 
 const INTRO = [
   { icon: I.Wallet, title: "Your pledge is your vote", text: "Back the idea you want launched with SOL. Pledges lock 5 minutes before the launch; the idea with the most SOL then wins." },
-  { icon: I.Check, title: "Lost? Refunded at the lock", text: "If your idea doesn’t win, your SOL comes back to your wallet when pledges lock. Nothing to claim." },
+  { icon: I.Check, title: "Lost? Refunded at the lock", text: "If your idea doesn’t win, you get your SOL back when pledges lock. Nothing to claim." },
   { icon: I.Flame, title: "Won? You’re a founder", text: "At 01:00 the coin launches. Your SOL buys its first tokens, and you get a founder number in its clan, for good." },
 ];
 
@@ -338,7 +340,7 @@ function useFinaleWords(f, locked, lockWords) {
   useEffect(() => {
     const w = was.current;
     if (f && !w.on) setWords(`Final minutes: pledges lock in ${f.lockIn.replace(/^0/, "")}. ${f.text}.${f.nudge ? ` ${f.nudge.text}` : ""}`);
-    else if (f && w.lead !== f.lead.id && Date.now() - (w.saidLeadAt ?? 0) > 10000 && !document.querySelector("[role=dialog]")) { setWords(`$${f.lead.ticker} takes the lead. ${f.text}.`); was.current.saidLeadAt = Date.now(); }
+    else if (f && w.lead !== f.lead.id && Date.now() - (w.saidLeadAt ?? 0) > 10000) { setWords(`$${f.lead.ticker} takes the lead. ${f.text}.`); was.current.saidLeadAt = Date.now(); }
     else if (f && f.nudge && !w.nudge) setWords(f.nudge.text);
     else if (!f && w.on && locked) setWords(lockWords || "Pledges are locked.");
     was.current = { on: !!f, lead: f?.lead.id ?? null, nudge: !!f?.nudge, saidLeadAt: was.current.saidLeadAt };
@@ -470,6 +472,7 @@ export function Lobby({ s, a, phone }) {
     return html`<div class="lobby screen">
       <div class="ambient" style=${{ background: glow, height: "100%" }} />
       ${head}
+      <${NetBanner} net=${s.net} pledged=${!!s.pledge} inline />
       <div class="lobby-sub">
         <${GestationTimeline} phases=${timeline(s.elapsed)} labels=${false} height=${4} />
         <${Segmented} label="Lobby sections" full tabs options=${TABS} value=${s.lobbyTab} onChange=${a.setLobbyTab} />
@@ -485,6 +488,7 @@ export function Lobby({ s, a, phone }) {
   return html`<div class="lobby screen">
     <div class="ambient" style=${{ background: glow, height: "100%" }} />
     ${head}
+    <${NetBanner} net=${s.net} pledged=${!!s.pledge} inline />
     <div class="lobby-body">
       <${Stage} s=${s} a=${a} />
       <${Ideas} s=${s} a=${a} />

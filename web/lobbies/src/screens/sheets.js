@@ -29,7 +29,7 @@ function PledgeSheet({ s, a }) {
     <div class="rows">
       <div><span>If it wins</span><span class="num">${d.shareIfWins >= 99.995 ? "You’d be its only backer: the whole opening batch" : `About ${d.shareIfWins.toFixed(2)}% of its opening batch, at the same price as every backer`}</span></div>
       <div><span>If it loses</span><span>Full refund when pledges lock, 5 minutes before the launch</span></div>
-      <div><span>Change your mind</span><span>Withdraw or move any time before 00:55</span></div>
+      <div><span>Change your mind</span><span>Withdraw or move it until pledges lock</span></div>
       <div><span>Your wallet</span><span>No SOL leaves it: this lobby is a rehearsal until it runs on Solana</span></div>
     </div>
     <span class="t2" style="font-size:12px;line-height:1.5;text-align:center">Memecoins are speculative and can lose all their value. This is not an investment or advice.
@@ -475,7 +475,7 @@ function WithdrawSheet({ s, a }) {
   const p = s.pledge;
   if (!p) return null;
   return html`
-    <p class="t2" style="font-size:15px;line-height:1.5">${sol(p.amount)} comes back from ${ticker(p.symbol)} to your ${s.live ? "practice SOL" : "balance"}. You can pledge again until the lock at 00:55; if you’re not backing the winner then, you won’t be one of its founders.</p>
+    <p class="t2" style="font-size:15px;line-height:1.5">${sol(p.amount)} comes back from ${ticker(p.symbol)} to your ${s.live ? "practice SOL" : "balance"}. You can pledge again until pledges lock, 5 minutes before the launch; if you’re not backing the winner then, you won’t be one of its founders.</p>
     <div class="sheet-actions">
       <${Button} size="lg" onClick=${a.closeSheet}>Keep my pledge</${Button}>
       <${Button} variant="danger" size="lg" data-primary disabled=${s.signing} onClick=${a.withdraw}>Withdraw ${sol(p.amount)}</${Button}>
@@ -515,7 +515,7 @@ function ReceiptSheet({ s, a }) {
     ${proofLink(r)
       ? html`<div class="row" style="justify-content:center;gap:8px;font-size:13px"><${Chip} tone="lime"><${I.Check} size=${12} />On Solana</${Chip}>
           <a class="link" href=${proofLink(r)} target="_blank" rel="noopener">View the transaction on Solscan<span class="sr"> (opens in a new tab)</span></a></div>`
-      : html`<span class="t2" style="font-size:12px;line-height:1.5;text-align:center">${r.signature ? "This transaction is on a local validator: no explorer shows it." : r.practice ? "Practice: recorded by the lobby server under the lobby program’s rules; no SOL moved, so there is no transaction to look up." : "Practice: worked out by the lobby program’s own rules on this device; no SOL moved, so there is no transaction to look up."} Pledges can be withdrawn or moved until 00:55; losing pledges are refunded at the lock.</span>`}
+      : html`<span class="t2" style="font-size:12px;line-height:1.5;text-align:center">${r.signature ? "This transaction is on a local validator: no explorer shows it." : "A practice pledge: no real SOL moved, so there is no transaction to look up."} You can withdraw or move it until pledges lock; if its idea loses, it comes back then.</span>`}
     <${Button} variant="white" size="lg" onClick=${a.closeSheet}>Done</${Button}>`;
 }
 
