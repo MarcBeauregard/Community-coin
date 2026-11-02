@@ -18,11 +18,12 @@ const CONTROL = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩]/g;
 
 /** Cleans a chat message: no control or bidi characters, trimmed, length-capped. Empty means refused. */
 export function cleanText(text, max) {
-  return String(text ?? "").replace(CONTROL, " ").replace(/\s+/g, " ").trim().slice(0, max);
+  if (typeof text !== "string") return ""; // only text is text: an object here is someone poking at the server
+  return text.replace(CONTROL, " ").replace(/\s+/g, " ").trim().slice(0, max);
 }
 
 // Tickers of coins everyone knows: a practice idea can't borrow them.
-const RESERVED = new Set(["SOL", "WSOL", "USDC", "USDT", "BTC", "ETH", "JUP", "BONK"]);
+const RESERVED = new Set(["SOL", "WSOL", "MSOL", "USDC", "USDT", "PYUSD", "BTC", "WBTC", "ETH", "WETH", "JUP", "JTO", "PYTH", "RAY", "ORCA", "BONK", "PUMP", "TRUMP", "MELANIA", "PEPE", "DOGE", "SHIB", "PENGU", "FARTCO"]);
 
 export function createRoom({ id, opensAt, source, host = null, welcome = null, onStage = null, crank = null, now = () => Date.now(), chatSlowMs = 3000, chatMax = 200, historySize = 200, rate = { burst: 20, perSec: 2 } }) {
   const conns = new Map(); // connId -> { session, send, listening, lastChat, tokens, at }
@@ -62,7 +63,7 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
   // The stage: the lobby's host speaks first; `onStage(user, canPublish)` tells the SFU when someone's right changes.
   const stage = createStage({ host: host ?? (() => source.host?.() ?? null) });
   const stageChanged = (user, before) => {
-    broadcast({ t: "stage", ...stage.view() });
+    broadcast({ t: "stage", ...stageView() });
     if (user && before !== stage.isSpeaker(user)) onStage?.(user, stage.isSpeaker(user));
   };
 
@@ -97,6 +98,12 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
     return { inside: users.size, listening: listening.size, guests, people };
   }
   // The host's welcome, pinned for everyone who comes in.
+  // The stage as everyone sees it: who is on it, and which of them isn't here right now (the host can be away).
+  const stageView = () => {
+    const v = stage.view();
+    const here = new Set([...conns.values()].map((c) => c.session.sub));
+    return { ...v, away: v.speakers.filter((u) => !here.has(u)) };
+  };
   const welcomeLine = () => {
     const text = cleanText(welcome, 280);
     return text ? { text, from: host?.() ?? source.host?.() ?? null } : null;
@@ -106,9 +113,11 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
     id,
     size: () => conns.size,
     join(connId, session, send) {
+      const first = ![...conns.values()].some((x) => x.session.sub === session.sub);
       conns.set(connId, { session, send, listening: false, lastChat: -Infinity, tokens: rate.burst, at: now() });
+      if (first && stage.isSpeaker(session.sub)) queueMicrotask(() => broadcast({ t: "stage", ...stageView() })); // back on stage
       if (settled.has(session.sub)) queueMicrotask(() => send(settled.get(session.sub))); // after the hello
-      return { t: "hello", lobby: id, now: now(), opensAt, phase: phaseAt(elapsed()), race: raceRows(), ...presence(), chat: history.slice(-50), curve, welcome: welcomeLine(), ...(manages(session.sub) ? { reports: reportCounts() } : {}), you: session.sub, guest: !!session.guest, stage: stage.view(), ...outcome,
+      return { t: "hello", lobby: id, now: now(), opensAt, phase: phaseAt(elapsed()), race: raceRows(), ...presence(), chat: history.slice(-50), curve, welcome: welcomeLine(), ...(manages(session.sub) ? { reports: reportCounts() } : {}), you: session.sub, guest: !!session.guest, stage: stageView(), ...outcome,
         practice: !!source.practice, ...(source.practice && !session.guest ? practiceOf(session.sub) : {}) };
     },
     leave(connId) {
@@ -120,6 +129,7 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
         const v = JSON.stringify(stage.view());
         stage.leave(c.session.sub);
         if (JSON.stringify(stage.view()) !== v) stageChanged(c.session.sub, was);
+        else if (was) broadcast({ t: "stage", ...stageView() }); // the host stays on stage, away
       }
     },
     stage,
@@ -136,6 +146,9 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
         let m;
         try { m = JSON.parse(raw); } catch { return null; }
         if (m.kind !== "fire" && m.kind !== "skull") return { t: "error", code: "BadMessage" };
+        // Even dropped ones are frames: past 40 a second, it's a flood like any other.
+        if (t - (c.cheerWindow ?? 0) >= 1000) { c.cheerWindow = t; c.cheerFrames = 0; }
+        if (++c.cheerFrames > 40) return "close";
         if (t - (c.lastCheer ?? 0) < 250) return null;
         c.lastCheer = t;
         cheers[m.kind]++;

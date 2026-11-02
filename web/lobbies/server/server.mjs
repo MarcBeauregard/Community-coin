@@ -130,7 +130,8 @@ export function createServer({ port = 0, guests = false, devSessions = false, da
     if (req.method === "POST" && url.pathname === "/auth/dev") {
       if (!devSessions) return json(res, 404, { error: "Not found" });
       const { sub } = await readBody(req);
-      return json(res, 200, { token: auth.issue(String(sub ?? "dev").slice(0, 64)) });
+      if (sub !== undefined && typeof sub !== "string") return json(res, 400, { error: "sub is a string" });
+      return json(res, 200, { token: auth.issue((sub ?? "dev").slice(0, 64)) });
     }
     const up = /^\/clans\/([^/]+)\/media$/.exec(url.pathname);
     if (req.method === "POST" && up) {
@@ -146,6 +147,7 @@ export function createServer({ port = 0, guests = false, devSessions = false, da
       const session = auth.session(bearer(req, url));
       if (!session) return json(res, 401, { error: "Sign in first" });
       const { lobby, clan } = await readBody(req);
+      if (![lobby, clan].every((v) => v === undefined || typeof v === "string" || typeof v === "number")) return json(res, 400, { error: "Bad request" });
       let room, canPublish;
       if (clan !== undefined) {
         const c = clanRoom(String(clan));
@@ -202,7 +204,7 @@ export function createServer({ port = 0, guests = false, devSessions = false, da
       if (!hello) return ws.close(4403, "Founders only");
       send(JSON.stringify(hello));
       ws.on("message", (data) => {
-        const out = clan.receive(id, data.toString());
+        const out = guarded(() => clan.receive(id, data.toString()));
         if (out === "close") return ws.close(4408, "Closed by the server");
         if (out) send(JSON.stringify(out));
       });
@@ -216,13 +218,17 @@ export function createServer({ port = 0, guests = false, devSessions = false, da
     const send = (s) => { if (ws.readyState === ws.OPEN && ws.bufferedAmount < 1 << 20) ws.send(s); };
     send(JSON.stringify(room.join(id, session, send)));
     ws.on("message", (data) => {
-      const out = room.receive(id, data.toString());
+      const out = guarded(() => room.receive(id, data.toString()));
       if (out === "close") return ws.close(4408, "Too many messages");
       if (out) send(JSON.stringify(out));
     });
     ws.on("close", () => room.leave(id));
   });
 
+  // A message that breaks something is answered BadMessage: it never takes the server down.
+  function guarded(fn) {
+    try { return fn(); } catch (e) { console.error(`message: ${e.message}`); return { t: "error", code: "BadMessage" }; }
+  }
   const timer = setInterval(() => { for (const r of rooms.values()) r.tick(); }, batchMs);
   return new Promise((resolve) => server.listen(port, () => resolve({
     port: server.address().port, rooms, auth, clans, clanRoom, media,

@@ -91,6 +91,21 @@ check(!late.last("hello").race.some((r) => r.symbol === "PIGW"), "and a late joi
   await wait(300);
   const alive = await fetch(`${base}/lobbies/412`).then((r) => r.ok, () => false);
   check(alive && raw.readyState !== 1, "an oversized frame closes that socket; the server lives on");
+  // Text that isn't text (an object posing as a string) is a bad message, never a crash.
+  const poke = [];
+  const pc = connectLobby({ base, lobby: 412, token: server.auth.issue("poker"), onMessage: (m) => poke.push(m) });
+  await wait(150);
+  const rawPoke = new WebSocket(`${base.replace("http", "ws")}/ws?lobby=412&token=${encodeURIComponent(server.auth.issue("poker2"))}`);
+  const pokeGot = [];
+  rawPoke.on("message", (d) => pokeGot.push(JSON.parse(d)));
+  await new Promise((r) => rawPoke.on("open", r));
+  rawPoke.send(JSON.stringify({ t: "chat", text: { toString: 1 } }));
+  rawPoke.send(JSON.stringify({ t: "propose", symbol: "OKAY", name: { toString: 1 } }));
+  await wait(300);
+  check(await fetch(`${base}/lobbies/412`).then((r) => r.ok, () => false) && pokeGot.some((m) => m.code === "EmptyMessage" || m.code === "BadMessage"), "an object for text is refused; the server lives on");
+  const vt = await fetch(`${base}/voice/token`, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${server.auth.issue("poker")}` }, body: JSON.stringify({ lobby: { toString: 1 } }) });
+  check(vt.status === 400 || vt.status === 503, `and over HTTP it is a bad request, not a server error (${vt.status})`);
+  rawPoke.close(); pc.close();
   // Ideas as the app lets anyone write them.
   for (const [symbol, name] of [["<IMG>", "x"], ["SOL", "Solana"], ["TOOLONGX", "Long"], ["OK", "<script>x</script>"]]) ben.c.practice("propose", { symbol, name });
   await wait(300);

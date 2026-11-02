@@ -40,6 +40,7 @@ const visible = (loc, ms = 4000) => loc.first().waitFor({ timeout: ms }).then(()
   await wait(200);
   const hello = seen.find((m) => m.t === "hello");
   check(hello?.welcome?.text === "Welcome in! Animal coins only." && hello.welcome.from === "mira.sol", "the hello carries the host's welcome, cleaned, with who wrote it");
+  check(hello.stage.speakers.includes("mira.sol") && hello.stage.away.includes("mira.sol"), "a host who isn't here is on the stage as away, not as speaking");
   const conns = ["ana", "ben", "ana"].map((who) => connectLobby({ base, lobby: 412, token: server.auth.issue(who), onMessage: () => {} }));
   const guest = await (await fetch(`${base}/auth/guest`, { method: "POST" })).json();
   conns.push(connectLobby({ base, lobby: 412, token: guest.token, onMessage: () => {} }));

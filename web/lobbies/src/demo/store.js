@@ -328,7 +328,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
         const v = s.voice;
         const onStage = m.speakers.includes(s.live.you);
         const hand = m.hands.includes(s.live.you);
-        set({ live: { ...s.live, stage: { host: m.host, speakers: m.speakers, cohosts: m.cohosts, hands: m.hands } }, voice: { ...v, onStage, hand } });
+        set({ live: { ...s.live, stage: { host: m.host, speakers: m.speakers, cohosts: m.cohosts, hands: m.hands, away: m.away ?? [] } }, voice: { ...v, onStage, hand } });
         // The microphone follows the stage only for someone already in the audio (who asked to be): nobody's
         // microphone turns on because of a list they did not touch (a host lands on stage before choosing to speak).
         // Brought up: an invitation, not an open microphone; the person says when they speak. Moved down: the
@@ -779,7 +779,10 @@ export function createStore({ scene, freeze, live = false } = {}) {
       if (link) link.cheer(kind);
     },
     // Report an idea to the host; the host (or a co-host) removes it, and everyone on it is refunded.
-    askReport(id) { set({ sheet: "report", sheetIdea: id, sheetAt: Date.now() }); },
+    askReport(id) {
+      if (link && state.live?.guest && !state.wallet.signedIn) return actions.openConnect("report"); // asked first, not after the sheet
+      set({ sheet: "report", sheetIdea: id, sheetAt: Date.now() });
+    },
     askRemove(id) { set({ sheet: "remove", sheetIdea: id, sheetAt: Date.now() }); },
     report(id) {
       const idea = state.ideas.find((d) => d.id === id);

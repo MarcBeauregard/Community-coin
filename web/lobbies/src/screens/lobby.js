@@ -17,7 +17,7 @@ const TABS = [{ id: "ideas", label: "Ideas" }, { id: "stage", label: "Stage" }, 
 function speakers(s) {
   // Live, the stage is the server's: who speaks is its list (the talking light needs the SFU's audio levels).
   const st = s.live?.stage;
-  if (st) return st.speakers.map((who) => ({ who, me: who === s.live.you, speaking: s.audio.speaking.includes(who), muted: who === s.live.you && !s.audio.micOn }));
+  if (st) return st.speakers.map((who) => ({ who, me: who === s.live.you, away: (st.away ?? []).includes(who), speaking: s.audio.speaking.includes(who), muted: who === s.live.you && !s.audio.micOn }));
   const spk = s.beat % 4 === 3 ? 2 : s.beat % 4 === 2 ? 0 : 1;
   const list = SPEAKERS.map((who, i) => ({ who, speaking: i === spk, muted: MUTED_SPEAKERS.includes(who) }));
   if (s.voice.onStage) list.push({ who: ME, me: true, speaking: s.voice.mic && s.beat % 5 === 0, muted: !s.voice.mic });
@@ -91,9 +91,9 @@ function Stage({ s, a, phone }) {
       <span style="font-size:12px;font-weight:600;color:var(--sky);display:inline-flex;align-items:center;gap:6px"><${Equalizer} height=${10} />${listeners} listening</span>
     </div>`}
     <div style="position:relative">
-      <ul class="speakers" role="list" aria-label="On stage">${speakers(s).map((p) => html`<li key=${p.who}>
+      <ul class="speakers" role="list" aria-label="On stage">${speakers(s).map((p) => html`<li key=${p.who} class=${p.away ? "away" : ""}>
         <${Avatar} person=${person(p.who)} size=${size} speaking=${p.speaking} muted=${p.muted} />
-        <span class="ellipsis" style=${{ fontSize: phone ? "13px" : "12px", fontWeight: 500, color: "rgba(235,235,245,.82)", maxWidth: "100%" }}>${p.me ? "you" : person(p.who).name}</span>
+        <span class="ellipsis" style=${{ fontSize: phone ? "13px" : "12px", fontWeight: 500, color: "rgba(235,235,245,.82)", maxWidth: "100%" }}>${p.me ? "you" : person(p.who).name}${p.away ? html`<span class="t2"> · away</span>` : ""}</span>
       </li>`)}</ul>
       <div class="cheer-layer" aria-hidden="true">${s.cheers.map((c) => html`<span key=${c.id} class="cheer" style=${{ left: `${c.x}%`, animationDelay: `${c.delay}ms` }}>${c.kind === "fire" ? "🔥" : "💀"}</span>`)}</div>
     </div>
@@ -185,7 +185,7 @@ function IdeaCard({ d, s, a, phone }) {
     </button>`;
   }
   return html`<button type="button" class="idea" aria-pressed=${String(selected)} onClick=${() => a.select(d.id)}>
-    <span class="row" style="justify-content:space-between;align-items:flex-start;width:100%">
+    <span class="row" style="justify-content:space-between;align-items:flex-start;width:100%;flex-wrap:nowrap">
       <${Coin} coin=${coin(d)} size=${56} />
       ${tr && html`<span style="flex:1;display:flex;justify-content:center;padding:14px 10px 0"><${Spark} points=${tr.points} width=${88} height=${30} color=${sparkColor} /></span>`}
       <span style="display:flex;flex-direction:column;align-items:flex-end;gap:6px"><span class="num t2" style="font-size:13px;font-weight:600">#${d.rank}</span>${badges}</span>

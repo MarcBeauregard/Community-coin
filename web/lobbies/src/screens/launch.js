@@ -23,7 +23,7 @@ export function Launch({ s, a, phone }) {
   const recap = s.live ? [
     { t: "00:00", c: "var(--text)", text: "Lobby opens" },
     { t: "00:30", c: "var(--sky)", text: `Proposals close · ${s.ideas.length} ideas` },
-    { t: "00:55", c: "var(--amber)", text: `Lock · ${sol(l.total)} pledged · ${ticker(win.ticker)} leads` },
+    { t: "00:55", c: "var(--amber)", text: `Lock · ${sol(l.total)} pledged · ${ticker(win.ticker)} wins` },
     { t: "01:00", c: "var(--lime)", text: `${ticker(win.ticker)} launched · ${int(l.backers)} founders · the clan opens` },
   ] : [
     { t: "00:00", c: "var(--text)", text: `Lobby opens · ${int(FEATURED.inside)} join` },
