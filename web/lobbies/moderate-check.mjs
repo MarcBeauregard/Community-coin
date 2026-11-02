@@ -80,6 +80,17 @@ const late = conn("late");
 await wait(150);
 check(!late.last("hello").race.some((r) => r.symbol === "PIGW"), "and a late joiner never sees it");
 
+// ------------------------------------------------------------------ the lock's settlements carry the practice SOL
+{
+  const room = server.rooms.get("412");
+  room.announce([{ event: "PledgeRefunded", user: "cleo", amount: SOL }, { event: "BondReturned", idea: 0, proposer: "ana", amount: source.chain.lobby.bond }]);
+  await wait(150);
+  const r = cleo.got.filter((m) => m.t === "settled").pop();
+  check(r?.kind === "refund" && r.balance !== undefined, "a refund at the lock says the person's practice SOL now (no stale balance)");
+  const b = ana.got.filter((m) => m.t === "settled" && m.kind === "bond").pop();
+  check(b && BigInt(b.amount) === source.chain.lobby.bond && b.balance !== undefined, "and the proposer hears their bond is back, with their SOL");
+}
+
 // ------------------------------------------------------------------ in the app
 {
   ana.c.practice("propose", { symbol: "FROG", name: "Frog Prince" });

@@ -34,9 +34,9 @@ function PledgeSheet({ s, a }) {
     </div>
     <span class="t2" style="font-size:12px;line-height:1.5;text-align:center">Memecoins are speculative and can lose all their value. This is not an investment or advice.
       <button type="button" class="link" onClick=${() => a.openSheet("terms")}>Risks and terms</button></span>
+    ${unreachable && html`<span class="remind-error" role="alert"><${I.Alert} size=${14} />${s.net.offline ? "You’re offline. Confirm when you’re back online." : "The lobby server can’t be reached. Confirm when it’s back."}</span>`}
     <div class="sheet-actions">
       <${Button} size="lg" disabled=${s.signing} onClick=${a.closeSheet}>Cancel</${Button}>
-      ${unreachable && html`<span class="remind-error" role="alert" style="flex-basis:100%"><${I.Alert} size=${14} />${s.net.offline ? "You’re offline. Confirm when you’re back online." : "The lobby server can’t be reached. Confirm when it’s back."}</span>`}
       <span class="sr" role="status">${s.signing ? "Confirming your pledge" : ""}</span>
       <${Button} variant="prim" size="lg" style="flex:1.4" disabled=${unreachable} aria-disabled=${s.signing ? "true" : undefined} onClick=${() => { if (!s.signing) a.confirmPledge(); }}>
         ${s.signing ? html`<span class="spin" aria-hidden="true" />Confirming` : "Confirm practice pledge"}

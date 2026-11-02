@@ -57,8 +57,8 @@ export function finale(s, ideas) {
   const gap = lead.total - next.total;
   const left = LOCK_AT - s.elapsed;
   // Tied only when equal to the lamport (the program then keeps the idea proposed first); a small gap is shown exactly.
-  const tied = Math.abs(gap) < 1e-9;
-  const text = tied ? `$${lead.ticker} and $${next.ticker} are tied: the idea proposed first wins a tie` : `$${lead.ticker} leads $${next.ticker} by ${gap < 0.1 ? solExact(gap) : sol(gap)}`;
+  const tied = Math.round(gap * 1e9) === 0; // in lamports: one lamport is a lead
+  const text = tied ? `$${lead.ticker} and $${next.ticker} are tied: $${lead.ticker}, proposed first, wins a tie` : `$${lead.ticker} leads $${next.ticker} by ${gap < 0.1 ? solExact(gap) : sol(gap)}`;
   const mine = s.pledge && ideas.find((d) => d.ticker === s.pledge.symbol);
   const nudge = mine && mine.rank > 2 && s.nudgeOff !== s.pledge.symbol
     ? { from: mine, to: lead, amount: s.pledge.amount, text: `$${mine.ticker} is ${ordinal(mine.rank)}. Move your ${sol(s.pledge.amount)} to $${lead.ticker}?` }
@@ -91,7 +91,7 @@ export function lobbyCards(s) {
     .map((l) => {
       if (l.opens) {
         const on = !!s.reminders[l.id];
-        return { ...l, live: false, tone: l.mine ? "sky" : "neutral", phase: l.mine ? "Hosted by you" : `Opens ${l.opens}`, when: dayOf(nextOpening(l.opens)) === "today" ? "Today" : "Tomorrow", progress: 0,
+        return { ...l, live: false, tone: l.mine ? "sky" : "neutral", phase: l.mine ? "Hosted by you" : `Opens ${l.opens}`, when: `${l.opens} ${dayOf(nextOpening(l.opens))}`, progress: 0,
           meta: `${l.waiting + (on ? 1 : 0)} waiting`, meta2: l.clan ? `$${s.clans.find((c) => c.id === l.clan)?.ticker ?? ""} clan · you host` : l.mine ? "you host" : `@${l.host}`, reminder: on };
       }
       const e = (((s.elapsed + l.offset) % HOUR) + HOUR) % HOUR;
@@ -206,6 +206,7 @@ export function profile(s) {
   });
   // This lobby's ideas, while it runs (after the launch they are in the history), then the past ones.
   const now = s.launched ? [] : race(s).filter((d) => d.by === you).map((d) => ({ ticker: d.ticker, name: d.name, hue: d.hue, status: `Racing · #${d.rank}`, tone: "sky" }));
+  const removed = (s.removedMine ?? []).map((d) => ({ ...d, status: "Removed by the host · bond returned", tone: "neutral" }));
   const past = s.history.flatMap((h) => (h.proposed ?? []).map((p) => ({ ticker: p.ticker, name: p.name, hue: s.ideas.find((d) => d.ticker === p.ticker)?.hue ?? 200,
     status: p.won ? "Won · launched" : "Didn’t win · bond returned", tone: p.won ? "lime" : "neutral" })));
   const lobbies = [
@@ -216,7 +217,7 @@ export function profile(s) {
   ];
   let streak = open ? 1 : 0;
   for (const h of s.history) { if (!h.pledged) break; streak++; }
-  return { you, clans, ideas: [...now, ...past], lobbies, streak, proposed: now.length + past.length };
+  return { you, clans, ideas: [...now, ...removed, ...past], lobbies, streak, proposed: now.length + removed.length + past.length };
 }
 
 /** What the network banner says, the most pressing first; null when all is well. */

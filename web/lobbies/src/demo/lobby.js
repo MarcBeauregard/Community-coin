@@ -115,7 +115,7 @@ export function lockedOf(chain) {
 
 /** The launch the realtime server announced, before the crank tells this wallet what it got (`settled`). */
 export function liveLaunch(m, total) {
-  return { id: m.symbol.toLowerCase(), mint: m.mint, sol: toSol(BigInt(m.pot)), pot: BigInt(m.pot), total, backers: m.founders, founder: false, rank: null,
+  return { id: m.symbol.toLowerCase(), mint: m.mint, cluster: m.cluster ?? null, sol: toSol(BigInt(m.pot)), pot: BigInt(m.pot), total, backers: m.founders, founder: false, rank: null,
     refund: 0, bondBack: 0, myAmount: 0, myId: null, allocation: 0 };
 }
 

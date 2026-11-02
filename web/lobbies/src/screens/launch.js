@@ -69,7 +69,7 @@ export function Launch({ s, a, phone }) {
                   ${txLink && html`<div><span>Your commitment</span><span>${txLink}</span></div>`}
                   ${isAddress(l.mint) && html`<div><span>Contract</span><span class="row" style="gap:8px;justify-content:flex-end">
                     <button type="button" class="link num" aria-label=${`Copy the contract address ${l.mint}`} onClick=${() => a.copyText(l.mint, "Contract address copied")}>${shortAddress(l.mint)}</button>
-                    <a class="link" href=${explorerUrl(l.mint)} target="_blank" rel="noopener">Solscan<span class="sr"> (opens in a new tab)</span></a>
+                    ${l.cluster && html`<a class="link" href=${explorerUrl(l.mint, l.cluster)} target="_blank" rel="noopener">Solscan<span class="sr"> (opens in a new tab)</span></a>`}
                   </span></div>`}
                 </div>
               </div>

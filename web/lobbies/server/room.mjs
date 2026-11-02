@@ -272,14 +272,18 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
           outcome.locked = { ...outcome.locked, voided: true };
           broadcast({ t: "voided", idea: e.idea });
         } else if (e.event === "LobbyLaunched") {
-          outcome.launch = { mint: e.mint, idea: e.idea, pot: String(e.pot), founders: e.founders, symbol: names[e.mint]?.symbol, name: names[e.mint]?.name };
+          outcome.launch = { mint: e.mint, idea: e.idea, pot: String(e.pot), founders: e.founders, symbol: names[e.mint]?.symbol, name: names[e.mint]?.name, cluster: source.practice ? null : source.cluster ?? null };
           broadcast({ t: "launch", ...outcome.launch });
         } else if (e.event === "PledgeRefunded" || e.event === "FounderJoined") {
           const msg = JSON.stringify(e.event === "PledgeRefunded"
-            ? { t: "settled", kind: "refund", amount: String(e.amount), symbol: backedBy(e.user), ...proof(e) }
+            ? { t: "settled", kind: "refund", amount: String(e.amount), symbol: backedBy(e.user), ...proof(e), ...practiceOf(e.user) }
             : { t: "settled", kind: "founder", amount: String(e.amount), rank: clans?.rankOf(e.mint, e.user) ?? null, mint: e.mint, ...proof(e) });
           settled.set(e.user, msg);
           for (const c of conns.values()) if (c.session.sub === e.user) c.send(msg);
+        } else if (e.event === "BondReturned" && e.proposer) {
+          // The proposer's bond, back at the lock: said to them, with their practice SOL now.
+          const msg = JSON.stringify({ t: "settled", kind: "bond", amount: String(e.amount), symbol: source.chain?.ideas[e.idea]?.symbol ?? null, ...proof(e), ...practiceOf(e.proposer) });
+          for (const c of conns.values()) if (c.session.sub === e.proposer) c.send(msg);
         }
       }
     },

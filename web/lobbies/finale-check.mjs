@@ -26,7 +26,9 @@ const check = (cond, msg) => { if (cond) console.log(`  ok  ${msg}`); else { fai
   check(at(3100, { pledge: { symbol: "B", amount: 2 } }).nudge === null, "a pledge in the top two is left alone");
   check(at(3100, { pledge: { symbol: "C", amount: 2 }, nudgeOff: "C" }).nudge === null, "set aside, the offer stays away for that pledge");
   const tie = finale({ elapsed: 3100, launched: null, pledge: null }, [{ ...ideas[0], total: 5 }, { ...ideas[1], total: 5 }]);
-  check(tie.tied && tie.text === "$A and $B are tied: the idea proposed first wins a tie", "a tie to the lamport says so, and who wins it");
+  check(tie.tied && tie.text === "$A and $B are tied: $A, proposed first, wins a tie", "a tie to the lamport says so, and who wins it");
+  const lamport = finale({ elapsed: 3100, launched: null, pledge: null }, [{ ...ideas[0], total: 171.250000001 }, { ...ideas[1], total: 171.25 }]);
+  check(!lamport.tied, "one lamport is a lead, not a tie");
   const near = finale({ elapsed: 3100, launched: null, pledge: null }, [{ ...ideas[0], total: 5.04 }, { ...ideas[1], total: 5 }]);
   check(!near.tied && near.text === "$A leads $B by 0.04 SOL", "a near tie is a lead, shown exactly");
 }

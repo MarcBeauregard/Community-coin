@@ -114,6 +114,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
     const before = state;
     state = { ...state, ...(typeof patch === "function" ? patch(state) : patch) };
     if (state.pledge) lastBacked = state.pledge.symbol;
+    if (state.sheet === "withdraw" && !state.pledge) state = { ...state, sheet: null };
     // Live, the history is the signed-in wallet's, from this device (none for a guest).
     const who = state.wallet.address;
     if (state.live && (!before.live || who !== before.wallet.address)) state = { ...state, history: who ? loadHistory(who) : [] };
@@ -272,6 +273,9 @@ export function createStore({ scene, freeze, live = false } = {}) {
         const l = s.launched;
         // The settlement's receipt: verifiable on Solana when it has a transaction there, practice otherwise.
         const proof = m.signature ? { signature: m.signature, cluster: m.cluster ?? null, practice: false } : { practice: true };
+        // Practice SOL as the server now counts it (a refund or a bond is back at once).
+        if (m.balance !== undefined) set({ balance: toSol(BigInt(m.balance)), pledge: liveMine(m) });
+        if (m.kind === "bond") { toast(`Your ${solExact(amount)} bond${m.symbol ? ` for $${m.symbol}` : ""} is back`, "white"); break; }
         const r = m.kind === "founder" ? { kind: "founder", title: `Founder #${m.rank ?? "?"}`, lines: [["Committed to the opening", amount]], ...proof }
           : m.kind === "refund" ? { kind: "refund", title: `Refunded ${sol(amount)}`, lines: [["Back in your wallet", amount]], ...proof } : null;
         if (r && !s.receipts.some((x) => x.title === r.title && x.signature === r.signature)) set({ receipts: [r, ...state.receipts] });
@@ -342,6 +346,8 @@ export function createStore({ scene, freeze, live = false } = {}) {
         set({ chat: chatLine({ sys: true, kind: "propose", text: `The host removed $${m.symbol} from the race. Pledges on it were refunded.` }) });
         // Whoever had SOL or a bond on it hears their own amount instead (the "refunded" message).
         const concerned = s.pledge?.symbol === m.symbol || s.ideas.some((d) => d.ticker === m.symbol && d.by === s.live.you);
+        const mineGone = s.ideas.find((d) => d.ticker === m.symbol && d.by === s.live.you);
+        if (mineGone) set({ removedMine: [...(state.removedMine ?? []), { ticker: mineGone.ticker, name: mineGone.name, hue: mineGone.hue }] });
         if (m.by === s.live.you) toast(`$${m.symbol} is out of the race. Everyone on it is refunded.`, "white");
         else if (!concerned) toast(`The host removed $${m.symbol} from the race. Pledges on it are refunded.`, "white");
         break;
@@ -764,7 +770,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
     },
     cheer(kind) {
       // As fast as the server counts them (4 a second): every one that flies here is one the others see.
-      if (Date.now() - lastCheer < 250) return;
+      if (Date.now() - lastCheer < 300) return; // a little slower than the server's 250 ms, so none is dropped there
       lastCheer = Date.now();
       flyCheers(kind === "fire" ? 1 : 0, kind === "skull" ? 1 : 0);
       if (link) link.cheer(kind);
