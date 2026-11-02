@@ -239,7 +239,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
       case "hello":
         linkBack();
         set({ live: { connected: true, reports: m.reports ?? {}, lobby: m.lobby, inside: m.inside, listening: m.listening, people: m.people ?? [], opensAt: m.opensAt, you: m.you, guest: m.guest, race: m.race, stage: m.stage },
-          welcome: m.welcome ?? null, welcomeOff: hiddenWelcome(m.welcome?.text),
+          welcome: m.welcome ?? null, welcomeOff: hiddenWelcome(m.welcome?.text), ...(m.cheers ? { cheerCount: { fire: m.cheers.fire | 0, skull: m.cheers.skull | 0 } } : {}),
           elapsed: Math.floor((m.now - m.opensAt) / 1000), ideas: raceIdeas(m.race, s.meta), curve: Array.isArray(m.curve) ? m.curve : [], chat: m.chat.map((l) => lineToChat(l, m.you)), voice: { ...s.voice, onStage: !!m.stage?.speakers.includes(m.you) } });
         // A practice lobby: this wallet's pledge and practice SOL, as the server keeps them (across reloads).
         if (m.practice) set({ live: { ...state.live, practice: true }, pledge: m.guest ? null : liveMine(m), balance: m.guest ? 10 : toSol(BigInt(m.balance ?? "0")) }); // a guest sees the allowance they get by signing in
@@ -282,7 +282,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
         if (r && !s.receipts.some((x) => x.title === r.title && x.signature === r.signature)) set({ receipts: [r, ...state.receipts] });
         if (m.kind === "founder" && l) {
           set({ launched: { ...l, founder: true, rank: m.rank, myAmount: amount, myId: l.id, allocation: founderAllocation(l.pot, BigInt(m.amount)) },
-            clans: [{ id: "new", name: m.name ?? s.ideas.find((d) => d.id === l.id)?.name ?? l.id, ticker: l.id.toUpperCase(), hue: s.ideas.find((d) => d.id === l.id)?.hue ?? 150,
+            clans: [{ id: "new", name: m.name ?? s.ideas.find((d) => d.id === l.id)?.name ?? l.id, ticker: l.id.toUpperCase(), hue: s.ideas.find((d) => d.id === l.id)?.hue ?? 150, logo: s.ideas.find((d) => d.id === l.id)?.logo ?? null,
               members: l.backers, born: "Born tonight", change: null, voice: 0, unread: 0, fresh: true, story: "" }, ...s.clans.filter((c) => c.id !== "new")] });
           if (wantScreen === "clan") { wantScreen = null; actions.openClan("new"); } // reloaded on the clan: back in it
         } else if (m.kind === "refund") {
@@ -308,7 +308,8 @@ export function createStore({ scene, freeze, live = false } = {}) {
         }
         if (op?.op === "pledge") {
           const total = patch.pledge?.amount ?? op.amount;
-          const r = liveReceipt(`Pledged ${sol(op.amount)} to $${op.symbol}`, [["Pledged", op.amount], ...(total !== op.amount ? [["Your pledge on $" + op.symbol, total]] : []), ["Practice SOL left", patch.balance]]);
+          const holds = state.ideas.find((d) => d.ticker === op.symbol)?.sol;
+          const r = liveReceipt(`Pledged ${sol(op.amount)} to $${op.symbol}`, [["Your pledge", total], ...(holds !== undefined ? [[`$${op.symbol} now holds`, holds]] : []), ["Lobby total", state.ideas.reduce((n, d) => n + d.sol, 0)], ["Practice SOL left", patch.balance]]);
           set({ ...patch, sheet: "receipt", receipt: r, receipts: [r, ...state.receipts] });
         } else if (op?.op === "withdraw") {
           set({ ...patch, sheet: null });
@@ -361,7 +362,10 @@ export function createStore({ scene, freeze, live = false } = {}) {
         toast(`The host removed $${m.symbol}: ${[amount ? `your ${solExact(amount)} is back` : "", bond ? `your ${solExact(bond)} bond is back` : ""].filter(Boolean).join(", and ")}.`, "white");
         break;
       }
-      case "cheers": flyCheers(Math.max(0, m.fire | 0), Math.max(0, m.skull | 0)); break;
+      case "cheers":
+        flyCheers(Math.max(0, m.fire | 0), Math.max(0, m.skull | 0));
+        if (m.total) set({ cheerCount: { fire: m.total.fire | 0, skull: m.total.skull | 0 } }); // the lobby's count, everyone's
+        break;
       case "presence": {
         const came = m.inside - s.live.inside;
         set({ live: { ...s.live, inside: m.inside, listening: m.listening, people: m.people ?? s.live.people }, ...(came > 0 ? { chat: arrivals(s.chat, came) } : {}) });

@@ -67,6 +67,12 @@ const visible = (loc, ms = 4000) => loc.first().waitFor({ timeout: ms }).then(()
   await wait(400);
   check(closedCode === null, `mashing 🔥 keeps the link open${closedCode ? ` (closed ${closedCode})` : ""}`);
   masher.close();
+  const lateGot = [];
+  const late = connectLobby({ base, lobby: 412, token: server.auth.issue("late-cheer"), onMessage: (m) => lateGot.push(m) });
+  await wait(200);
+  const lh = lateGot.find((m) => m.t === "hello");
+  check(lh?.cheers?.fire >= 2, `a late joiner gets the lobby's reaction counts, the same as everyone (🔥 ${lh?.cheers?.fire})`);
+  late.close();
   ca.close(); cb.close();
   conns.forEach((c) => c.close());
   watcher.close();

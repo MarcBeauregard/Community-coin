@@ -35,6 +35,7 @@ export const Heart = icon(html`<path d="M12 21s-7.5-4.6-9.5-9.3C1 8 3.3 4.5 7 4.
 export const Flame = icon(html`<path d="M12 2c1 3.5 5 6 5 11a5 5 0 0 1-10 0c0-2.4 1.2-3.9 2.3-5 .2 1.6.9 2.8 2 3.4C11 8.6 11.3 5 12 2z" />`, { fill: true });
 export const Play = icon(html`<path d="M6 4l14 8-14 8z" />`, { fill: true });
 
+export const Flag = icon(html`<path d="M5 21V4M5 4h11l-2 4 2 4H5" />`);
 export const Alert = icon(html`<path d="M12 7v6M12 17h.01" />`, { width: 3 });
 // The share symbol people know from their phone: a box with an arrow leaving it.
 export const Share = icon(html`<path d="M12 3v12M8 7l4-4 4 4" /><path d="M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1" />`);

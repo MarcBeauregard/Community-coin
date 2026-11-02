@@ -33,6 +33,7 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
   const settled = new Map(); // user -> their settled message, for when they come back
   let seq = 0;
   const cheers = { fire: 0, skull: 0 }; // reactions since the last batch
+  const cheerTotal = { fire: 0, skull: 0 }; // the lobby's, the same for everyone (late joiners get it in the hello)
   // Ideas reported to the host (who reported each), and the ones the host took out of the race.
   const reports = new Map();
   const removed = new Set();
@@ -117,7 +118,7 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
       conns.set(connId, { session, send, listening: false, lastChat: -Infinity, tokens: rate.burst, at: now() });
       if (first && stage.isSpeaker(session.sub)) queueMicrotask(() => broadcast({ t: "stage", ...stageView() })); // back on stage
       if (settled.has(session.sub)) queueMicrotask(() => send(settled.get(session.sub))); // after the hello
-      return { t: "hello", lobby: id, now: now(), opensAt, phase: phaseAt(elapsed()), race: raceRows(), ...presence(), chat: history.slice(-50), curve, welcome: welcomeLine(), ...(manages(session.sub) ? { reports: reportCounts() } : {}), you: session.sub, guest: !!session.guest, stage: stageView(), ...outcome,
+      return { t: "hello", lobby: id, now: now(), opensAt, phase: phaseAt(elapsed()), race: raceRows(), ...presence(), chat: history.slice(-50), curve, welcome: welcomeLine(), ...(manages(session.sub) ? { reports: reportCounts() } : {}), you: session.sub, guest: !!session.guest, stage: stageView(), cheers: { ...cheerTotal }, ...outcome,
         practice: !!source.practice, ...(source.practice && !session.guest ? practiceOf(session.sub) : {}) };
     },
     leave(connId) {
@@ -331,12 +332,14 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
         broadcast({ t: "race", ideas: changed });
       }
       if (cheers.fire || cheers.skull) {
-        // Each one hears everyone else's (their own already flew on their screen).
+        cheerTotal.fire += cheers.fire;
+        cheerTotal.skull += cheers.skull;
+        // Each one sees everyone else's fly (their own already flew) and everyone gets the same totals.
         for (const c of conns.values()) {
           const fire = cheers.fire - (c.cheers?.fire ?? 0);
           const skull = cheers.skull - (c.cheers?.skull ?? 0);
           c.cheers = null;
-          if (fire || skull) c.send(JSON.stringify({ t: "cheers", fire, skull }));
+          c.send(JSON.stringify({ t: "cheers", fire, skull, total: { ...cheerTotal } }));
         }
         cheers.fire = 0;
         cheers.skull = 0;

@@ -313,7 +313,7 @@ function ReplaySheet({ s, a }) {
     <ol class="replay-story" aria-label="What happened">${story.map((e) => html`<li key=${e.t + e.text}><span class="num t2">${e.t}</span><span>${e.text}</span></li>`)}</ol>
     <div class="sheet-actions" ref=${actions}>
       ${video
-        ? html`<${Button} size="lg" onClick=${save}>Save video</${Button}>
+        ? html`<${Button} size="lg" variant=${canShare ? undefined : "prim"} onClick=${save}>Save video</${Button}>
             ${canShare && html`<${Button} variant="prim" size="lg" style="flex:1.4" onClick=${share}><${I.Share} size=${17} />Share…</${Button}>`}`
         : html`${!recording && html`<${Button} size="lg" disabled=${!r} onClick=${toggle}>${playing ? html`Pause` : html`<${I.Play} size=${15} />${progress > 0 && progress < 1 ? "Resume" : "Play"}`}</${Button}>`}
             ${canRecord && html`<${Button} variant="prim" size="lg" style="flex:1.4;white-space:nowrap" disabled=${!r} aria-disabled=${recording ? "true" : undefined} onClick=${() => { if (!recording) record(); }}>${recording ? `Recording… ${left} s` : "Make a video"}</${Button}>`}`}

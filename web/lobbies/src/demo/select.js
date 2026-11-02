@@ -214,7 +214,7 @@ export function profile(s) {
   const lobbies = [
     ...(open ? [{ key: "open", name: FEATURED.name, when: "Now", text: `${sol(s.pledge.amount)} on $${open.ticker} · racing`, tone: "sky" }] : []),
     ...s.history.map((h) => ({ key: h.key, name: h.name, when: new Date(h.at).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      text: h.founder ? `Founder #${h.rank} of $${h.ticker}` : h.pledged ? `Backed $${h.pledged} · refunded · $${h.ticker} won` : `Watched · $${h.ticker} won`,
+      text: h.founder ? `Founder #${Number(h.rank).toLocaleString("en-US")} of $${h.ticker}` : h.pledged ? `Backed $${h.pledged} · refunded · $${h.ticker} won` : `Watched · $${h.ticker} won`,
       tone: h.founder ? "lime" : "neutral" })),
   ];
   let streak = open ? 1 : 0;

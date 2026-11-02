@@ -448,7 +448,7 @@ button, .btn, .ibtn { -webkit-user-select: none; user-select: none; }
 /* ---------------------------------------------------------------- the replay */
 .card-preview.replay { position: relative; aspect-ratio: 1 / 1; max-height: min(52vh, 460px); width: auto; align-self: center; }
 .card-preview.replay canvas { width: 100%; height: 100%; display: block; }
-.replay-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255, 255, 255, 0.08); }
+.replay-progress { position: absolute; left: 14px; right: 14px; bottom: 10px; height: 3px; border-radius: 2px; overflow: hidden; background: rgba(255, 255, 255, 0.12); }
 .replay-progress span { display: block; height: 100%; background: var(--lime); }
 .replay-story { display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
 .replay-story li { display: flex; gap: 10px; }

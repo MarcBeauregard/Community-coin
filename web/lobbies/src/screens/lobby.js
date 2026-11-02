@@ -241,8 +241,8 @@ function Dock({ s, a, ideas, phone }) {
   const host = manages(s) && s.live?.practice && t.canPledge && (s.pickedIdea || (s.live.reports?.[d.sel.ticker] ?? 0) > 0);
   const reported = !!s.reported[d.sel.ticker];
   const flag = host
-    ? html`<${IconButton} label=${`Remove ${ticker(d.sel.ticker)} from the race`} size="sm" class="dock-flag" aria-haspopup="dialog" onClick=${() => a.askRemove(d.sel.id)}><${I.Close} size=${13} /></${IconButton}>`
-    : !d.sel.yours && t.canPledge && html`<${IconButton} label=${reported ? `${ticker(d.sel.ticker)} reported` : `Report ${ticker(d.sel.ticker)}`} size="sm" class="dock-flag" aria-haspopup=${reported ? undefined : "dialog"} disabled=${reported} onClick=${() => a.askReport(d.sel.id)}><${I.Alert} size=${14} /></${IconButton}>`;
+    ? html`<${Button} size="sm" variant="ghost" class="dock-flag" style="color:#ff6961;padding:0 10px" aria-label=${`Remove ${ticker(d.sel.ticker)} from the race`} aria-haspopup="dialog" onClick=${() => a.askRemove(d.sel.id)}>Remove</${Button}>`
+    : !d.sel.yours && t.canPledge && html`<${IconButton} label=${reported ? `${ticker(d.sel.ticker)} reported` : `Report ${ticker(d.sel.ticker)}`} size="sm" class="dock-flag" aria-haspopup=${reported ? undefined : "dialog"} disabled=${reported} onClick=${() => a.askReport(d.sel.id)}><${I.Flag} size=${14} /></${IconButton}>`;
   return html`<section class="dock glass" ref=${ref} aria-label="Your pledge">
     <div class="row" style="flex-wrap:nowrap;gap:12px;flex:1 1 260px;min-width:0">
       <${Coin} coin=${coin(d.sel)} size=${phone ? 40 : 48} />
@@ -461,7 +461,7 @@ export function Lobby({ s, a, phone }) {
     <div class="row" style="flex-wrap:nowrap;gap:14px">
       ${!phone && !s.live && html`<${Button} variant="ghost" size="sm" disabled=${s.elapsed >= 3594} title="Prototype only: jump to the last seconds before launch" onClick=${a.skipToLock}>Demo · skip to lock</${Button}>`}
       <div class=${`clock${f ? " finale-clock" : ""}${f?.urgent ? " urgent" : ""}`}>
-        <span class="t2" style="font-size:12px;font-weight:600">${f ? "Pledges lock in" : t.phase === "lock" ? "Locked · launching in" : "Launch in"}</span>
+        <span class="t2" style="font-size:12px;font-weight:600">${f ? "Pledges lock in" : "Launch in"}</span>
         <span class="value display num" style=${{ color: f ? (f.urgent ? "#ffb340" : "var(--lime)") : t.phase === "lock" ? "#ffb340" : "var(--text)" }} role="timer" aria-label=${f ? `Pledges lock in ${f.lockIn}` : `Launch in ${t.launchIn}`}>${f ? f.lockIn : t.launchIn}</span>
       </div>
       <${WalletPill} s=${s} a=${a} compact=${phone} />
