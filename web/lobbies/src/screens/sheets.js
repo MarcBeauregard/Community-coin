@@ -13,6 +13,9 @@ import { race, dock, lobbyClock, profile } from "../demo/select.js";
 import { PROPOSE_BOND } from "../demo/store.js";
 import { sol, ticker, initials } from "../format.js";
 
+// What someone typed, without invisible direction marks (a theme can't be shown reversed).
+const plain = (t) => t.replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2069\u061C\uFEFF]/g, "").trim();
+
 const HUES = [[150, "Mint"], [205, "Sky"], [265, "Violet"], [340, "Pink"], [18, "Ember"], [45, "Gold"]];
 const SLOTS = ["21:00", "22:00", "23:00"];
 
@@ -84,7 +87,7 @@ function HostSheet({ a }) {
       <${Segmented} label="Opening time" options=${SLOTS.map((t, i) => ({ id: i, label: t }))} value=${form.slot} onChange=${(slot) => setForm({ ...form, slot })} /></div>
     <div class="sheet-actions">
       <${Button} onClick=${a.closeSheet}>Cancel</${Button}>
-      <${Button} variant="white" disabled=${!valid} onClick=${() => a.hostLobby({ name: form.name.trim(), theme: form.theme.trim(), opens: SLOTS[form.slot] })}>Schedule lobby</${Button}>
+      <${Button} variant="white" disabled=${!valid} onClick=${() => a.hostLobby({ name: plain(form.name), theme: plain(form.theme), opens: SLOTS[form.slot] })}>Schedule lobby</${Button}>
     </div>`;
 }
 
@@ -441,7 +444,7 @@ function SiblingSheet({ s, a }) {
       <${Segmented} label="Opening time" options=${SLOTS.map((t, i) => ({ id: i, label: t }))} value=${form.slot} onChange=${(slot) => setForm({ ...form, slot })} /></div>
     <div class="sheet-actions">
       <${Button} onClick=${a.closeSheet}>Cancel</${Button}>
-      <${Button} variant="white" disabled=${!valid} onClick=${() => a.openSibling({ name: form.name.trim(), theme: form.theme.trim(), opens: SLOTS[form.slot] })}>Open the lobby</${Button}>
+      <${Button} variant="white" disabled=${!valid} onClick=${() => a.openSibling({ name: plain(form.name), theme: plain(form.theme), opens: SLOTS[form.slot] })}>Open the lobby</${Button}>
     </div>`;
 }
 
@@ -465,6 +468,7 @@ function RemoveSheet({ s, a }) {
   const n = s.live?.reports?.[d.ticker] ?? 0;
   return html`
     <div class="row" style="gap:12px;flex-wrap:nowrap"><${Coin} coin=${coin(d)} size=${44} /><span style="display:flex;flex-direction:column;gap:2px"><span style="font-size:16px;font-weight:600">${ticker(d.ticker)} · ${d.name}</span><span class="t2 num" style="font-size:13px">${sol(d.total)} from ${d.backersShown} ${d.backersShown === 1 ? "backer" : "backers"}${n ? ` · reported by ${n}` : ""}</span></span></div>
+    ${d.rank === 1 && html`<p class="remind-error" role="note"><${I.Alert} size=${14} />${ticker(d.ticker)} leads the race. Remove it only if it breaks the lobby’s rules: its backers can’t win with it any more.</p>`}
     <p class="t2" style="font-size:14px;line-height:1.5">It leaves the race for good. Every pledge on it is refunded now, and its proposer’s bond is returned. Practice lobbies only, for now.</p>
     <div class="sheet-actions">
       <${Button} size="lg" onClick=${a.closeSheet}>Keep it</${Button}>

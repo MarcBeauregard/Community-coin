@@ -80,6 +80,8 @@ check(cleo.last("practice")?.error === "IdeaRemoved", "a removed idea can't be b
 // Not under another spelling either: the program reads "pigw" and "P1GW" as the same ticker.
 for (const sym of ["pigw", "P1GW"]) { cleo.c.practice("pledge", { symbol: sym, amount: String(SOL) }); await wait(120); }
 check(cleo.got.filter((m) => m.t === "practice").slice(-2).every((m) => m.error === "IdeaRemoved"), "nor under another spelling (lower case, look-alike digits)");
+for (const sym of ["P16W", "PI9W"]) { cleo.c.practice("pledge", { symbol: sym, amount: String(SOL) }); await wait(120); }
+check(cleo.got.filter((m) => m.t === "practice").slice(-2).every((m) => m.error === "IdeaRemoved" || m.error === "AccountNotInitialized"), "nor a look-alike the program would read as another ticker");
 ana.c.practice("propose", { symbol: "B0NK", name: "Not Bonk" });
 await wait(120);
 check(ana.last("practice")?.error === "MemeExists", "a well-known coin can't be borrowed with a look-alike spelling");
@@ -130,6 +132,19 @@ check(!late.last("hello").race.some((r) => r.symbol === "PIGW"), "and a late joi
   check(r?.kind === "refund" && r.balance !== undefined, "a refund at the lock says the person's practice SOL now (no stale balance)");
   const b = ana.got.filter((m) => m.t === "settled" && m.kind === "bond").pop();
   check(b && BigInt(b.amount) === source.chain.lobby.bond && b.balance !== undefined, "and the proposer hears their bond is back, with their SOL");
+}
+
+// ------------------------------------------------------------------ no kingmaking in the final minutes
+{
+  const late = await createServer({ guests: true, batchMs: 30, lobbies: [{ id: 413, opensAt: Date.now() - 3020 * 1000, source: simulatedSource() }] });
+  const got = [];
+  const h = connectLobby({ base: `http://localhost:${late.port}`, lobby: 413, token: late.auth.issue("mira.sol"), onMessage: (m) => got.push(m) });
+  await wait(150);
+  h.remove("WIF");
+  await wait(150);
+  check(got.some((m) => m.code === "FinalMinutesNeedReport") && !got.some((m) => m.t === "removed"), "in the final minutes the host can't remove an idea nobody reported (not the leader, not anyone)");
+  h.close();
+  await late.close();
 }
 
 // ------------------------------------------------------------------ in the app

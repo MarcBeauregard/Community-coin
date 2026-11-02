@@ -21,6 +21,20 @@ export const dayOf = (ms, now = Date.now()) => (new Date(ms).toDateString() === 
 const stamp = (ms) => new Date(ms).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
 const esc = (t) => String(t).replace(/\\/g, "\\\\").replace(/[;,]/g, (c) => `\\${c}`).replace(/\n/g, "\\n");
 
+// Calendar lines are at most 75 bytes; longer ones continue on lines that start with a space (RFC 5545).
+function fold(line) {
+  const bytes = new TextEncoder();
+  if (bytes.encode(line).length <= 75) return line;
+  const out = [];
+  let cur = "";
+  for (const ch of line) {
+    if (bytes.encode(cur + ch).length > (out.length ? 74 : 75)) { out.push(cur); cur = ""; }
+    cur += ch;
+  }
+  out.push(cur);
+  return out.join("\r\n ");
+}
+
 /** An .ics file for the lobby's hour, with an alarm 5 minutes before. */
 export function icsFor({ id, name, theme, host }, at, url) {
   return [
@@ -35,7 +49,7 @@ export function icsFor({ id, name, theme, host }, at, url) {
     `URL:${url}`,
     "BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${esc(`${name} opens in 5 minutes`)}`, "TRIGGER:-PT5M", "END:VALARM",
     "END:VEVENT", "END:VCALENDAR", "",
-  ].join("\r\n");
+  ].map(fold).join("\r\n");
 }
 
 /** The same event, as a link that opens Google Calendar's new-event page. */
@@ -45,7 +59,7 @@ export function googleCalendarUrl({ name, theme, host }, at, url) {
   return `https://calendar.google.com/calendar/render?${q}`;
 }
 
-export const calendarFileName = (lobby) => `${lobby.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}.ics`;
+export const calendarFileName = (lobby) => `${lobby.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "community-coin-lobby"}.ics`;
 
 /** Whether this browser can show notifications, and what the person said: "granted" | "denied" | "default" | null. */
 export function notifyPermission() {

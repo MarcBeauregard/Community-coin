@@ -197,7 +197,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
   // ------------------------------------------------------------------ live (realtime server)
   // When connected, the server owns the clock, the race, the chat and the presence; the demo's crowd stops.
   let link = null;
-  const LIVE_ERRORS = { HostOnly: "Only the host can remove an idea.", SignInToReport: "Connect a wallet to report an idea.", UnknownIdea: "That idea is no longer in the race.", PledgesLocked: "Pledges are locked.", SlowMode: "Slow mode: one message every 3 seconds.", SignInToChat: "Connect a wallet to chat.", EmptyMessage: "Write something first.", LobbyNotOpen: "The lobby is not open yet." };
+  const LIVE_ERRORS = { FinalMinutesNeedReport: "In the final minutes, only an idea people reported can be removed.", HostOnly: "Only the host can remove an idea.", SignInToReport: "Connect a wallet to report an idea.", UnknownIdea: "That idea is no longer in the race.", PledgesLocked: "Pledges are locked.", SlowMode: "Slow mode: one message every 3 seconds.", SignInToChat: "Connect a wallet to chat.", EmptyMessage: "Write something first.", LobbyNotOpen: "The lobby is not open yet." };
   const short = (who) => (who.length > 20 ? `${who.slice(0, 4)}…${who.slice(-4)}` : who);
   // Live, everyone is who the server says, the person included (their wallet), with `mine` to say "you".
   const lineToChat = (line, you) => ({ who: line.from, mine: line.from === you, text: line.text });
@@ -312,7 +312,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
           const total = patch.pledge?.amount ?? op.amount;
           // What the idea holds with this pledge in, as the server counted it (the race may not have caught up yet).
           const holds = m.holds !== undefined ? toSol(BigInt(m.holds)) : state.ideas.find((d) => d.ticker === op.symbol)?.sol;
-          const r = liveReceipt(`Pledged ${sol(op.amount)} to $${op.symbol}`, [["Your pledge", total], ...(holds !== undefined ? [[`$${op.symbol} after it`, holds]] : []), ["Lobby after it", state.ideas.reduce((n, d) => n + d.sol, 0) + (m.holds !== undefined ? Math.max(0, holds - (state.ideas.find((d) => d.ticker === op.symbol)?.sol ?? holds)) : 0)]]);
+          const r = liveReceipt(`Pledged ${sol(op.amount)} to $${op.symbol}`, [["Your pledge", total], ...(holds !== undefined ? [[`$${op.symbol} after it`, holds]] : []), ["Lobby after it", state.ideas.reduce((n, d) => n + (d.ticker === op.symbol && holds !== undefined ? holds : d.sol), 0)]]);
           set({ ...patch, sheet: "receipt", receipt: r, receipts: [r, ...state.receipts] });
         } else if (op?.op === "withdraw") {
           set({ ...patch, sheet: null });

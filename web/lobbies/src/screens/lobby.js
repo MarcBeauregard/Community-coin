@@ -188,11 +188,12 @@ function IdeaCard({ d, s, a, phone }) {
   return html`<button type="button" class="idea" aria-pressed=${String(selected)} onClick=${() => a.select(d.id)}>
     <span class="row" style="justify-content:space-between;align-items:flex-start;width:100%;flex-wrap:nowrap">
       <${Coin} coin=${coin(d)} size=${56} />
-      ${tr && html`<span style="flex:1 1 0;min-width:0;overflow:hidden;display:flex;justify-content:center;padding:14px 8px 0"><${Spark} points=${tr.points} width=${d.mine || d.yours ? 56 : 88} height=${30} color=${sparkColor} /></span>`}
-      <span style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:none"><span class="num t2" style="font-size:13px;font-weight:600">#${d.rank}</span>${badges}</span>
+      ${tr && html`<span style="flex:1 1 0;min-width:0;overflow:hidden;display:flex;justify-content:center;padding:14px 8px 0"><${Spark} points=${tr.points} width=${88} height=${30} color=${sparkColor} /></span>`}
+      <span style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex:none"><span class="num t2" style="font-size:13px;font-weight:600">#${d.rank}</span></span>
     </span>
     <span style="display:flex;flex-direction:column;gap:4px">
       <span class="row" style="gap:8px;align-items:baseline"><span style="font-size:16px;font-weight:600">${d.name}</span><span class="t2" style="font-size:13px;font-weight:500">${ticker(d.ticker)}</span></span>
+      ${(d.mine || d.yours || flagged > 0) && html`<span class="row" style="gap:6px">${badges}</span>`}
       <span class="t2 clamp2" style="font-size:13px;line-height:1.45;min-height:38px">${d.pitch}</span>
     </span>
     <span style="width:100%"><${Bar} value=${d.share} color=${barColor} /></span>

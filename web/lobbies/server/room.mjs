@@ -20,7 +20,7 @@ const CONTROL = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩]/g;
 /** Cleans a chat message: no control or bidi characters, trimmed, length-capped. Empty means refused. */
 export function cleanText(text, max) {
   if (typeof text !== "string") return ""; // only text is text: an object here is someone poking at the server
-  return text.toWellFormed().replace(CONTROL, " ").replace(/\s+/g, " ").trim().slice(0, max);
+  return text.toWellFormed().replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2069\u061C\u3164\uFEFF]/g, "").replace(CONTROL, " ").replace(/\s+/g, " ").trim().slice(0, max);
 }
 
 // Tickers of coins everyone knows: a practice idea can't borrow them.
@@ -39,7 +39,11 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
   const reports = new Map();
   const removed = new Set(); // keys, as the program reads a ticker (case and look-alike digits folded)
   const keyOf = (sym) => { try { return typeof sym === "string" ? symbolKey(sym) : null; } catch { return null; } };
-  const isRemoved = (sym) => { const k = keyOf(sym); return k !== null && removed.has(k); };
+  // Beyond the program's own folding: other digits and letters that pass for one (RU6 for RUG, 8ONK for BONK).
+  const LOOKS = { 6: "G", 9: "G", 8: "B", 2: "Z", V: "U" };
+  const looks = (sym) => (typeof sym === "string" ? keyOf(sym.toUpperCase().replace(/[689V2]/g, (ch) => LOOKS[ch])) : null);
+  const removedLooks = new Set();
+  const isRemoved = (sym) => { const k = keyOf(sym); return (k !== null && removed.has(k)) || (looks(sym) !== null && removedLooks.has(looks(sym))); };
   const manages = (user) => { const v = stage.view(); return !!user && (user === v.host || v.cohosts.includes(user)); };
   // A settlement's transaction, when it is one on a cluster (a practice lobby's never is).
   const proof = (e) => (typeof e.signature === "string" && !source.practice ? { signature: e.signature, cluster: source.cluster ?? null } : {});
@@ -219,6 +223,8 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
           const ch = source.chain;
           const idea = ch.ideas.find((d) => keyOf(d.symbol) !== null && keyOf(d.symbol) === keyOf(msg.symbol));
           if (!idea || isRemoved(idea.symbol)) return { t: "error", code: "UnknownIdea" };
+          // In the last five minutes the host can't swing the race: only an idea people reported can go.
+          if (elapsed() >= 3000 && !(reports.get(idea.symbol)?.size > 0)) return { t: "error", code: "FinalMinutesNeedReport" };
           const back = [];
           for (const [user, p] of ch.pledges) {
             if (p.idea !== idea.index || p.settled || p.amount === 0n) continue;
@@ -227,6 +233,9 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
           }
           idea.bond_returned = true; // the proposer's practice bond (src/chain/rules.js has no instruction for this)
           removed.add(keyOf(idea.symbol));
+          removedLooks.add(looks(idea.symbol));
+          // The race over the hour forgets it too: a replay never tells the story of a removed idea.
+          curve = curve.map((p) => { const { [idea.symbol]: _, ...v } = p.v; return { ...p, v }; });
           reports.delete(idea.symbol);
           broadcast({ t: "removed", symbol: idea.symbol, by: c.session.sub, race: raceRows() });
           for (const r of raceRows()) sent.race.set(r.index, r);
@@ -257,7 +266,7 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
             args.name = cleanText(args.name, 24);
             if (!/^[A-Z0-9]{2,6}$/.test(args.symbol) || args.name.length < 2 || /[<>]/.test(args.name)) return { t: "practice", op: msg.t, ok: false, error: "BadIdea", ...practiceOf(me) };
             if (source.chain.ideas.filter((d) => d.proposer === me).length >= 2) return { t: "practice", op: msg.t, ok: false, error: "TwoIdeasEach", ...practiceOf(me) };
-            if ([...RESERVED].some((r) => keyOf(r) === keyOf(args.symbol))) return { t: "practice", op: msg.t, ok: false, error: "MemeExists", ...practiceOf(me) };
+            if ([...RESERVED].some((r) => keyOf(r) === keyOf(args.symbol) || looks(r) === looks(args.symbol)) || isRemoved(args.symbol)) return { t: "practice", op: msg.t, ok: false, error: "MemeExists", ...practiceOf(me) };
           }
           if (isRemoved(args.symbol) || isRemoved(args.to)) return { t: "practice", op: msg.t, ok: false, error: "IdeaRemoved", ...practiceOf(me) };
           if ((msg.t === "pledge" || msg.t === "propose") && practiceBalance(me) < (msg.t === "pledge" ? args.amount : source.chain.lobby.bond)) {
