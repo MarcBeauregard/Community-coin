@@ -37,7 +37,7 @@ export function Launch({ s, a, phone }) {
       <div class="row" style="justify-content:space-between">
         ${phone
           ? html`<${IconButton} label="Back to lobbies" size="sm" onClick=${() => a.go({ screen: "discover" })}><${I.Back} size=${15} /></${IconButton}>`
-          : html`<${Button} variant="ghost" size="sm" onClick=${() => a.go({ screen: "discover" })}><${I.Back} size=${14} />Lobbies</${Button}>`}
+          : html`<${Button} variant="ghost" size="sm" aria-label="Back to lobbies" onClick=${() => a.go({ screen: "discover" })}><${I.Back} size=${14} />Lobbies</${Button}>`}
         <span class="t2 num" style="font-size:13px;font-weight:600">Lobby #${FEATURED.number} · launched at 01:00</span>
       </div>
       <div class="launch-main">

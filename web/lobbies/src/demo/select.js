@@ -78,7 +78,7 @@ export function dock(s, ideas) {
     pick: `${shareIfWins.toFixed(2)}% of its first tokens if it wins`,
     backed: `${((mine / sel.total) * 100).toFixed(2)}% of its first tokens now`,
     move: `Your ${sol(mine)} is on another idea`,
-    closed: `${sol(sel.total)} pledged`,
+    closed: `${sol(sel.total)} pledged on it in all`,
   }[mode];
   return { sel, mode, sub, mine, shareIfWins };
 }

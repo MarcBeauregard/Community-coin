@@ -97,11 +97,11 @@ function Stage({ s, a, phone }) {
       </li>`)}</ul>
       <div class="cheer-layer" aria-hidden="true">${s.cheers.map((c) => html`<span key=${c.id} class="cheer" style=${{ left: `${c.x}%`, animationDelay: `${c.delay}ms` }}>${c.kind === "fire" ? "🔥" : "💀"}</span>`)}</div>
     </div>
-    <div class="row cheer-bar" role="group" aria-label="React to the pitch">
+    ${!speakers(s).every((p) => p.away) && html`<div class="row cheer-bar" role="group" aria-label="React to the pitch">
       <button type="button" class="cheer-btn" aria-label=${`Fire: love this pitch, ${int(s.cheerCount.fire)}`} onClick=${() => a.cheer("fire")}><span aria-hidden="true">🔥</span><span class="num t2" aria-hidden="true">${int(s.cheerCount.fire)}</span></button>
       <button type="button" class="cheer-btn" aria-label=${`Skull: not this one, ${int(s.cheerCount.skull)}`} onClick=${() => a.cheer("skull")}><span aria-hidden="true">💀</span><span class="num t2" aria-hidden="true">${int(s.cheerCount.skull)}</span></button>
       <span class="t2" style="font-size:12px">Everyone on the stage sees them</span>
-    </div>
+    </div>`}
     <div class="panel" ref=${panel} onFocusIn=${() => { inPanel.current = true; }} onFocusOut=${(e) => { if (e.relatedTarget) inPanel.current = panel.current?.contains(e.relatedTarget) ?? false; }} style="padding:14px;display:flex;flex-direction:column;gap:12px">
       ${!v.listening && !v.onStage && html`<span class="t2" style="font-size:13px;line-height:1.45">Pitches happen out loud. Listen in, or raise your hand to pitch your idea on stage.</span>`}
       <span role="status" style="display:flex;flex-direction:column;gap:4px">${mounted && html`

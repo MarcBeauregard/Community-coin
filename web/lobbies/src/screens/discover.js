@@ -58,7 +58,7 @@ function Hero({ s, a, phone }) {
       <div class="row" style="gap:14px;flex-wrap:nowrap">
         ${phone && html`<${Coin} coin=${coin(lead)} size=${68} class="glow" />`}
         <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
-          <h1 id="hero-title" class="display">Friday Night${phone ? " " : html`<br />`}Degens</h1>
+          ${phone ? html`<h2 id="hero-title" class="display">Friday Night Degens</h2>` : html`<h1 id="hero-title" class="display">Friday Night<br />Degens</h1>`}
           ${phone
             ? html`<span class="t2" style="font-size:13px;margin-top:-8px">${FEATURED.host} · ${FEATURED.theme}</span>`
             : html`<p class="lede t2">Theme tonight: ${FEATURED.theme}. ${s.ideas.length} ideas are fighting for one launch.</p>`}
@@ -118,10 +118,13 @@ function LobbyAction({ l, s, a, compact }) {
 
 function ThisHour({ s, a, phone }) {
   const cards = lobbyCards(s);
-  const search = html`<label class="search" style=${phone ? "" : "width:240px;max-width:100%"}>
+  // What a search found, said once it settles (not every key).
+  const found = html`<span class="sr" role="status">${!s.query.trim() ? "" : cards.length ? `${cards.length} ${cards.length === 1 ? "lobby matches" : "lobbies match"}` : "No lobbies match"}</span>`;
+  const searchField = html`<label class="search" style=${phone ? "" : "width:240px;max-width:100%"}>
     <${I.Search} size=${15} /><span class="sr">Search lobbies</span>
     <input type="search" value=${s.query} placeholder="Search" onInput=${(e) => a.setQuery(e.currentTarget.value)} />
   </label>`;
+  const search = html`${searchField}${found}`;
   const empty = html`<div class="panel empty">
     <span style="font-size:17px;font-weight:600">Nothing matches “${s.query}”</span>
     <span class="t2" style="font-size:14px">Try another name, or start the lobby you were looking for.</span>
@@ -173,7 +176,7 @@ function ClanCard({ k, a, phone }) {
     return html`<button type="button" class="card" onClick=${() => a.openClan(k.id)} style="flex:none;width:236px;padding:16px;display:flex;flex-direction:column;gap:12px;text-align:left;scroll-snap-align:start">
       <span class="row" style="flex-wrap:nowrap;width:100%"><${Coin} coin=${coin(k)} size=${44} />
         <span style="flex:1;display:flex;flex-direction:column"><strong style="font-weight:600">${ticker(k.ticker)}</strong>${change}</span>
-        ${k.unread > 0 && html`<span class="badge">${k.unread}</span>`}</span>
+        ${k.unread > 0 && html`<span class="badge">${k.unread}<span class="sr"> unread</span></span>`}</span>
       <span class="t2 clamp2" style="font-size:12px;line-height:1.4">${k.story}</span>${voice}
     </button>`;
   }
@@ -184,7 +187,7 @@ function ClanCard({ k, a, phone }) {
       <span class="t2 num" style="font-size:13px">${int(k.members)} founders · ${k.name}</span>
       <span class="t2 clamp2" style="font-size:12px;line-height:1.4">${k.story}</span>
     </span>
-    <span style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">${k.unread > 0 && html`<span class="badge">${k.unread}</span>`}${voice}</span>
+    <span style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">${k.unread > 0 && html`<span class="badge">${k.unread}<span class="sr"> unread</span></span>`}${voice}</span>
   </button>`;
 }
 

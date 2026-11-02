@@ -534,3 +534,7 @@ button.profile-row:hover { background: rgba(255, 255, 255, 0.04); }
 .speakers li.away .av { opacity: 0.45; filter: grayscale(0.6); }
 .search:focus-within { outline: 2px solid var(--sky); outline-offset: 2px; }
 .field .inp:focus-visible { outline: 2px solid var(--sky); outline-offset: 1px; }
+
+/* A phone's tab bar never hides the control that has the focus: scrolling into view keeps clear of it. */
+:root:has(.app.phone) { scroll-padding-bottom: 104px; scroll-padding-top: 16px; }
+.app.phone .scroll { scroll-padding-bottom: 104px; }

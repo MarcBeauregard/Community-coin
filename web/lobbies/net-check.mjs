@@ -142,6 +142,27 @@ const banner = (page) => page.locator(".net-wrap, .net-inline");
   await page.close();
 }
 {
+  // 720 × 450 (a phone layout at 200% zoom): Tab never leaves the focus under the tab bar.
+  const page = await open(`${app}?freeze`, {});
+  await page.setViewportSize({ width: 720, height: 450 });
+  await page.waitForTimeout(300);
+  let hidden = 0;
+  for (let i = 0; i < 25; i++) {
+    await page.keyboard.press("Tab");
+    hidden += await page.evaluate(() => {
+      const el = document.activeElement;
+      if (!el || el === document.body || el.closest(".tabbar")) return 0;
+      const r = el.getBoundingClientRect();
+      const top = document.elementFromPoint(r.left + r.width / 2, Math.min(innerHeight - 1, r.top + r.height / 2));
+      return top && top.closest(".tabbar") ? 1 : 0;
+    });
+  }
+  check(hidden === 0, `at 720 × 450 no focused control sits under the tab bar (${hidden} did)`);
+  await page.fill('input[type="search"]', "zzzz");
+  check(await page.getByRole("status").filter({ hasText: "No lobbies match" }).count() === 1, "a search that finds nothing says so");
+  await page.close();
+}
+{
   // The browser offline.
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await open(`${app}?freeze`, { context });

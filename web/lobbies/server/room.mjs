@@ -260,7 +260,9 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
           const r = source.chain.apply(op, args, elapsed());
           // The person's other tabs follow (their pledge and practice SOL), the asking one gets the answer.
           if (r.ok) toOthers(connId, me, { t: "mine", ...practiceOf(me) });
-          return { t: "practice", op: msg.t, ok: r.ok, error: r.error ?? null, ...practiceOf(me) };
+          const sym = args.symbol ?? args.to;
+          const held = source.chain.ideas.find((d) => d.symbol === sym)?.pledged;
+          return { t: "practice", op: msg.t, ok: r.ok, error: r.error ?? null, ...practiceOf(me), ...(held !== undefined ? { holds: String(held) } : {}) };
         }
         case "hand": case "bring": case "down": case "cohost": {
           if (c.session.guest) return { t: "error", code: "SignInToSpeak" };

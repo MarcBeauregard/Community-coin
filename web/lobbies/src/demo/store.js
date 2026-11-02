@@ -308,7 +308,8 @@ export function createStore({ scene, freeze, live = false } = {}) {
         }
         if (op?.op === "pledge") {
           const total = patch.pledge?.amount ?? op.amount;
-          const holds = state.ideas.find((d) => d.ticker === op.symbol)?.sol;
+          // What the idea holds with this pledge in, as the server counted it (the race may not have caught up yet).
+          const holds = m.holds !== undefined ? toSol(BigInt(m.holds)) : state.ideas.find((d) => d.ticker === op.symbol)?.sol;
           const r = liveReceipt(`Pledged ${sol(op.amount)} to $${op.symbol}`, [["Your pledge", total], ...(holds !== undefined ? [[`$${op.symbol} now holds`, holds]] : []), ["Lobby total", state.ideas.reduce((n, d) => n + d.sol, 0)]]);
           set({ ...patch, sheet: "receipt", receipt: r, receipts: [r, ...state.receipts] });
         } else if (op?.op === "withdraw") {

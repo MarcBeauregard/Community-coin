@@ -532,7 +532,7 @@ const SHEETS = {
   remind: { title: "Remind me", Body: RemindSheet },
   report: { title: "Report this idea?", Body: ReportSheet, refocus: ".idea[aria-pressed=true]", refocusFirst: true }, // its button turns into "reported" // back to the idea
   remove: { title: "Remove this idea?", Body: RemoveSheet, refocus: ".idea[aria-pressed=true]", refocusFirst: true }, // to the idea now selected
-  sibling: { title: "A sibling lobby", Body: SiblingSheet, refocus: ".sibling button", refocusFirst: true }, // to the new lobby's Remind
+  sibling: { title: "A sibling lobby", Body: SiblingSheet, refocus: ".sibling", refocusFirst: true }, // to the new lobby, pinned in the clan
   profile: { title: "Founder profile", Body: ProfileSheet, refocus: ".profile-open" },
   replay: { title: "The hour in 30 seconds", Body: ReplaySheet, refocus: ".replay-open" },
 };

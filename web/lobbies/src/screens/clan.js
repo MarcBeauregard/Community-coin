@@ -27,7 +27,7 @@ function Sibling({ s, a, k }) {
   const lobby = s.hosted.find((h) => h.clan === k.id);
   if (lobby) {
     const on = !!s.reminders[lobby.id]?.notify;
-    return html`<div class="sibling" role="group" aria-label="Sibling lobby">
+    return html`<div class="sibling" role="group" tabIndex="-1" aria-label=${`Sibling lobby: ${lobby.name}, opens ${lobby.opens}`}>
       <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span class="t2" style="font-size:12px;font-weight:600">Sibling lobby · opens ${lobby.opens}</span><span class="ellipsis" style="font-size:14px;font-weight:600">${lobby.name}</span></span>
       ${lobby.mine ? html`<${Chip} tone="sky">You host</${Chip}>` : html`<${Button} size="sm" class=${on ? "remind-on" : ""} aria-haspopup="dialog" aria-label=${on ? `Reminder on for ${lobby.name}` : `Remind me when ${lobby.name} opens`} onClick=${() => a.openReminder(lobby)}><${I.Bell} size=${13} />${on ? "On" : "Remind"}</${Button}>
     </div>`;
@@ -194,7 +194,7 @@ function FounderRow({ f }) {
 
 function PhoneClanList({ s, a, k }) {
   const people = campfirePeople(s);
-  return html`<div class="clan-list scroll screen" style=${{ background: `radial-gradient(60% 35% at 50% 0%, hsla(${k.hue},90%,55%,.09), transparent 70%), #000` }}>
+  return html`<main class="clan-list scroll screen" style=${{ background: `radial-gradient(60% 35% at 50% 0%, hsla(${k.hue},90%,55%,.09), transparent 70%), #000` }}>
     <h1 class="display large-title" style="margin:20px 20px 14px">Clans<span class="sr">: ${k.name} clan</span></h1>
     <div class="hscroll" style="gap:12px;padding:4px 20px 14px" role="group" aria-label="Your clans">
       ${(s.live ? s.clans.filter((c) => c.id === "new") : s.clans).map((c) => html`<button type="button" key=${c.id} class="rail-btn" aria-label=${`${ticker(c.ticker)} clan`} aria-current=${c.id === k.id ? "page" : undefined}
@@ -234,7 +234,7 @@ function PhoneClanList({ s, a, k }) {
         <div class="panel" style="padding:6px 0"><ul class="founder-list" role="list">${founders(s, k).map((f) => html`<${FounderRow} key=${f.who} f=${f} />`)}</ul></div>
       </section>
     </div>
-  </div>`;
+  </main>`;
 }
 
 export function Clan({ s, a, phone }) {

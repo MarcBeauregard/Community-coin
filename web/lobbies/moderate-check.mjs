@@ -46,6 +46,7 @@ ana.c.practice("propose", { symbol: "PIGW", name: "Pigeon Wizard" });
 await wait(100);
 cleo.c.practice("pledge", { symbol: "PIGW", amount: String(2n * SOL) });
 await wait(150);
+check(BigInt(cleo.last("practice").holds) === source.chain.ideas.find((d) => d.symbol === "PIGW").pledged, "the pledge's answer says what the idea now holds, with it");
 check(cleoTab2.last("mine") && BigInt(cleoTab2.last("mine").balance) === 8n * SOL && cleoTab2.last("mine").mine?.symbol === "PIGW", "Cleo's other tab follows her pledge");
 check(BigInt(cleo.last("practice").balance) === 8n * SOL && BigInt(ana.last("practice").balance) === 10n * SOL - source.chain.lobby.bond, "before: Cleo has 2 SOL on $PIGW, Ana's bond is in");
 
