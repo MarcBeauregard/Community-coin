@@ -216,3 +216,18 @@ Sheets: propose (invalid, valid, ticker taken), pledge (idle, signing), host, wa
   lobby server"; the app should then sign in again by itself. Keep the key across restarts meanwhile.
 - Notifications from a closed tab need a push service (Web Push and a service worker); until then the calendar is
   the reminder that always works.
+
+# Before real SOL: who pays the network's costs (to do when lobbies move on chain)
+
+Found while reviewing the program (`solana/programs/community-coin/src/lib.rs`); nothing is at risk while lobbies
+are practice lobbies.
+- A user's own withdraw costs us nothing: the signer pays the fee and gets back exactly what they pledged. Spam
+  clicking costs the spammer.
+- The crank pays a fee per refund (≈ 0.000005 SOL); fine, the pledger paid more to pledge.
+- `claim_founder`: whoever calls it pays the founder's Commitment rent (≈ 0.001 SOL). Thousands of 0.001 SOL pledges
+  on the winner would cost the crank about as much as they pledged. Fix: close the Pledge account there and send its
+  rent (≈ 0.0015 SOL, paid by the user at their first pledge) to the payer.
+- Pledge accounts are never closed: their rent stays locked. Close them on a full withdraw and on refund, rent back
+  to the user.
+- Consider a higher MIN_PLEDGE (0.01–0.05 SOL).
+Each is a program change: Rust tests, the security review (SECURITY.md) and the external audit before mainnet.
