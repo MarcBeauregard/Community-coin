@@ -78,7 +78,7 @@ export function Launch({ s, a, phone }) {
                 <${Button} size="lg" onClick=${a.shareBirthCard}><${I.Share} size=${17} />Share birth card</${Button}>
               </div>`
             : html`<div class="panel" style="padding:20px;display:flex;flex-direction:column;gap:8px;text-align:left">
-                <span style="font-size:17px;font-weight:600">${l.myAmount ? `Your ${sol(l.myAmount)} is back in your wallet` : "You watched this one from the stands"}</span>
+                <span style="font-size:17px;font-weight:600">${l.myAmount ? `Your ${sol(l.myAmount)} is back ${isAddress(l.mint) ? "in your wallet" : "in your practice SOL"}` : "You watched this one from the stands"}</span>
                 <span class="t2" style="font-size:14px;line-height:1.5">${l.myAmount
                   ? `You backed ${backed ? ticker(backed.ticker) : "another idea"}, which didn’t win. Refunds land automatically at lock. ${win.name} launched without you, and the next lobby opens on the hour.`
                   : "Only people who pledged become founders of the clan. Pledge in the next lobby to be in the room for good."}</span>

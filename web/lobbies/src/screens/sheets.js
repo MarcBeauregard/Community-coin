@@ -28,7 +28,7 @@ function PledgeSheet({ s, a }) {
     </div>
     <div class="rows">
       <div><span>If it wins</span><span class="num">${d.shareIfWins >= 99.995 ? "You’d be its only backer: the whole opening batch" : `About ${d.shareIfWins.toFixed(2)}% of its opening batch, at the same price as every backer`}</span></div>
-      <div><span>If it loses</span><span>Full refund at the lock (00:55 on the lobby clock)</span></div>
+      <div><span>If it loses</span><span>Full refund when pledges lock, 5 minutes before the launch</span></div>
       <div><span>Change your mind</span><span>Withdraw or move any time before 00:55</span></div>
       <div><span>Your wallet</span><span>No SOL leaves it: this lobby is a rehearsal until it runs on Solana</span></div>
     </div>

@@ -179,6 +179,8 @@ textarea.inp { height: 84px; padding: 12px 14px; resize: none; line-height: 1.45
 .sheet-head h2 { font-size: 26px; }
 .sheet-actions { display: flex; gap: 10px; }
 .sheet-actions > * { flex: 1; min-width: 0; white-space: normal; }
+/* A phone's sheet stacks its two actions, full width, the main one on top: no label on two lines. */
+@media (max-width: 480px) { .sheet-actions { flex-direction: column-reverse; } .sheet-actions > * { width: 100%; flex: none !important; white-space: nowrap; } }
 @keyframes rise { from { opacity: 0; transform: translateY(28px) scale(0.97); } }
 .sheet:focus { outline: none; }
 .app.phone .sheet-bg { align-items: flex-end; padding: 0; }
@@ -510,3 +512,13 @@ button.profile-row:hover { background: rgba(255, 255, 255, 0.04); }
 .btn[aria-disabled="true"] { opacity: 0.6; cursor: default; }
 .dock-chip-wrap { display: inline-flex; border-radius: 999px; }
 .dock-chip-wrap:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+
+/* The network line sits under the lobby's header (its title and clock stay in view). */
+.app:has(.lobby) .net-wrap { top: calc(84px + env(safe-area-inset-top)); }
+.app.phone:has(.lobby) .net-wrap { top: calc(132px + env(safe-area-inset-top)); }
+.app.phone.net-on:has(.lobby) .toast { top: calc(180px + env(safe-area-inset-top)); }
+.app.net-on:has(.lobby):not(.phone) .toast { top: calc(136px + env(safe-area-inset-top)); }
+.ibtn.remind-on { background: rgba(100, 210, 255, 0.2); color: var(--sky); box-shadow: inset 0 0 0 1.5px rgba(100, 210, 255, 0.55); }
+.app.phone .dock > .row:first-child { max-width: 100%; }
+.dock .who { flex: 1 1 0; }
+.net-wrap { width: max-content; }

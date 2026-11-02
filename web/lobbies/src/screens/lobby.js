@@ -238,7 +238,7 @@ function Dock({ s, a, ideas, phone }) {
   const host = manages(s) && s.live?.practice && t.canPledge;
   const reported = !!s.reported[d.sel.ticker];
   const flag = host
-    ? html`<${IconButton} label=${`Remove ${ticker(d.sel.ticker)} from the race`} tone="danger" size="sm" class="dock-flag" onClick=${() => a.askRemove(d.sel.id)}><${I.Close} size=${13} /></${IconButton}>`
+    ? html`<${IconButton} label=${`Remove ${ticker(d.sel.ticker)} from the race`} size="sm" class="dock-flag" aria-haspopup="dialog" onClick=${() => a.askRemove(d.sel.id)}><${I.Close} size=${13} /></${IconButton}>`
     : !d.sel.yours && t.canPledge && html`<${IconButton} label=${reported ? `${ticker(d.sel.ticker)} reported` : `Report ${ticker(d.sel.ticker)}`} size="sm" class="dock-flag" aria-haspopup=${reported ? undefined : "dialog"} disabled=${reported} onClick=${() => a.askReport(d.sel.id)}><${I.Alert} size=${14} /></${IconButton}>`;
   return html`<section class="dock glass" ref=${ref} aria-label="Your pledge">
     <div class="row" style="flex-wrap:nowrap;gap:12px;flex:1 1 260px;min-width:0">

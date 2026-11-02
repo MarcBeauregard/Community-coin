@@ -137,6 +137,20 @@ check(!late.last("hello").race.some((r) => r.symbol === "PIGW"), "and a late joi
   await page.close();
 }
 
+{
+  // A phone, backing an idea: the report button stays inside the dock.
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  await page.route(/fonts\.(googleapis|gstatic)\.com/, (r) => r.abort());
+  await page.goto(`${app}?freeze&scene=lobby-backed`);
+  await page.waitForTimeout(500);
+  const [flag, dockBox] = [await page.locator(".dock-flag").boundingBox(), await page.locator(".dock").boundingBox()];
+  check(flag && dockBox && flag.x + flag.width <= dockBox.x + dockBox.width - 8, "phone, backing: the report button fits in the dock");
+  await page.getByRole("button", { name: /^Withdraw/ }).click();
+  const btns = page.getByRole("dialog").locator(".sheet-actions .btn");
+  const heights = await btns.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
+  check(heights.length === 2 && heights.every((h) => h <= 56), `phone: a sheet's actions are one line each (${heights.map(Math.round).join(", ")} px)`);
+  await page.close();
+}
 [ana, cleo, ben, host, late, cleoTab2].forEach((x) => x.c.close());
 g.close();
 await server.close();
