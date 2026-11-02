@@ -206,10 +206,11 @@ function Dock({ s, a, ideas, phone }) {
   const d = dock(s, ideas);
   const ref = useRef(null);
   const before = useRef(null);
+  const inDock = useRef(false);
   useEffect(() => {
     // The lock takes the Pledge button away: someone who was on it lands on what the dock now says.
     const at = document.activeElement;
-    if (before.current && before.current !== d.mode && d.mode === "closed" && (!at || at === document.body)) ref.current?.querySelector(".dock-chip-wrap")?.focus();
+    if (before.current && before.current !== d.mode && d.mode === "closed" && (!at || at === document.body) && inDock.current) (document.querySelector(".finale.locked") ?? ref.current?.querySelector(".dock-chip-wrap"))?.focus();
     before.current = d.mode;
   }, [d.mode]);
   const t = lobbyClock(s);
@@ -243,7 +244,7 @@ function Dock({ s, a, ideas, phone }) {
   const flag = host
     ? html`<${Button} size="sm" variant="ghost" class="dock-flag" style="color:#ff6961;padding:0 10px" aria-label=${`Remove ${ticker(d.sel.ticker)} from the race`} aria-haspopup="dialog" onClick=${() => a.askRemove(d.sel.id)}>Remove</${Button}>`
     : !d.sel.yours && t.canPledge && html`<${IconButton} label=${reported ? `${ticker(d.sel.ticker)} reported` : `Report ${ticker(d.sel.ticker)}`} size="sm" class="dock-flag" aria-haspopup=${reported ? undefined : "dialog"} disabled=${reported} onClick=${() => a.askReport(d.sel.id)}><${I.Flag} size=${14} /></${IconButton}>`;
-  return html`<section class="dock glass" ref=${ref} aria-label="Your pledge">
+  return html`<section class="dock glass" ref=${ref} aria-label=${s.pledge ? "Your pledge" : "Pledge"} onFocusIn=${() => { inDock.current = true; }} onFocusOut=${(e) => { if (e.relatedTarget) inDock.current = ref.current?.contains(e.relatedTarget) ?? false; }}>
     <div class="row" style="flex-wrap:nowrap;gap:12px;flex:1 1 260px;min-width:0">
       <${Coin} coin=${coin(d.sel)} size=${phone ? 40 : 48} />
       <div class="who" style="min-width:0;flex:1"><span style="font-size:16px;font-weight:600">${d.sel.name}</span><span class="t2 num ellipsis" style="font-size:13px">${d.sub}</span></div>
@@ -340,7 +341,7 @@ function useFinaleWords(f, locked, lockWords) {
   useEffect(() => {
     const w = was.current;
     if (f && !w.on) setWords(`Final minutes: pledges lock in ${f.lockIn.replace(/^0/, "")}. ${f.text}.${f.nudge ? ` ${f.nudge.text}` : ""}`);
-    else if (f && w.lead !== f.lead.id && Date.now() - (w.saidLeadAt ?? 0) > 10000) { setWords(`$${f.lead.ticker} takes the lead. ${f.text}.`); was.current.saidLeadAt = Date.now(); }
+    else if (f && w.lead !== f.lead.id && Date.now() - (w.saidLeadAt ?? 0) > 10000) { setWords(f.tied ? `${f.text}.` : `${f.text.replace(" leads ", " takes the lead from ")}.`); was.current.saidLeadAt = Date.now(); }
     else if (f && f.nudge && !w.nudge) setWords(f.nudge.text);
     else if (!f && w.on && locked) setWords(lockWords || "Pledges are locked.");
     was.current = { on: !!f, lead: f?.lead.id ?? null, nudge: !!f?.nudge, saidLeadAt: was.current.saidLeadAt };
@@ -352,7 +353,7 @@ function useFinaleWords(f, locked, lockWords) {
 function Locked({ s, t }) {
   const k = s.locked;
   const mine = s.pledge && k.winner && s.pledge.symbol === k.winner;
-  return html`<section class="finale locked glass" aria-label="Pledges locked">
+  return html`<section class="finale locked glass" tabIndex="-1" aria-label="Pledges locked">
     <span class="finale-kicker">Pledges locked</span>
     <p class="finale-gap num">${k.winner && !k.voided ? `$${k.winner} wins with ${sol(k.pot)}` : "No winner: every pledge is refunded"}</p>
     <span class="t2 num" style="font-size:14px;line-height:1.45">${k.winner && !k.voided

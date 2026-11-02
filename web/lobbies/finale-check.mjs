@@ -109,7 +109,7 @@ const visible = (loc) => loc.first().waitFor({ timeout: 3000 }).then(() => true,
   await page.getByRole("button", { name: /^Pledge/ }).click();
   await page.getByRole("button", { name: /^Confirm/ }).click();
   check(await visible(panel.getByText("$POPCAT leads $WIF by 1.8 SOL")), "a pledge turns the race, the gap follows");
-  check(await page.getByRole("status").filter({ hasText: "$POPCAT leads" }).count() === 1, "a screen reader hears the new leader");
+  check(await page.getByRole("status").filter({ hasText: "$POPCAT takes the lead from $WIF" }).count() === 1, "a screen reader hears the new leader");
   check(JSON.stringify(await page.evaluate(() => window.__buzz)) === "[[30,60,30]]", "and the phone taps for the lead change");
   const box = await panel.boundingBox();
   check(box && box.x >= 0 && box.x + box.width <= 390, "the panel fits the phone");

@@ -316,7 +316,7 @@ function ReplaySheet({ s, a }) {
         ? html`<${Button} size="lg" variant=${canShare ? undefined : "prim"} onClick=${save}>Save video</${Button}>
             ${canShare && html`<${Button} variant="prim" size="lg" style="flex:1.4" onClick=${share}><${I.Share} size=${17} />Share…</${Button}>`}`
         : html`${!recording && html`<${Button} size="lg" disabled=${!r} onClick=${toggle}>${playing ? html`Pause` : html`<${I.Play} size=${15} />${progress > 0 && progress < 1 ? "Resume" : "Play"}`}</${Button}>`}
-            ${canRecord && html`<${Button} variant="prim" size="lg" style="flex:1.4;white-space:nowrap" disabled=${!r} aria-disabled=${recording ? "true" : undefined} onClick=${() => { if (!recording) record(); }}>${recording ? `Recording… ${left} s` : "Make a video"}</${Button}>`}`}
+            ${canRecord && html`<${Button} variant="prim" size="lg" style="flex:1.4;white-space:nowrap" disabled=${!r} aria-disabled=${recording ? "true" : undefined} aria-label=${recording ? "Recording the replay" : undefined} onClick=${() => { if (!recording) record(); }}>${recording ? html`<span aria-hidden="true">Recording… ${left} s</span>` : "Make a video"}</${Button}>`}`}
     </div>`;
 }
 
@@ -532,7 +532,7 @@ const SHEETS = {
   remind: { title: "Remind me", Body: RemindSheet },
   report: { title: "Report this idea?", Body: ReportSheet, refocus: ".idea[aria-pressed=true]", refocusFirst: true }, // its button turns into "reported" // back to the idea
   remove: { title: "Remove this idea?", Body: RemoveSheet, refocus: ".idea[aria-pressed=true]", refocusFirst: true }, // to the idea now selected
-  sibling: { title: "A sibling lobby", Body: SiblingSheet, refocus: ".sibling-open" },
+  sibling: { title: "A sibling lobby", Body: SiblingSheet, refocus: ".sibling button", refocusFirst: true }, // to the new lobby's Remind
   profile: { title: "Founder profile", Body: ProfileSheet, refocus: ".profile-open" },
   replay: { title: "The hour in 30 seconds", Body: ReplaySheet, refocus: ".replay-open" },
 };

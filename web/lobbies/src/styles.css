@@ -532,3 +532,5 @@ button.profile-row:hover { background: rgba(255, 255, 255, 0.04); }
 .app.phone:has(.lobby) .toast { top: auto; bottom: calc(196px + env(safe-area-inset-bottom)); }
 .ibtn.remind-on { background: var(--sky); color: #000; box-shadow: none; }
 .speakers li.away .av { opacity: 0.45; filter: grayscale(0.6); }
+.search:focus-within { outline: 2px solid var(--sky); outline-offset: 2px; }
+.field .inp:focus-visible { outline: 2px solid var(--sky); outline-offset: 1px; }

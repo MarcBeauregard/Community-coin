@@ -477,7 +477,8 @@ export function createStore({ scene, freeze, live = false } = {}) {
     const s = state;
     const beat = s.beat + 1;
     if (s.launched) return set({ beat });
-    if (link && s.live && s.live.connected) return set({ beat, elapsed: Math.floor((link.now() - s.live.opensAt) / 1000) });
+    // Live, the race is the server's alone: while the link is down nothing moves it (never the demo's crowd).
+    if (link) return set(s.live ? { beat, elapsed: Math.floor((link.now() - s.live.opensAt) / 1000) } : { beat });
     const elapsed = s.elapsed + 1;
     const patch = { elapsed, beat };
     if (elapsed < LOCK_AT && beat % 3 === 0) {

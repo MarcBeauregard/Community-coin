@@ -116,7 +116,7 @@ const pixels = (page) => page.evaluate(() => {
   await page.screenshot({ path: join(shots, "replay-end-1440.png") });
   // A video, made on this device.
   await page.getByRole("button", { name: "Make a video" }).click();
-  check(await page.getByRole("button", { name: /Recording… \d+ s/ }).isVisible(), "making the video says how long is left");
+  check(await page.getByText(/Recording… \d+ s/).isVisible() && await page.getByRole("button", { name: "Recording the replay" }).isVisible(), "making the video shows how long is left; its name stays still for screen readers");
   check(await page.getByRole("button", { name: "Save video" }).waitFor({ timeout: 9000 }).then(() => true, () => false), "then offers to save it");
   const [dl] = await Promise.all([page.waitForEvent("download", { timeout: 3000 }).catch(() => null), page.getByRole("button", { name: "Save video" }).click()]);
   const size = dl ? readFileSync(await dl.path()).length : 0;
