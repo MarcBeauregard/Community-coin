@@ -166,12 +166,12 @@ export function Sheet({ title, labelledBy, onClose, busy, refocus, refocusFirst,
 }
 
 // A toast: a check for what went right, an exclamation for what didn't ("error" tone), never the other way round.
-const TONE = { lime: "var(--lime)", sky: "var(--sky)", white: "var(--text)", error: "var(--amber)" };
+const TONE = { lime: "var(--lime)", sky: "var(--sky)", white: "var(--text)", note: "rgba(235,235,245,.6)", error: "var(--amber)" };
 // The live regions are always in the page (a region born with its text is often not read); the toast appears in one.
 export function Toast({ toast }) {
   const bad = toast?.tone === "error";
   const body = toast && html`<div class="toast glass" key=${toast.id}>
-    <span class="tick" style=${{ background: TONE[toast.tone] || TONE.lime }} aria-hidden="true">${bad ? html`<${I.Alert} size=${14} stroke=${3} />` : html`<${I.Check} size=${13} stroke=${3.2} />`}</span>${toast.text}
+    <span class="tick" style=${{ background: TONE[toast.tone] || TONE.lime }} aria-hidden="true">${bad ? html`<${I.Alert} size=${14} stroke=${3} />` : toast.tone === "note" ? html`<span style="width:6px;height:6px;border-radius:50%;background:#000" />` : html`<${I.Check} size=${13} stroke=${3.2} />`}</span>${toast.text}
   </div>`;
   return html`<div role="status" aria-live="polite">${!bad && body}</div><div role="alert" aria-live="assertive">${bad && body}</div>`;
 }

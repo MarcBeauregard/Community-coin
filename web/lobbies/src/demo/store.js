@@ -138,6 +138,8 @@ export function createStore({ scene, freeze, live = false } = {}) {
   // Reactions over the stage: a few at a time fly up and go; the counts keep what flew.
   let cheerId = 0;
   let lastCheer = 0;
+  const cheerQueue = { fire: 0, skull: 0 };
+  let cheerTimer = null;
   let removing = null;
   function flyCheers(fire, skull) {
     const fresh = [...Array(Math.min(fire, 6)).fill("fire"), ...Array(Math.min(skull, 4)).fill("skull")]
@@ -354,7 +356,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
         const mineGone = s.ideas.find((d) => d.ticker === m.symbol && d.by === s.live.you);
         if (mineGone) set({ removedMine: [...(state.removedMine ?? []), { ticker: mineGone.ticker, name: mineGone.name, hue: mineGone.hue }] });
         if (m.by === s.live.you) toast(`$${m.symbol} is out of the race. Everyone on it is refunded.`, "white");
-        else if (!concerned) toast(`The host removed $${m.symbol} from the race. Pledges on it are refunded.`, "white");
+        else if (!concerned) toast(`The host removed $${m.symbol} from the race. Pledges on it are refunded.`, "note");
         break;
       }
       case "refunded": {
@@ -778,11 +780,18 @@ export function createStore({ scene, freeze, live = false } = {}) {
       toast(`Moved your ${sol(p.amount)} to $${idea.ticker}`);
     },
     cheer(kind) {
-      // As fast as the server counts them (4 a second): every one that flies here is one the others see.
-      if (Date.now() - lastCheer < 300) return; // a little slower than the server's 250 ms, so none is dropped there
-      lastCheer = Date.now();
+      // Every tap counts: taps closer than the server's pace are gathered and sent together (5 at most at once).
       flyCheers(kind === "fire" ? 1 : 0, kind === "skull" ? 1 : 0);
-      if (link) link.cheer(kind);
+      if (!link) return;
+      cheerQueue[kind] = Math.min(5, cheerQueue[kind] + 1);
+      if (cheerTimer) return;
+      const send = () => {
+        cheerTimer = null;
+        for (const k of ["fire", "skull"]) if (cheerQueue[k]) { link.cheer(k, cheerQueue[k]); cheerQueue[k] = 0; }
+        lastCheer = Date.now();
+      };
+      const wait = Math.max(0, 300 - (Date.now() - lastCheer));
+      if (wait === 0) send(); else cheerTimer = setTimeout(send, wait);
     },
     // Report an idea to the host; the host (or a co-host) removes it, and everyone on it is refunded.
     askReport(id) {

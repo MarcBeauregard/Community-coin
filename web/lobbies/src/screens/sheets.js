@@ -156,8 +156,10 @@ function WalletSheet({ s, a }) {
             <span class="t2" style="font-size:13px;line-height:1.45">For pledging in practice lobbies. Not your wallet’s SOL: none of yours moves until a lobby runs on Solana.</span>`}
     </div>
     <div style="display:flex;flex-direction:column;gap:10px">
-      <span class="t2" style="font-size:13px;font-weight:600">Open pledge</span>
-      ${mine
+      <span class="t2" style="font-size:13px;font-weight:600">${s.launched ? "This lobby" : "Open pledge"}</span>
+      ${s.launched
+        ? html`<span style="font-size:14px">${s.launched.founder ? `Founder #${Number(s.launched.rank).toLocaleString("en-US")} of $${s.launched.id.toUpperCase()}` : s.launched.myAmount ? `Your ${sol(s.launched.myAmount)} came back: $${s.launched.id.toUpperCase()} won` : `$${s.launched.id.toUpperCase()} launched; you didn’t pledge`}</span>`
+        : mine
         ? html`<div class="row" style="flex-wrap:nowrap;gap:12px;padding:12px;border-radius:16px;background:rgba(0,0,0,.3)">
             <${Coin} coin=${coin(mine)} size=${38} />
             <span style="flex:1;display:flex;flex-direction:column"><span style="font-size:14px;font-weight:600">${sol(s.pledge.amount)} on ${ticker(mine.ticker)}</span><span class="t2 num" style="font-size:12px">Friday Night Degens · locks in ${t.lockIn}</span></span>

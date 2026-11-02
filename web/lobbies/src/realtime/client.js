@@ -37,7 +37,7 @@ export function connectLobby({ base, lobby, token, onMessage, WebSocketImpl = gl
     /** The practice lobby's money (signed in): pledge / withdraw (symbol, amount in lamports), move (from, to), propose (symbol, name). */
     practice: (t, args) => link.send({ t, ...args }),
     listen: (on) => link.send({ t: "listen", on }),
-    cheer: (kind) => link.send({ t: "cheer", kind }),
+    cheer: (kind, n = 1) => link.send({ t: "cheer", kind, n }),
     /** Tell the host an idea breaks the lobby's rules; the host (or a co-host) removes it, refunding everyone on it. */
     report: (symbol) => link.send({ t: "report", symbol }),
     remove: (symbol) => link.send({ t: "remove", symbol }),

@@ -155,9 +155,11 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
         if (++c.cheerFrames > 40) return "close";
         if (t - (c.lastCheer ?? 0) < 250) return null;
         c.lastCheer = t;
-        cheers[m.kind]++;
+        // Taps gathered by the app since its last send: up to 5 at once.
+        const n = Number.isInteger(m.n) && m.n > 0 ? Math.min(5, m.n) : 1;
+        cheers[m.kind] += n;
         c.cheers ??= { fire: 0, skull: 0 };
-        c.cheers[m.kind]++;
+        c.cheers[m.kind] += n;
         return null;
       }
       // Token bucket: a burst, then a steady rate. Flooding closes the socket.
