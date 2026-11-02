@@ -57,7 +57,7 @@ const visible = (loc, ms = 4000) => loc.first().waitFor({ timeout: ms }).then(()
   await wait(300);
   const sum = (list, k) => list.reduce((n, m) => n + m[k], 0);
   check(sum(got.b, "fire") === 1 && sum(got.b, "skull") === 0, `reactions reach the others, a burst counted once (${JSON.stringify(got.b)})`);
-  check(got.a.length === 0, "and never come back to whoever sent them");
+  check(got.a.every((m) => m.fire === 0 && m.skull === 0) && got.a.some((m) => m.total?.fire >= 1), "never fly back to whoever sent them, but everyone gets the same totals");
   // Mashing 🔥 (40 in under a second) never costs the link: the extra ones are dropped, the person stays.
   let closedCode = null;
   const masher = connectLobby({ base, lobby: 412, token: server.auth.issue("masher"), onMessage: (m) => { if (m.t === "closed") closedCode = m.code; } });
