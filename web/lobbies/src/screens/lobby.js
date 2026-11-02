@@ -172,7 +172,7 @@ function IdeaCard({ d, s, a, phone }) {
   const barColor = selected ? "var(--lime)" : "rgba(235,235,245,.38)";
   const tr = trend(s, d.ticker);
   const sparkColor = selected ? "var(--lime)" : `hsl(${d.hue} 80% 68%)`;
-  const said = tr?.text && html`<span class="sr">, ${tr.text}</span>`;
+  const said = tr?.text && html`<span class="sr"> — ${tr.text}</span>`;
   if (phone) {
     return html`<button type="button" class="idea" aria-pressed=${String(selected)} onClick=${() => a.select(d.id)}>
       <${Coin} coin=${coin(d)} size=${48} />
@@ -208,7 +208,7 @@ function Dock({ s, a, ideas, phone }) {
   useEffect(() => {
     // The lock takes the Pledge button away: someone who was on it lands on what the dock now says.
     const at = document.activeElement;
-    if (before.current && before.current !== d.mode && d.mode === "closed" && (!at || at === document.body)) ref.current?.querySelector("[role=status]")?.focus();
+    if (before.current && before.current !== d.mode && d.mode === "closed" && (!at || at === document.body)) ref.current?.querySelector(".dock-chip-wrap")?.focus();
     before.current = d.mode;
   }, [d.mode]);
   const t = lobbyClock(s);
@@ -232,7 +232,8 @@ function Dock({ s, a, ideas, phone }) {
     const text = !k ? `Pledges locked · launch in ${t.launchIn}`
       : k.winner && !k.voided ? `${ticker(k.winner)} won · launch in ${t.launchIn}`
       : `No winner · every pledge refunded`;
-    action = html`<span class="dock-chip-wrap" tabIndex="-1" role="status"><${Chip} tone="amber" class="dock-chip">${text}</${Chip}></span>`;
+    // Not a live region: its clock ticks every second (the lock itself is announced once, above the ideas).
+    action = html`<span class="dock-chip-wrap" tabIndex="-1"><${Chip} tone="amber" class="dock-chip">${text}</${Chip}></span>`;
   }
   // The host removes an idea; anyone else can report one (not their own), once.
   const host = manages(s) && s.live?.practice && t.canPledge;
@@ -337,10 +338,10 @@ function useFinaleWords(f, locked, lockWords) {
   useEffect(() => {
     const w = was.current;
     if (f && !w.on) setWords(`Final minutes: pledges lock in ${f.lockIn.replace(/^0/, "")}. ${f.text}.${f.nudge ? ` ${f.nudge.text}` : ""}`);
-    else if (f && w.lead !== f.lead.id) setWords(`$${f.lead.ticker} takes the lead. ${f.text}.`);
+    else if (f && w.lead !== f.lead.id && Date.now() - (w.saidLeadAt ?? 0) > 10000 && !document.querySelector("[role=dialog]")) { setWords(`$${f.lead.ticker} takes the lead. ${f.text}.`); was.current.saidLeadAt = Date.now(); }
     else if (f && f.nudge && !w.nudge) setWords(f.nudge.text);
     else if (!f && w.on && locked) setWords(lockWords || "Pledges are locked.");
-    was.current = { on: !!f, lead: f?.lead.id ?? null, nudge: !!f?.nudge };
+    was.current = { on: !!f, lead: f?.lead.id ?? null, nudge: !!f?.nudge, saidLeadAt: was.current.saidLeadAt };
   }, [!!f, f?.lead.id, !!f?.nudge, locked]);
   return words;
 }
@@ -363,9 +364,18 @@ function Ideas({ s, a, phone }) {
   const t = lobbyClock(s);
   const f = finale(s, ideas);
   const k = s.locked;
+  // An idea taken out of the race while the focus was on it: the focus goes to the idea now selected.
+  const list = useRef(null);
+  const inList = useRef(false);
+  const ids = ideas.map((d) => d.id).join();
+  useEffect(() => {
+    const at = document.activeElement;
+    if (inList.current && (!at || at === document.body)) list.current?.querySelector(".idea[aria-pressed=true], .idea")?.focus();
+  }, [ids]);
   const finaleWords = useFinaleWords(f, !t.canPledge, k ? (k.winner && !k.voided ? `Pledges are locked. $${k.winner} wins with ${sol(k.pot)}.${s.pledge?.symbol === k.winner ? " You’re on the winner." : ""}` : "Pledges are locked. No winner: every pledge is refunded.") : "");
   return html`<main class="ideas-col">
-    <div class="list scroll">
+    <div class="list scroll" ref=${list} onFocusIn=${() => { inList.current = true; }} onFocusOut=${(e) => { if (e.relatedTarget) inList.current = list.current?.contains(e.relatedTarget) ?? false; }}>
+      ${phone && html`<h2 class="sr">${ideas.length} ideas</h2>`}
       <span class="sr" role="status">${finaleWords}</span>
       ${f && html`<${Finale} f=${f} a=${a} phone=${phone} />`}
       ${!f && s.locked && !s.launched && html`<${Locked} s=${s} t=${t} />`}
@@ -374,7 +384,7 @@ function Ideas({ s, a, phone }) {
         ${ideas.filter((d) => s.live.reports[d.ticker] > 0).map((d) => html`<button key=${d.id} type="button" class="chip amber" aria-pressed=${String(s.selected === d.id)} onClick=${() => a.select(d.id)}>$${d.ticker} · ${s.live.reports[d.ticker]}</button>`)}
         <span class="t2" style="font-size:12px">Select one to remove it from the dock</span>
       </div>`}
-      ${s.intro !== null && html`<${Intro} step=${s.intro} a=${a} />`}
+      ${s.intro !== null && t.canPledge && html`<${Intro} step=${s.intro} a=${a} />`}
       ${phone
         ? html`<div class="row" style="justify-content:space-between;padding:0 4px 10px">
             <span class="t2 num" style="font-size:13px">${sol(ideas.reduce((x, d) => x + d.total, 0))} · ${t.proposeHint}</span>
@@ -464,7 +474,7 @@ export function Lobby({ s, a, phone }) {
         <${GestationTimeline} phases=${timeline(s.elapsed)} labels=${false} height=${4} />
         <${Segmented} label="Lobby sections" full tabs options=${TABS} value=${s.lobbyTab} onChange=${a.setLobbyTab} />
       </div>
-      <div class="lobby-body">
+      <div class="lobby-body" id="lobby-panel" role="tabpanel" aria-labelledby=${`tab-${s.lobbyTab}`}>
         ${s.lobbyTab === "ideas" && html`<${Ideas} s=${s} a=${a} phone />`}
         ${s.lobbyTab === "stage" && html`<${Stage} s=${s} a=${a} phone />`}
         ${s.lobbyTab === "chat" && html`<${Chat} s=${s} a=${a} phone />`}

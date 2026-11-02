@@ -3,6 +3,8 @@
 // events decoded from the chain (indexer.mjs, wallet mode) and on the events the demo's rules emit.
 
 const toNumber = (lamports) => Number(lamports) / 1e9;
+// As the app writes every amount: one decimal at least ("1.0 SOL"), more when it matters ("0.05 SOL").
+const solText = (lamports) => `${toNumber(lamports).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 3 })} SOL`;
 
 export function emptyView() {
   return { lobby: null, ideas: [], pledges: new Map(), order: [], winner: null, finalized: false, launched: false, mint: null, refunded: new Set(), founders: [], bondsReturned: new Set() };
@@ -88,16 +90,16 @@ export function receipt(events, user, ideas) {
     if (e.user !== undefined && e.user !== user) continue;
     switch (e.event) {
       case "Pledged":
-        return { kind: "pledge", title: `Pledged ${toNumber(e.amount)} SOL to ${ticker(e.idea)}`,
+        return { kind: "pledge", title: `Pledged ${solText(e.amount)} to ${ticker(e.idea)}`,
           lines: [["Your pledge", toNumber(e.user_total)], [`${ticker(e.idea)} now holds`, toNumber(e.idea_total)], ["Lobby total", toNumber(e.lobby_total)]] };
       case "Withdrawn":
-        return { kind: "withdraw", title: `Withdrew ${toNumber(e.amount)} SOL from ${ticker(e.idea)}`,
+        return { kind: "withdraw", title: `Withdrew ${solText(e.amount)} from ${ticker(e.idea)}`,
           lines: [["Your pledge", toNumber(e.user_total)], [`${ticker(e.idea)} now holds`, toNumber(e.idea_total)], ["Lobby total", toNumber(e.lobby_total)]] };
       case "PledgeMoved":
-        return { kind: "move", title: `Moved ${toNumber(e.amount)} SOL to ${ticker(e.to)}`,
+        return { kind: "move", title: `Moved ${solText(e.amount)} to ${ticker(e.to)}`,
           lines: [[`${ticker(e.from)} now holds`, toNumber(e.from_total)], [`${ticker(e.to)} now holds`, toNumber(e.to_total)]] };
       case "PledgeRefunded":
-        return { kind: "refund", title: `Refunded ${toNumber(e.amount)} SOL`, lines: [["Back in your wallet", toNumber(e.amount)]] };
+        return { kind: "refund", title: `Refunded ${solText(e.amount)}`, lines: [["Back in your wallet", toNumber(e.amount)]] };
       case "FounderJoined":
         return { kind: "founder", title: `Founder #${e.seq + 1}`, lines: [["Committed to the opening", toNumber(e.amount)]] };
       case "BondReturned":

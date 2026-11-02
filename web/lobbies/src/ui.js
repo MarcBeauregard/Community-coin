@@ -35,7 +35,7 @@ export function Segmented({ label, options, value, onChange, full, tabs }) {
   } : undefined;
   return html`<div class=${cx("seg", full && "full")} role=${tabs ? "tablist" : "group"} aria-label=${label} onKeyDown=${onKey}>
     ${options.map((o) => tabs
-      ? html`<button type="button" key=${o.id} role="tab" aria-selected=${String(o.id === value)} tabIndex=${o.id === value ? 0 : -1} onClick=${() => onChange(o.id)}>${o.label}</button>`
+      ? html`<button type="button" key=${o.id} role="tab" id=${`tab-${o.id}`} aria-controls="lobby-panel" aria-selected=${String(o.id === value)} tabIndex=${o.id === value ? 0 : -1} onClick=${() => onChange(o.id)}>${o.label}</button>`
       : html`<button type="button" key=${o.id} aria-pressed=${String(o.id === value)} disabled=${o.disabled} onClick=${() => onChange(o.id)}>${o.label}</button>`)}
   </div>`;
 }

@@ -103,7 +103,7 @@ for (const [w, h] of [[1440, 900], [390, 844]]) {
   check(await page.getByText(/Full refund when pledges lock/).isVisible(), `@${w} the pledge sheet says what happens if it loses`);
   await click("Confirm practice pledge");
   await page.waitForTimeout(1500);
-  check(await page.getByRole("heading", { name: "Pledged 1 SOL to $WIF" }).isVisible(), `@${w} the receipt reads the pledge from the program's events`);
+  check(await page.getByRole("heading", { name: "Pledged 1.0 SOL to $WIF" }).isVisible(), `@${w} the receipt reads the pledge from the program's events`);
   check(await page.locator(".rows", { hasText: "Your pledge" }).getByText("1.0 SOL").first().isVisible(), `@${w} the receipt shows the pledge total`);
   await click("Done");
   check(await page.getByText("Backing with 1.0 SOL").isVisible(), `@${w} the pledge is confirmed`);
