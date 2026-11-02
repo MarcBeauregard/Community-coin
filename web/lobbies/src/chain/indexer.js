@@ -91,13 +91,13 @@ export function receipt(events, user, ideas) {
     switch (e.event) {
       case "Pledged":
         return { kind: "pledge", title: `Pledged ${solText(e.amount)} to ${ticker(e.idea)}`,
-          lines: [["Your pledge", toNumber(e.user_total)], [`${ticker(e.idea)} now holds`, toNumber(e.idea_total)], ["Lobby total", toNumber(e.lobby_total)]] };
+          lines: [["Your pledge", toNumber(e.user_total)], [`${ticker(e.idea)} after it`, toNumber(e.idea_total)], ["Lobby after it", toNumber(e.lobby_total)]] };
       case "Withdrawn":
         return { kind: "withdraw", title: `Withdrew ${solText(e.amount)} from ${ticker(e.idea)}`,
-          lines: [["Your pledge", toNumber(e.user_total)], [`${ticker(e.idea)} now holds`, toNumber(e.idea_total)], ["Lobby total", toNumber(e.lobby_total)]] };
+          lines: [["Your pledge", toNumber(e.user_total)], [`${ticker(e.idea)} after it`, toNumber(e.idea_total)], ["Lobby after it", toNumber(e.lobby_total)]] };
       case "PledgeMoved":
         return { kind: "move", title: `Moved ${solText(e.amount)} to ${ticker(e.to)}`,
-          lines: [[`${ticker(e.from)} now holds`, toNumber(e.from_total)], [`${ticker(e.to)} now holds`, toNumber(e.to_total)]] };
+          lines: [[`${ticker(e.from)} after it`, toNumber(e.from_total)], [`${ticker(e.to)} after it`, toNumber(e.to_total)]] };
       case "PledgeRefunded":
         return { kind: "refund", title: `Refunded ${solText(e.amount)}`, lines: [["Back in your wallet", toNumber(e.amount)]] };
       case "FounderJoined":

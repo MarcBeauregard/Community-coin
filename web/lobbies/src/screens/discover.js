@@ -1,3 +1,4 @@
+import { useEffect, useState } from "preact/hooks";
 // Discover: the lobby of the hour up front, how a lobby works, the other lobbies of the hour and your clans.
 
 import { html, Button, IconButton, Segmented, Chip, Coin, Avatar, Bar, GestationTimeline, Orbit } from "../ui.js";
@@ -110,17 +111,24 @@ function HowItWorks() {
 
 const pal = Object.keys(PEOPLE);
 function LobbyAction({ l, s, a, compact }) {
-  if (l.live) return html`<${Button} variant="white" size="sm" onClick=${() => a.go({ screen: s.launched ? "launch" : "lobby" })}>Join</${Button}>`;
+  if (l.live) return html`<${Button} variant="white" size="sm" aria-label=${`Join ${l.name}`} onClick=${() => a.go({ screen: s.launched ? "launch" : "lobby" })}>Join</${Button}>`;
   if (l.mine) return html`<${Chip} tone="sky">You host</${Chip}>`; // no reminder for your own lobby
   // It opens the reminder sheet (not a toggle): its name says for which lobby, and whether one is set.
   if (compact) return html`<${IconButton} label=${l.reminder ? `Reminder on for ${l.name}` : `Remind me when ${l.name} opens`} tone="sky" size="sm" class=${l.reminder ? "remind-on" : ""} aria-haspopup="dialog" onClick=${() => a.openReminder(l)}><${I.Bell} size=${15} /></${IconButton}>`;
   return html`<${Button} variant="fill" size="sm" class=${l.reminder ? "remind-on" : ""} aria-haspopup="dialog" aria-label=${l.reminder ? `Reminder on for ${l.name}` : `Remind me when ${l.name} opens`} onClick=${() => a.openReminder(l)}><${I.Bell} size=${13} />${l.reminder ? "On" : "Remind"}</${Button}>`;
 }
 
+// What a search found, said once typing pauses (not at every key).
+function SearchStatus({ text }) {
+  const [said, setSaid] = useState("");
+  useEffect(() => { const t = setTimeout(() => setSaid(text), 600); return () => clearTimeout(t); }, [text]);
+  return html`<span class="sr" role="status">${said}</span>`;
+}
+
 function ThisHour({ s, a, phone }) {
   const cards = lobbyCards(s);
   // What a search found, said once it settles (not every key).
-  const found = html`<span class="sr" role="status">${!s.query.trim() ? "" : cards.length ? `${cards.length} ${cards.length === 1 ? "lobby matches" : "lobbies match"}` : "No lobbies match"}</span>`;
+  const found = html`<${SearchStatus} text=${!s.query.trim() ? "" : cards.length ? `${cards.length} ${cards.length === 1 ? "lobby matches" : "lobbies match"}` : "No lobbies match"} />`;
   const searchField = html`<label class="search" style=${phone ? "" : "width:240px;max-width:100%"}>
     <${I.Search} size=${15} /><span class="sr">Search lobbies</span>
     <input type="search" value=${s.query} placeholder="Search" onInput=${(e) => a.setQuery(e.currentTarget.value)} />

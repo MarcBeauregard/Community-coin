@@ -158,10 +158,11 @@ export function VoicePill({ s, a, onOpen }) {
     : v.onStage && !vs.micBlocked ? html`<${Button} size="sm" onClick=${a.toggleMic}>${vs.micLive ? "Mute" : "Unmute"}</${Button}>`
     : null;
   return html`<div class="voice-pill glass" role="region" aria-label="Voice">
-    <button type="button" class="open" onClick=${onOpen}>
+    <button type="button" class="open" aria-label=${`Open the stage: ${vs.link && vs.link.tone === "amber" ? vs.link.text : vs.text}`} onClick=${() => { onOpen(); setTimeout(() => (document.querySelector(".lobby-body [data-primary], .lobby-body .stage-controls button, [role=tab][aria-selected=true]"))?.focus(), 60); }}>
       <span class=${`dot ${vs.micLive && v.onStage ? "onair" : ""}`} style=${{ background: TONE_COLOR[vs.tone] }} aria-hidden="true" />
-      <span role="status" class="ellipsis" style="font-size:14px;font-weight:600">${vs.link && vs.link.tone === "amber" ? vs.link.text : vs.text}</span>
+      <span class="ellipsis" aria-hidden="true" style="font-size:14px;font-weight:600">${vs.link && vs.link.tone === "amber" ? vs.link.text : vs.text}</span>
     </button>
+    <span class="sr" role="status">${vs.link && vs.link.tone === "amber" ? vs.link.text : vs.text}</span>
     ${action}
   </div>`;
 }
@@ -380,8 +381,8 @@ function Ideas({ s, a, phone }) {
   const ids = ideas.map((d) => d.id).join();
   useEffect(() => {
     const at = document.activeElement;
-    if (inList.current && (!at || at === document.body)) list.current?.querySelector(".idea[aria-pressed=true], .idea")?.focus();
-  }, [ids]);
+    if (inList.current && (!at || at === document.body)) list.current?.querySelector(".finale.locked, .idea[aria-pressed=true], .idea")?.focus();
+  }, [ids, !!f]);
   const finaleWords = useFinaleWords(f, !t.canPledge, k ? (k.winner && !k.voided ? `Pledges are locked. $${k.winner} wins with ${sol(k.pot)}.${s.pledge?.symbol === k.winner ? " You’re on the winner." : ""}` : "Pledges are locked. No winner: every pledge is refunded.") : "");
   return html`<main class="ideas-col">
     <div class="list scroll" ref=${list} onFocusIn=${() => { inList.current = true; }} onFocusOut=${(e) => { if (e.relatedTarget) inList.current = list.current?.contains(e.relatedTarget) ?? false; }}>

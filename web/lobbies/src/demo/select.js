@@ -167,7 +167,7 @@ export function voiceStatus(s) {
   // Live, nobody is told "Listening" before the voice room is there.
   const joining = live && au.status !== "live" && au.status !== "reconnecting" && !au.error;
   if (base.needsTap) return { ...base, text: "Sound is blocked by your browser", tone: "amber" };
-  if (v.onStage && v.invited) return { ...base, text: "The host invited you to speak", tone: "lime" };
+  if (v.onStage && v.invited) return { ...base, text: "The host invited you to speak.", tone: "lime" };
   if (v.onStage && micBlocked) return { ...base, text: "On stage · microphone blocked", tone: "amber" };
   if (v.onStage && live && v.mic && !micLive) return { ...base, starting: true, text: "Starting your microphone…", tone: "sky" };
   if (v.onStage) return { ...base, text: micLive ? "You’re on stage · mic live" : "You’re on stage · muted", tone: micLive ? "lime" : "sky" };

@@ -195,7 +195,7 @@ function FounderRow({ f }) {
 function PhoneClanList({ s, a, k }) {
   const people = campfirePeople(s);
   return html`<main class="clan-list scroll screen" style=${{ background: `radial-gradient(60% 35% at 50% 0%, hsla(${k.hue},90%,55%,.09), transparent 70%), #000` }}>
-    <h1 class="display large-title" style="margin:20px 20px 14px">Clans<span class="sr">: ${k.name} clan</span></h1>
+    <h1 class="display large-title" style="margin:20px 20px 14px">Clans<span class="sr">, ${k.name} clan</span></h1>
     <div class="hscroll" style="gap:12px;padding:4px 20px 14px" role="group" aria-label="Your clans">
       ${(s.live ? s.clans.filter((c) => c.id === "new") : s.clans).map((c) => html`<button type="button" key=${c.id} class="rail-btn" aria-label=${`${ticker(c.ticker)} clan`} aria-current=${c.id === k.id ? "page" : undefined}
         style=${{ width: "56px", height: "56px", flex: "none", borderRadius: c.id === k.id ? "16px" : "50%", boxShadow: c.id === k.id ? "0 0 0 2px #000, 0 0 0 4px #f5f5f7" : "none", overflow: "hidden" }} onClick=${() => a.openClan(c.id)}>
@@ -220,7 +220,7 @@ function PhoneClanList({ s, a, k }) {
             <span style="flex:1;display:flex;flex-direction:column"><span style="font-size:16px;font-weight:600">Campfire</span><span class="num" style="font-size:12px;color:var(--sky)">${people.length} connected</span></span>
             ${s.campfire.joined
               ? html`<${Button} size="sm" style="color:var(--sky)" onClick=${() => a.openChannel(s.channel)}>Open call</${Button}>`
-              : html`<${Button} variant="white" size="sm" onClick=${() => a.joinCampfire(true)}>Join</${Button}>`}
+              : html`<${Button} variant="white" size="sm" aria-label="Join the Campfire voice room" onClick=${() => a.joinCampfire(true)}>Join</${Button}>`}
           </div>
           <div class="row" style="gap:6px">${people.map((p) => html`<${Avatar} key=${p.who} person=${person(p.who)} size=${32} speaking=${p.speaking} alone />`)}</div>
         </div>
