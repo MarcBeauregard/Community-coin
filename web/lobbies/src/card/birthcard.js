@@ -133,7 +133,7 @@ export async function drawBirthCard(c, format = "post") {
 
   // Signature: the mark and the name, small.
   g.font = `600 ${size.mark}px ${FONT}`;
-  const sig = c.practice ? "Community Coin · practice lobby" : "Community Coin";
+  const sig = c.practice ? "Social Launch · practice lobby" : "Social Launch";
   const sigW = g.measureText(sig).width;
   const mr = Math.round(size.mark * 0.6);
   const mx = center ? x - (sigW + mr * 2 + 12) / 2 + mr : x + 14;
@@ -165,7 +165,7 @@ function fit(g, text, max) {
 export const cardText = (c) => `Birth card: ${c.practice ? "practice lobby, " : ""}Founder #${int(c.rank)} of $${c.ticker}, ${c.name}. Born ${day(c.date)} in Lobby ${c.lobby}. ${sol(c.pot)} raised, ${int(c.founders)} founders.`;
 
 /** The words that go with the card when it is shared, with the way to the app. */
-export const cardCaption = (c, link) => `I’m Founder #${int(c.rank)} of $${c.ticker}${c.practice ? " in a Community Coin practice lobby" : ""}. ${int(c.founders)} of us picked it together in one hour${c.practice ? "" : " on Community Coin"}.${c.mint ? ` CA: ${c.mint}` : ""}${link ? ` ${link}` : ""}`;
+export const cardCaption = (c, link) => `I’m Founder #${int(c.rank)} of $${c.ticker}${c.practice ? " in a Social Launch practice lobby" : ""}. ${int(c.founders)} of us picked it together in one hour${c.practice ? "" : " on Social Launch"}.${c.mint ? ` CA: ${c.mint}` : ""}${link ? ` ${link}` : ""}`;
 
 /** A file name for the card. */
 export const cardFileName = (c, format = "post") => `founder-${c.rank}-${c.ticker.toLowerCase()}${format === "story" ? "-story" : ""}.png`;

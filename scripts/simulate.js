@@ -2,7 +2,7 @@
 //
 //   pvp: today's game. Plain bonding curves: no opening batch, no vesting, no spike share, and every copycat
 //        is an independent ETH pool.
-//   cc:  Community Coin. 5 minute batch opening vesting over 1 hour, half of any sale above the one-hour
+//   cc:  Social Launch. 5 minute batch opening vesting over 1 hour, half of any sale above the one-hour
 //        reference price left to the holders, and every copycat is a variant of the original.
 //
 // Same actors, same amounts, same order in both worlds. Every launch goes: creator and sniper bot in first

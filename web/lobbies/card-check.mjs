@@ -63,7 +63,7 @@ async function open(query, { share = false, width = 1440 } = {}) {
   check(await page.getByText("Image saved").isVisible(), "and says it is saved");
   await page.getByRole("button", { name: "Copy caption" }).click();
   const clip = await page.evaluate(() => navigator.clipboard.readText());
-  check(/^I’m Founder #\d+ of \$WIF in a Community Coin practice lobby\. \d+ of us picked it together in one hour\. http:\/\/localhost:\d+\/index\.html$/.test(clip), "without a share sheet, the caption (saying it was practice, with the way to the app) can be copied");
+  check(/^I’m Founder #\d+ of \$WIF in a Social Launch practice lobby\. \d+ of us picked it together in one hour\. http:\/\/localhost:\d+\/index\.html$/.test(clip), "without a share sheet, the caption (saying it was practice, with the way to the app) can be copied");
   check(await page.getByRole("dialog").isVisible(), "the sheet stays open after saving and copying");
   await page.getByRole("button", { name: "Story" }).click();
   await page.getByText("Story card ready").waitFor({ state: "attached", timeout: 5000 });

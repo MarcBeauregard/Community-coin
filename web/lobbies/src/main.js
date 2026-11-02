@@ -101,7 +101,7 @@ function App() {
   useEffect(() => {
     const clan = s.clans.find((c) => c.id === s.clan);
     const where = { discover: "Lobbies", lobby: FEATURED.name, launch: s.launched ? `$${s.launched.id.toUpperCase()} launched` : "Launch", clan: clan ? `$${clan.ticker} clan` : "Clans" }[s.route.screen];
-    document.title = `${where} · Community Coin`;
+    document.title = `${where} · Social Launch`;
   }, [s.route.screen, s.clan, !!s.launched]);
   // The address follows the screen, and the back button walks it.
   useEffect(() => {

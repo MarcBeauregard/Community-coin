@@ -148,7 +148,7 @@ export class WalletHub {
     const [configInfo, memeAccounts, unionAccounts, slot, vaultRent] = await Promise.all([
       c.getAccountInfo(new PublicKey(A.config())), ofType("Meme"), ofType("Union"), c.getSlot(), c.getMinimumBalanceForRentExemption(8),
     ]);
-    if (!configInfo) throw new Error(`Community Coin is not set up on ${this.label} yet.`);
+    if (!configInfo) throw new Error(`Social Launch is not set up on ${this.label} yet.`);
     const config = decodeConfig(configInfo.data);
     const memes = memeAccounts.map((a) => decodeMeme(a.account.data)).sort((a, b) => a.index - b.index);
     const unions = unionAccounts.map((a) => decodeUnion(a.account.data)).sort((a, b) => a.id - b.id);

@@ -99,7 +99,7 @@ async function bootDemo() {
 
 async function bootWallet() {
   const deployment = Object.values(DEPLOYMENTS)[0];
-  if (!deployment) throw new Error("Community Coin is not deployed on a Solana cluster yet: the demo is all there is for now.");
+  if (!deployment) throw new Error("Social Launch is not deployed on a Solana cluster yet: the demo is all there is for now.");
   const hub = await WalletHub.connect(deployment);
   const session = newSession(hub);
   snapshot(session, hub.now());
@@ -190,7 +190,7 @@ function Toolbar({ session, world, account, setAccount, onWarp, onReset, onConne
   return html`<header class="top">
     <a class="skip" href="#main">Skip to content</a>
     <div class="top-inner">
-      <a class="brand" href="#market"><${Coin} symbol="CC" hue=${0} size="md" /><span>Community Coin</span></a>
+      <a class="brand" href="#market"><${Coin} symbol="SL" hue=${0} size="md" /><span>Social Launch</span></a>
       <nav class="tabs" aria-label="Pages">
         ${PAGES.map(([r, label, Icon]) => html`<a key=${r} href=${`#${r}`} aria-current=${section === r ? "page" : null}><${Icon} size=${16} />${label}</a>`)}
       </nav>
@@ -241,7 +241,7 @@ function Toasts({ toasts }) {
 /** Loading: blocks the size of the market page, so nothing jumps when the numbers land. */
 function BootSkeleton() {
   return html`<div class="boot">
-    <header class="top"><div class="top-inner"><span class="brand"><${Coin} symbol="CC" hue=${0} size="md" /><span>Community Coin</span></span></div></header>
+    <header class="top"><div class="top-inner"><span class="brand"><${Coin} symbol="SL" hue=${0} size="md" /><span>Social Launch</span></span></div></header>
     <main><div class="page">
       <div class="page-head"><h1>Market</h1><span class="tagline">Starting the demo</span></div>
       <div class="hero">

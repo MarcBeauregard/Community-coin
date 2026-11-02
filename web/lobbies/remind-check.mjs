@@ -24,7 +24,7 @@ const check = (cond, msg) => { if (cond) console.log(`  ok  ${msg}`); else { fai
   const at = Date.UTC(2026, 10, 1, 21, 0);
   const ics = icsFor(lobby, at, "https://example.org/lobbies/");
   check(ics.includes("DTSTART:20261101T210000Z") && ics.includes("DTEND:20261101T220000Z") && ics.includes("TRIGGER:-PT5M"), "the calendar event is the lobby's hour, with an alarm 5 minutes before");
-  check(ics.includes("SUMMARY:Retro Arcade Hour · Community Coin lobby") && ics.includes("8-bit mascots\\, chiptune") && ics.split("\r\n").length > 10, "named, its text escaped, lines as calendars expect");
+  check(ics.includes("SUMMARY:Retro Arcade Hour · Social Launch lobby") && ics.includes("8-bit mascots\\, chiptune") && ics.split("\r\n").length > 10, "named, its text escaped, lines as calendars expect");
   const g = new URL(googleCalendarUrl(lobby, at, "https://example.org/"));
   check(g.hostname === "calendar.google.com" && g.searchParams.get("dates") === "20261101T210000Z/20261101T220000Z", "and a Google Calendar link for the same hour");
   const fired = [];

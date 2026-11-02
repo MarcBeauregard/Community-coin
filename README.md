@@ -1,8 +1,8 @@
-# Community Coin
+# Social Launch
 
 > *« the first person to figure out the vamp/pvp problem with memes will be a billionaire »* (@alpha_co)
 
-Community Coin est un launchpad de memecoins sur **Solana** (un programme Anchor, testé) conçu contre les deux
+Social Launch est un launchpad de memecoins sur **Solana** (un programme Anchor, testé) conçu contre les deux
 maladies des memes : le **vamp** (chaque meme qui marche est copié, et chaque copie vide l'original) et le
 **PvP** (les premiers arrivés, souvent des bots, revendent sur la vague des suivants).
 
@@ -201,7 +201,7 @@ retire sa part avec `claim_fees`, comme un créateur.
 `npm run simulate:web` (`web/simulate.mjs`) joue 10 fois le même scénario sur les règles du programme : un
 original (`PNUT`, 24 acheteurs) puis 5 copies (10 acheteurs chacune), environ 1 800 SOL d'argent « retail » au
 total. À chaque lancement : le créateur et un bot sniper entrent en premier (dans l'enchère groupée côté
-Community Coin, avec la première moitié des acheteurs), puis le reste de la vague. Ensuite la retombée : le bot
+Social Launch, avec la première moitié des acheteurs), puis le reste de la vague. Ensuite la retombée : le bot
 vend tout ce qu'il peut, la moitié des acheteurs de la vague (les « paper hands ») vend derrière lui. Quand la
 hype s'arrête, tout le monde vend ce qu'il reste dans un ordre aléatoire. Tout finit en SOL, donc la somme est
 exactement nulle : la seule question est qui paie qui.
@@ -209,7 +209,7 @@ exactement nulle : la seule question est qui paie qui.
 Les deux mondes paient le même 1 % de frais par échange, dont 0,2 % au protocole (`PROTOCOL=0` le retire).
 Résultat moyen en SOL, le bot sortant à un moment aléatoire de la fin (personne ne sait où est le sommet) :
 
-| | Aujourd'hui | Community Coin |
+| | Aujourd'hui | Social Launch |
 |---|---:|---:|
 | Bot sniper | +1 590 | +1 394 |
 | Créateur de l'original | +10,6 | +26,5 |
@@ -239,7 +239,7 @@ dit d'où vient chaque effet :
 | Enchère + vesting | +875 | −269 | −608 | −877 |
 | Enchère + vesting + part de pic | +802 | −242 | −565 | −807 |
 | Enchère + lignée | +1 628 | −427 | −1 189 | −1 616 |
-| Tout (Community Coin) | +1 394 | −208 | −1 178 | −1 385 |
+| Tout (Social Launch) | +1 394 | −208 | −1 178 | −1 385 |
 
 Ce qu'il faut en retenir, sans enjoliver :
 

@@ -21,7 +21,7 @@ export const GLOSSARY = {
   spike: ["Spike", "How far the price sits above its 1h reference. A big spike usually means a wave of buyers just arrived."],
   spikeShare: ["Spike share", "{spike} of what a sale gets above the 1h reference stays in the reserve, which lifts the price for everyone still holding."],
   creatorFee: ["Creator fee", "{creator} of every trade on a meme's curve goes to the person who launched it."],
-  protocolFee: ["Protocol fee", "{protocol} of every trade goes to Community Coin. It comes out of the 1% fee, never on top of it, and the program caps it at 0.5% for good."],
+  protocolFee: ["Protocol fee", "{protocol} of every trade goes to Social Launch. It comes out of the 1% fee, never on top of it, and the program caps it at 0.5% for good."],
   slippage: ["Slippage", "How far the price may move before your trade goes through. Beyond 1%, it is refused and nothing happens."],
   priceImpact: ["Price impact", "How much your own trade moves the price against you, fees left out. Bigger trades move it more."],
   union: ["Union", "A vote by which a rival root joins another family: its SOL buys the target, and its holders keep their tokens."],

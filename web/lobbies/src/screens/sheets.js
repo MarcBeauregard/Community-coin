@@ -300,7 +300,7 @@ function ReplaySheet({ s, a }) {
     anchor.click();
     a.cardDone("Video saved");
   };
-  const caption = winner ? `The hour that launched $${winner.ticker}, in 30 seconds.${l && isAddress(l.mint) ? "" : " A Community Coin practice lobby."}` : "A Community Coin lobby, in 30 seconds.";
+  const caption = winner ? `The hour that launched $${winner.ticker}, in 30 seconds.${l && isAddress(l.mint) ? "" : " A Social Launch practice lobby."}` : "A Social Launch lobby, in 30 seconds.";
   const share = async () => {
     try { await navigator.share({ files: [video.file], text: caption, title: "Lobby replay" }); a.cardDone("Shared"); }
     catch (e) { if (e?.name !== "AbortError") save(); }

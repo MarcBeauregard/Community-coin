@@ -230,9 +230,9 @@ export function Discover({ s, a, phone }) {
     <div class="ambient" style=${{ background: ambient(lead.hue) }} />
     ${phone
       ? html`<header class="row" style="position:relative;justify-content:space-between;padding:16px 16px 4px 20px;flex-wrap:nowrap">
-          <span role="img" aria-label="Community Coin"><${I.Logo} size=${28} /></span><${WalletPill} s=${s} a=${a} /></header>`
+          <span role="img" aria-label="Social Launch"><${I.Logo} size=${28} /></span><${WalletPill} s=${s} a=${a} /></header>`
       : html`<header class="topbar glass">
-          <button type="button" class="brand" onClick=${() => a.go({ screen: "discover" })}><${I.Logo} /><span>Community Coin</span></button>
+          <button type="button" class="brand" onClick=${() => a.go({ screen: "discover" })}><${I.Logo} /><span>Social Launch</span></button>
           <nav aria-label="Sections" style="margin:0 auto"><${Segmented} label="Sections" options=${[{ id: "discover", label: "Lobbies" }, { id: "clan", label: "Clans" }]} value="discover" onChange=${(id) => (id === "clan" ? a.openClan(s.clan) : null)} /></nav>
           <${WalletPill} s=${s} a=${a} />
         </header>`}

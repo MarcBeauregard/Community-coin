@@ -1,4 +1,4 @@
-//! Community Coin on Solana: a memecoin launchpad that turns the vamp/PvP game into a family game.
+//! Social Launch on Solana: a memecoin launchpad that turns the vamp/PvP game into a family game.
 //!
 //!  1. One meme, one ticker. A meme's mint address is derived from its normalized ticker (case, punctuation and
 //!     leetspeak folded), so a duplicate cannot be created at all.

@@ -38,13 +38,13 @@ function fold(line) {
 /** An .ics file for the lobby's hour, with an alarm 5 minutes before. */
 export function icsFor({ id, name, theme, host }, at, url) {
   return [
-    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Community Coin//Lobbies//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
+    "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Social Launch//Lobbies//EN", "CALSCALE:GREGORIAN", "METHOD:PUBLISH",
     "BEGIN:VEVENT",
-    `UID:lobby-${id}-${at}@community-coin`,
+    `UID:lobby-${id}-${at}@social-launch`,
     `DTSTAMP:${stamp(Date.now())}`,
     `DTSTART:${stamp(at)}`,
     `DTEND:${stamp(at + 3600_000)}`,
-    `SUMMARY:${esc(`${name} · Community Coin lobby`)}`,
+    `SUMMARY:${esc(`${name} · Social Launch lobby`)}`,
     `DESCRIPTION:${esc(`${theme}\nHosted by @${host}. One hour to pick a coin together: pledge on the idea you want launched.\n${url}`)}`,
     `URL:${url}`,
     "BEGIN:VALARM", "ACTION:DISPLAY", `DESCRIPTION:${esc(`${name} opens in 5 minutes`)}`, "TRIGGER:-PT5M", "END:VALARM",
@@ -54,12 +54,12 @@ export function icsFor({ id, name, theme, host }, at, url) {
 
 /** The same event, as a link that opens Google Calendar's new-event page. */
 export function googleCalendarUrl({ name, theme, host }, at, url) {
-  const q = new URLSearchParams({ action: "TEMPLATE", text: `${name} · Community Coin lobby`, dates: `${stamp(at)}/${stamp(at + 3600_000)}`,
+  const q = new URLSearchParams({ action: "TEMPLATE", text: `${name} · Social Launch lobby`, dates: `${stamp(at)}/${stamp(at + 3600_000)}`,
     details: `${theme}\nHosted by @${host}.\n${url}`, location: url });
   return `https://calendar.google.com/calendar/render?${q}`;
 }
 
-export const calendarFileName = (lobby) => `${lobby.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "community-coin-lobby"}.ics`;
+export const calendarFileName = (lobby) => `${lobby.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "social-launch-lobby"}.ics`;
 
 /** Whether this browser can show notifications, and what the person said: "granted" | "denied" | "default" | null. */
 export function notifyPermission() {

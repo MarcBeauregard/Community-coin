@@ -99,7 +99,7 @@ export function drawFrame(g, r, p) {
   g.arc(88, H - 70, 6, 0, Math.PI * 2);
   g.fill();
   g.fillStyle = "rgba(235,235,245,0.6)";
-  g.fillText("Community Coin", 116, H - 61);
+  g.fillText("Social Launch", 116, H - 61);
 }
 
 function coinAt(g, r, ticker, x, y, rad) {

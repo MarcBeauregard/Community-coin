@@ -174,8 +174,8 @@ function Results() {
     <${Segmented} label="Scenario" value=${which} onChange=${setWhich} options=${[["random", "Bot exits at random"], ["first", "Bot sees the top"]]} size="sm" />
     <div class="scroll-x">
       <table class="results-table">
-        <caption class="sr">Mean result per group in SOL over ${simulation.seeds} scenarios, today versus Community Coin</caption>
-        <thead><tr><th scope="col">Who</th><th scope="col">Today</th><th scope="col">Community Coin</th></tr></thead>
+        <caption class="sr">Mean result per group in SOL over ${simulation.seeds} scenarios, today versus Social Launch</caption>
+        <thead><tr><th scope="col">Who</th><th scope="col">Today</th><th scope="col">Social Launch</th></tr></thead>
         <tbody>
           ${rows.map((r) => html`<tr key=${r.key} class=${r.key === "retail" ? "total" : ""}>
             <th scope="row">${r.label}</th>
@@ -239,7 +239,7 @@ export function HowItWorks({ section }) {
   return html`<div class="page how">
     <header class="page-head how-head">
       <h1>How it works</h1>
-      <p class="lede">Memecoins have two diseases. Copies drain the original (the vamp), and the first block goes to bots who sell into everyone after them (the PvP). Community Coin changes the rules of the launch so that both stop paying.</p>
+      <p class="lede">Memecoins have two diseases. Copies drain the original (the vamp), and the first block goes to bots who sell into everyone after them (the PvP). Social Launch changes the rules of the launch so that both stop paying.</p>
     </header>
 
     <section class="card how-section" id="how-problem" aria-labelledby="how-problem-title">

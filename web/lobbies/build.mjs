@@ -35,7 +35,7 @@ writeFileSync(join(dist, "index.html"), `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#000000">
-<title>Community Coin — Lobbies</title>
+<title>Social Launch — Lobbies</title>
 <meta name="description" content="Pick the next memecoin together in one hour, then stay together in its clan.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
