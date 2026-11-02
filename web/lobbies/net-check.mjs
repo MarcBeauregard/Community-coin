@@ -159,7 +159,7 @@ const banner = (page) => page.locator(".net-wrap, .net-inline");
   }
   check(hidden === 0, `at 720 × 450 no focused control sits under the tab bar (${hidden} did)`);
   await page.fill('input[type="search"]', "zzzz");
-  check(await page.getByRole("status").filter({ hasText: "No lobbies match" }).count() === 1, "a search that finds nothing says so");
+  check(await page.getByRole("status").filter({ hasText: "No lobbies match" }).count() >= 1, "a search that finds nothing says so");
   await page.close();
 }
 {

@@ -160,7 +160,7 @@ function ThisHour({ s, a, phone }) {
       <div style="display:flex;flex-direction:column;gap:6px;min-height:64px"><h3>${l.name}</h3><p class="t2 clamp2" style="font-size:14px;line-height:1.45">${l.theme}</p></div>
       <${Bar} value=${l.progress} color=${`var(--${l.tone === "neutral" ? "text" : l.tone})`} />
       <div class="foot">
-        <span class="stack">${[0, 4, 9].map((k) => html`<${Avatar} key=${k} person=${person(pal[(i + k) % pal.length])} size=${24} />`)}</span>
+        ${l.live && html`<span class="stack">${[0, 4, 9].map((k) => html`<${Avatar} key=${k} person=${person(pal[(i + k) % pal.length])} size=${24} />`)}</span>`}
         <span class="meta"><span class="num ellipsis" style="font-size:13px;font-weight:600">${l.meta}</span><span class="num t2 ellipsis" style="font-size:12px">${l.meta2}</span></span>
         <${LobbyAction} l=${l} s=${s} a=${a} />
       </div>

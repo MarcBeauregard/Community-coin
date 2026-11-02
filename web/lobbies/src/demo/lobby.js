@@ -148,6 +148,7 @@ const ERROR_TEXT = {
   TooManyIdeas: "This lobby is full.", PledgeSettled: "Already refunded or committed.", TickerHeld: "Another lobby is racing this ticker right now.", PledgeTooSmall: "A pledge is at least 0.001 SOL, or withdrawn in full.",
   IdeaRemoved: "The host removed this idea from the race.",
   BadIdea: "A ticker is 2 to 6 capital letters or digits, with a plain name.",
+  TwoIdeasEach: "Two ideas per person in a lobby.",
 };
 /** What a person reads when the program refuses an operation. */
 export const errorText = (name) => ERROR_TEXT[name] || `The program refused it (${name}).`;

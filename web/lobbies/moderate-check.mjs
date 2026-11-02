@@ -77,6 +77,12 @@ check(bond && BigInt(bond.bond) === source.chain.lobby.bond && BigInt(bond.balan
 cleo.c.practice("pledge", { symbol: "PIGW", amount: String(SOL) });
 await wait(150);
 check(cleo.last("practice")?.error === "IdeaRemoved", "a removed idea can't be backed again");
+// Not under another spelling either: the program reads "pigw" and "P1GW" as the same ticker.
+for (const sym of ["pigw", "P1GW"]) { cleo.c.practice("pledge", { symbol: sym, amount: String(SOL) }); await wait(120); }
+check(cleo.got.filter((m) => m.t === "practice").slice(-2).every((m) => m.error === "IdeaRemoved"), "nor under another spelling (lower case, look-alike digits)");
+ana.c.practice("propose", { symbol: "B0NK", name: "Not Bonk" });
+await wait(120);
+check(ana.last("practice")?.error === "MemeExists", "a well-known coin can't be borrowed with a look-alike spelling");
 const late = conn("late");
 await wait(150);
 check(!late.last("hello").race.some((r) => r.symbol === "PIGW"), "and a late joiner never sees it");
@@ -88,7 +94,7 @@ check(!late.last("hello").race.some((r) => r.symbol === "PIGW"), "and a late joi
   const tok = server.auth.issue("big");
   const raw = new WebSocket(`${base.replace("http", "ws")}/ws?lobby=412&token=${encodeURIComponent(tok)}`);
   await new Promise((r) => raw.on("open", r));
-  raw.send(JSON.stringify({ t: "chat", text: "x".repeat(3000) }));
+  raw.send(JSON.stringify({ t: "chat", text: "x".repeat(9000) }));
   await wait(300);
   const alive = await fetch(`${base}/lobbies/412`).then((r) => r.ok, () => false);
   check(alive && raw.readyState !== 1, "an oversized frame closes that socket; the server lives on");

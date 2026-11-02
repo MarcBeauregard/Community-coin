@@ -5,6 +5,7 @@
 
 import { createStage } from "./voice.mjs";
 import { addSample } from "../src/race/curve.js";
+import { symbolKey } from "../../src/protocol.js";
 
 export const PHASES = [
   { id: "gather", end: 300 },
@@ -19,11 +20,11 @@ const CONTROL = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩]/g;
 /** Cleans a chat message: no control or bidi characters, trimmed, length-capped. Empty means refused. */
 export function cleanText(text, max) {
   if (typeof text !== "string") return ""; // only text is text: an object here is someone poking at the server
-  return text.replace(CONTROL, " ").replace(/\s+/g, " ").trim().slice(0, max);
+  return text.toWellFormed().replace(CONTROL, " ").replace(/\s+/g, " ").trim().slice(0, max);
 }
 
 // Tickers of coins everyone knows: a practice idea can't borrow them.
-const RESERVED = new Set(["SOL", "WSOL", "MSOL", "USDC", "USDT", "PYUSD", "BTC", "WBTC", "ETH", "WETH", "JUP", "JTO", "PYTH", "RAY", "ORCA", "BONK", "PUMP", "TRUMP", "MELANIA", "PEPE", "DOGE", "SHIB", "PENGU", "FARTCO"]);
+const RESERVED = new Set(["SOL", "WSOL", "MSOL", "USDC", "USDT", "PYUSD", "BTC", "WBTC", "ETH", "WETH", "XRP", "BNB", "JUP", "JTO", "PYTH", "RAY", "ORCA", "BONK", "PUMP", "TRUMP", "MELANIA", "PEPE", "DOGE", "SHIB", "PENGU", "FARTCO", "GOAT", "PNUT", "MOODEN"]);
 
 export function createRoom({ id, opensAt, source, host = null, welcome = null, onStage = null, crank = null, now = () => Date.now(), chatSlowMs = 3000, chatMax = 200, historySize = 200, rate = { burst: 20, perSec: 2 } }) {
   const conns = new Map(); // connId -> { session, send, listening, lastChat, tokens, at }
@@ -36,7 +37,9 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
   const cheerTotal = { fire: 0, skull: 0 }; // the lobby's, the same for everyone (late joiners get it in the hello)
   // Ideas reported to the host (who reported each), and the ones the host took out of the race.
   const reports = new Map();
-  const removed = new Set();
+  const removed = new Set(); // keys, as the program reads a ticker (case and look-alike digits folded)
+  const keyOf = (sym) => { try { return typeof sym === "string" ? symbolKey(sym) : null; } catch { return null; } };
+  const isRemoved = (sym) => { const k = keyOf(sym); return k !== null && removed.has(k); };
   const manages = (user) => { const v = stage.view(); return !!user && (user === v.host || v.cohosts.includes(user)); };
   // A settlement's transaction, when it is one on a cluster (a practice lobby's never is).
   const proof = (e) => (typeof e.signature === "string" && !source.practice ? { signature: e.signature, cluster: source.cluster ?? null } : {});
@@ -79,7 +82,7 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
   queueMicrotask(() => { for (const r of raceRows()) sent.race.set(r.index, r); if (elapsed() < 3300) sample(); });
   const toOthers = (connId, user, msg) => { const m = JSON.stringify(msg); for (const [id, x] of conns) if (id !== connId && x.session.sub === user) x.send(m); };
   const broadcast = (msg) => { const s = JSON.stringify(msg); for (const c of conns.values()) c.send(s); };
-  const raceRows = () => source.ideas().filter((d) => !removed.has(d.symbol)).map((d) => ({ index: d.index, symbol: d.symbol, name: d.name, proposer: d.proposer ?? "", pledged: String(d.pledged), backers: d.backers }));
+  const raceRows = () => source.ideas().filter((d) => !isRemoved(d.symbol)).map((d) => ({ index: d.index, symbol: d.symbol, name: d.name, proposer: d.proposer ?? "", pledged: String(d.pledged), backers: d.backers }));
   // Who is in: everyone counted once (a person with two tabs is one), the guests among them, and the faces to show:
   // the last signed-in people to come in, newest first.
   const FACES = 12;
@@ -197,12 +200,13 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
           // Anyone signed in can tell the host an idea breaks the lobby's rules; once each.
           if (c.session.guest) return { t: "error", code: "SignInToReport" };
           const sym = typeof msg.symbol === "string" ? msg.symbol : "";
-          if (!source.ideas().some((d) => d.symbol === sym) || removed.has(sym)) return { t: "error", code: "UnknownIdea" };
-          if (!reports.has(sym)) reports.set(sym, new Set());
-          reports.get(sym).add(c.session.sub);
+          if (!source.ideas().some((d) => keyOf(d.symbol) === keyOf(sym)) || isRemoved(sym)) return { t: "error", code: "UnknownIdea" };
+          const canon = source.ideas().find((d) => keyOf(d.symbol) === keyOf(sym)).symbol;
+          if (!reports.has(canon)) reports.set(canon, new Set());
+          reports.get(canon).add(c.session.sub);
           tellManagers();
-          toOthers(connId, c.session.sub, { t: "reported", symbol: sym, quiet: true });
-          return { t: "reported", symbol: sym };
+          toOthers(connId, c.session.sub, { t: "reported", symbol: canon, quiet: true });
+          return { t: "reported", symbol: canon };
         }
         case "remove": {
           // The host (or a co-host) takes an idea out of the race: every pledge on it comes back now, and its bond.
@@ -211,8 +215,8 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
           if (!source.practice) return { t: "error", code: "NotPractice" };
           if (phaseAt(elapsed()) === "lock" || phaseAt(elapsed()) === "done") return { t: "error", code: "PledgesLocked" };
           const ch = source.chain;
-          const idea = ch.ideas.find((d) => d.symbol === msg.symbol);
-          if (!idea || removed.has(idea.symbol)) return { t: "error", code: "UnknownIdea" };
+          const idea = ch.ideas.find((d) => keyOf(d.symbol) !== null && keyOf(d.symbol) === keyOf(msg.symbol));
+          if (!idea || isRemoved(idea.symbol)) return { t: "error", code: "UnknownIdea" };
           const back = [];
           for (const [user, p] of ch.pledges) {
             if (p.idea !== idea.index || p.settled || p.amount === 0n) continue;
@@ -220,7 +224,7 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
             if (ch.apply("withdraw", { user, symbol: idea.symbol, amount }, elapsed()).ok) back.push([user, amount]);
           }
           idea.bond_returned = true; // the proposer's practice bond (src/chain/rules.js has no instruction for this)
-          removed.add(idea.symbol);
+          removed.add(keyOf(idea.symbol));
           reports.delete(idea.symbol);
           broadcast({ t: "removed", symbol: idea.symbol, by: c.session.sub, race: raceRows() });
           for (const r of raceRows()) sent.race.set(r.index, r);
@@ -250,9 +254,10 @@ export function createRoom({ id, opensAt, source, host = null, welcome = null, o
           if (msg.t === "propose") {
             args.name = cleanText(args.name, 24);
             if (!/^[A-Z0-9]{2,6}$/.test(args.symbol) || args.name.length < 2 || /[<>]/.test(args.name)) return { t: "practice", op: msg.t, ok: false, error: "BadIdea", ...practiceOf(me) };
-            if (RESERVED.has(args.symbol)) return { t: "practice", op: msg.t, ok: false, error: "MemeExists", ...practiceOf(me) };
+            if (source.chain.ideas.filter((d) => d.proposer === me).length >= 2) return { t: "practice", op: msg.t, ok: false, error: "TwoIdeasEach", ...practiceOf(me) };
+            if ([...RESERVED].some((r) => keyOf(r) === keyOf(args.symbol))) return { t: "practice", op: msg.t, ok: false, error: "MemeExists", ...practiceOf(me) };
           }
-          if (removed.has(args.symbol) || removed.has(args.to)) return { t: "practice", op: msg.t, ok: false, error: "IdeaRemoved", ...practiceOf(me) };
+          if (isRemoved(args.symbol) || isRemoved(args.to)) return { t: "practice", op: msg.t, ok: false, error: "IdeaRemoved", ...practiceOf(me) };
           if ((msg.t === "pledge" || msg.t === "propose") && practiceBalance(me) < (msg.t === "pledge" ? args.amount : source.chain.lobby.bond)) {
             return { t: "practice", op: msg.t, ok: false, error: "NotEnoughPractice", ...practiceOf(me) };
           }

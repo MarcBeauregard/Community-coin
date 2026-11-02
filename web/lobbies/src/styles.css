@@ -538,3 +538,4 @@ button.profile-row:hover { background: rgba(255, 255, 255, 0.04); }
 /* A phone's tab bar never hides the control that has the focus: scrolling into view keeps clear of it. */
 :root:has(.app.phone) { scroll-padding-bottom: 104px; scroll-padding-top: 16px; }
 .app.phone .scroll { scroll-padding-bottom: 104px; }
+.hscroll { position: relative; } /* a hidden label inside a card stays inside the scroller */

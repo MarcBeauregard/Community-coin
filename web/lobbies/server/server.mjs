@@ -21,7 +21,7 @@ import http from "node:http";
 import { randomUUID } from "node:crypto";
 import { WebSocketServer } from "ws";
 import { createAuth, signInMessage } from "./auth.mjs";
-import { createRoom } from "./room.mjs";
+import { createRoom, cleanText } from "./room.mjs";
 import { simulatedSource, chainSource } from "./sources.mjs";
 import { createCrank, stateOfRules, rulesExecutor } from "./crank.mjs";
 import { createClans } from "./clans.mjs";
@@ -121,7 +121,8 @@ export function createServer({ port = 0, guests = false, devSessions = false, da
       try { return json(res, 200, auth.nonce(site)); } catch (e) { return json(res, 429, { error: e.message }); }
     }
     if (req.method === "POST" && url.pathname === "/auth/verify") {
-      try { return json(res, 200, { token: auth.verify(await readBody(req)) }); } catch (e) { return json(res, 401, { error: e.message }); }
+      // Sign-in failures are said in the server's own words, never an internal message.
+      try { return json(res, 200, { token: auth.verify(await readBody(req)) }); } catch (e) { return json(res, 401, { error: /^[A-Z][\w ,.'’-]{3,80}$/.test(e.message) && !/Error|undefined|null|TypeError/.test(e.message) ? e.message : "Sign-in failed. Try again." }); }
     }
     if (req.method === "POST" && url.pathname === "/auth/guest") {
       if (!guests) return json(res, 403, { error: "Guests are not allowed" });
@@ -131,7 +132,9 @@ export function createServer({ port = 0, guests = false, devSessions = false, da
       if (!devSessions) return json(res, 404, { error: "Not found" });
       const { sub } = await readBody(req);
       if (sub !== undefined && typeof sub !== "string") return json(res, 400, { error: "sub is a string" });
-      return json(res, 200, { token: auth.issue((sub ?? "dev").slice(0, 64)) });
+      const name = cleanText(sub ?? "dev", 64).replace(/[\u202A-\u202E\u2066-\u2069]/g, "");
+      if (!name) return json(res, 400, { error: "A name, please" });
+      return json(res, 200, { token: auth.issue(name) });
     }
     const up = /^\/clans\/([^/]+)\/media$/.exec(url.pathname);
     if (req.method === "POST" && up) {
@@ -181,7 +184,7 @@ export function createServer({ port = 0, guests = false, devSessions = false, da
     json(res, 404, { error: "Not found" });
   }
 
-  const wss = new WebSocketServer({ server, maxPayload: 2048 });
+  const wss = new WebSocketServer({ server, maxPayload: 8192 });
   // A socket's error (a frame over the limit, a broken peer) ends that socket, never the server.
   wss.on("error", (e) => console.error(`ws server: ${e.message}`));
   wss.on("connection", (ws, req) => {

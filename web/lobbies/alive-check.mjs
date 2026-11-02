@@ -91,6 +91,7 @@ const visible = (loc, ms = 4000) => loc.first().waitFor({ timeout: ms }).then(()
   const welcome = page.getByRole("note", { name: "The host’s welcome" });
   check(await visible(welcome.getByText("Welcome in! Animal coins only.")), "the host's welcome is pinned atop the chat");
   check(await welcome.getByText("mira.sol").isVisible(), "signed by the host");
+  check(await page.getByRole("button", { name: /^Fire: love this pitch/ }).count() === 0, "with only an away host on stage, nothing to react to");
   const conns = ["ana", "ben", "cleo"].map((who) => connectLobby({ base, lobby: 412, token: server.auth.issue(who), onMessage: () => {} }));
   check(await visible(page.locator(".feed .sys", { hasText: /^3 people just arrived$/ })), "three arrivals make one quiet line: 3 people just arrived");
   check(await page.locator(".feed .sys", { hasText: /just arrived/ }).count() === 1, "not three lines");
@@ -100,7 +101,9 @@ const visible = (loc, ms = 4000) => loc.first().waitFor({ timeout: ms }).then(()
   check(await faces.getByText("cleo").count() === 1, "each face is named for a screen reader");
   check(!(await page.getByText("+1,269").count()), "never the demo's crowd");
   // 🔥 on the stage: it flies at once for the person, and the others' come in.
-  const fire = page.getByRole("button", { name: "Fire: love this pitch" });
+  const hostConn = connectLobby({ base, lobby: 412, token: server.auth.issue("mira.sol"), onMessage: () => {} }); // the host comes in: the stage is live
+  const fire = page.getByRole("button", { name: /^Fire: love this pitch/ });
+  await fire.waitFor({ timeout: 3000 });
   await fire.click();
   check(await page.locator(".cheer").count() >= 1 && (await fire.getAttribute("aria-label")).endsWith(", 1"), "a tap on 🔥 flies over the stage at once, and counts, in its name too");
   conns[0].cheer("fire");
@@ -113,6 +116,7 @@ const visible = (loc, ms = 4000) => loc.first().waitFor({ timeout: ms }).then(()
   check(await welcome.count() === 0, "the welcome can be hidden");
   check(errors.length === 0, `no script errors${errors.length ? `: ${errors.join(" | ")}` : ""}`);
   conns.forEach((c) => c.close());
+  hostConn.close();
   await page.close();
   await server.close();
 }
