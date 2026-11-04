@@ -1,0 +1,20 @@
+# Render Blueprint for the Social Launch closed beta (free plan): New > Blueprint > this repository.
+# The free plan sleeps after ~15 min without visitors and keeps no disk: read /stats before a redeploy.
+services:
+  - type: web
+    name: social-launch-beta
+    runtime: docker
+    plan: free
+    branch: claude/trusting-babbage-0qiv25
+    dockerfilePath: ./web/lobbies/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: STATS_TOKEN
+        generateValue: true
+      - key: LOBBY_HOST
+        sync: false
+      - key: LOBBY_HOST_NAME
+        sync: false

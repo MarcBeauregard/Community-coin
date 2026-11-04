@@ -24,4 +24,4 @@ USER node
 VOLUME /data
 EXPOSE 8790
 HEALTHCHECK --interval=30s --timeout=5s CMD node -e "fetch('http://localhost:'+process.env.PORT+'/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
-CMD ["sh", "-c", "exec node web/lobbies/server/server.mjs --schedule hourly --guests --trust-proxy --static web/dist/lobbies ${ORIGINS:+--origins $ORIGINS}"]
+CMD ["node", "web/lobbies/server/server.mjs", "--schedule", "hourly", "--guests", "--trust-proxy", "--static", "web/dist/lobbies"]

@@ -6,7 +6,7 @@
 //          [--rpc <url> --program <id>]    (race from the chain through the indexer; else the simulated demo lobby)
 //          [--schedule hourly --host <wallet> [--name …] [--theme …] [--host-name …]] [--static web/dist/lobbies]
 //          (the closed beta: an empty practice lobby every hour, the app served from the same address)
-//   env: PORT, DATA_DIR, SESSION_SECRET (sessions survive restarts), STATS_TOKEN (GET /stats), LOBBY_HOST, …
+//   env: PORT, DATA_DIR, ORIGINS (or Render's RENDER_EXTERNAL_URL), SESSION_SECRET (sessions survive restarts), STATS_TOKEN (GET /stats), LOBBY_HOST, …
 //
 //   GET  /health                      → { ok, lobbies }
 //   GET  /lobbies                     → { lobbies: [{ id, opensAt, name, theme, phase, inside, listening }], current }
@@ -320,7 +320,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const secret = process.env.SESSION_SECRET ? Buffer.from(process.env.SESSION_SECRET) : undefined;
   if (secret && secret.length < 32) throw new Error("SESSION_SECRET must be 32 characters or more");
   const common = { port: Number(process.env.PORT ?? arg("port") ?? 8790), guests: flag("guests"), devSessions: flag("dev-sessions"),
-    maxPerIp: Number(arg("max-per-ip") ?? 50), httpPerMin: Number(arg("http-per-min") ?? 120), origins: arg("origins")?.split(","), trustProxy: flag("trust-proxy"),
+    maxPerIp: Number(arg("max-per-ip") ?? 50), httpPerMin: Number(arg("http-per-min") ?? 120), origins: (arg("origins") ?? process.env.ORIGINS ?? process.env.RENDER_EXTERNAL_URL)?.split(","), trustProxy: flag("trust-proxy"),
     dataDir: arg("data") ?? process.env.DATA_DIR, staticDir: arg("static") ?? null, statsToken: process.env.STATS_TOKEN ?? null,
     auth: secret ? createAuth({ secret }) : undefined,
     // --sfu wss://… with LIVEKIT_API_KEY and LIVEKIT_API_SECRET in the environment
