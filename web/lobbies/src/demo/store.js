@@ -9,7 +9,7 @@ import { CLANS, CROWD, CHATTER, ME, seedClanMessages, seedLobbyChat, message, FE
 import { HOUR, sol, solExact } from "../format.js";
 import { connectLobby, connectClan, voiceToken, walletSession, guestSession } from "../realtime/client.js";
 import { createAudio } from "../voice/audio.js";
-import { detectWallets, connectWallet, signText, disconnectWallet, lastWallet, watchWallet, walletError, shortAddress, readBalance } from "../wallet/wallets.js";
+import { detectWallets, connectWallet, signText, disconnectWallet, lastWallet, watchWallet, walletError, shortAddress, readBalance, onPhone } from "../wallet/wallets.js";
 import { addSample, totalsOf } from "../race/curve.js";
 import { nextOpening, hhmm, dayOf, askToNotify, notifyPermission, loadReminders, saveReminders, armReminders, notify } from "../remind/remind.js";
 import { createDemoLobby, ideasFrom, ideaMeta, myPledge, act, crank, launchSummary, lockedOf, liveLaunch, founderAllocation, toLamports, toSol, errorText, receiptFor } from "./lobby.js";
@@ -125,10 +125,10 @@ export function createStore({ scene, freeze, live = false } = {}) {
     if (state.ideas !== before.ideas && state.elapsed < LOCK_AT && !state.launched) state = { ...state, curve: addSample(state.curve, state.elapsed, totalsOf(state.ideas)) };
     subscribers.forEach((fn) => fn(state));
   };
-  const toast = (text, tone = "lime") => {
+  const toast = (text, tone = "lime", ms = 2800) => {
     set({ toast: { text, tone, id: Math.random() } });
     const mine = state.toast.id;
-    later(() => { if (state.toast && state.toast.id === mine) set({ toast: null }); }, 2800);
+    later(() => { if (state.toast && state.toast.id === mine) set({ toast: null }); }, ms);
   };
   const chatLine = (line) => [...state.chat, line].slice(-60);
   let settledEarly = null; // this wallet's refund, when it came before the launch
@@ -590,7 +590,9 @@ export function createStore({ scene, freeze, live = false } = {}) {
         const address = await connectWallet(w);
         await actions.signIn(w, address);
         set({ sheet: null });
-        toast(`Connected · ${shortAddress(address)}`);
+        // On a phone the wallet's own browser keeps the session; a link opened anywhere else starts over.
+        if (onPhone() && server) toast(`Connected · ${shortAddress(address)}. Next time, open this page from ${w.name}’s browser: you’ll be signed in already.`, "lime", 8000);
+        else toast(`Connected · ${shortAddress(address)}`);
         actions.resume();
       } catch (e) {
         // Refused at the signature: the address was shared, but nothing else, and nobody is signed in.
