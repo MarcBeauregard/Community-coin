@@ -9,10 +9,10 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-community_coin = "CommCoin11111111111111111111111111111111111"
+community_coin = "AR1viUeM7HjnNyX5BFUAt9QpbqEk6Z6jc3Yz8EYgiHsX"
 
 [programs.devnet]
-community_coin = "CommCoin11111111111111111111111111111111111"
+community_coin = "AR1viUeM7HjnNyX5BFUAt9QpbqEk6Z6jc3Yz8EYgiHsX"
 
 [provider]
 cluster = "devnet"

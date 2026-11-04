@@ -5,7 +5,7 @@
 import { PublicKey, SystemProgram } from "@solana/web3.js";
 import { symbolKey } from "../../../src/protocol.js";
 
-export const PROGRAM_ID = "CommCoin11111111111111111111111111111111111";
+export const PROGRAM_ID = "AR1viUeM7HjnNyX5BFUAt9QpbqEk6Z6jc3Yz8EYgiHsX";
 export const TOKEN_2022 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
 export const SYSTEM = SystemProgram.programId.toBase58();
 export const DEFAULT_KEY = PublicKey.default.toBase58();

@@ -37,7 +37,7 @@ use events::*;
 use math::*;
 use state::*;
 
-declare_id!("CommCoin11111111111111111111111111111111111");
+declare_id!("AR1viUeM7HjnNyX5BFUAt9QpbqEk6Z6jc3Yz8EYgiHsX");
 
 pub const MAX_DEPTH: usize = 6;
 pub const DECIMALS: u8 = 6;

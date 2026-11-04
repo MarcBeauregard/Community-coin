@@ -11,7 +11,7 @@ export const TOKEN_2022 = new PublicKey("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpP
 export const ASSOCIATED_TOKEN = new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 export const SYSTEM = SystemProgram.programId;
 /** The program's address in solana/programs/community-coin (declare_id!); a deployment gives its own. */
-export const PROGRAM_ID = "CommCoin11111111111111111111111111111111111";
+export const PROGRAM_ID = "AR1viUeM7HjnNyX5BFUAt9QpbqEk6Z6jc3Yz8EYgiHsX";
 
 const fromHex = (s) => Uint8Array.from(s.match(/../g), (b) => parseInt(b, 16));
 export const toHex = (bytes) => Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
