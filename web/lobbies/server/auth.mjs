@@ -7,7 +7,8 @@ import { PublicKey } from "@solana/web3.js";
 import { signInMessage } from "../src/realtime/siws.js";
 
 const NONCE_TTL = 5 * 60 * 1000;
-const SESSION_TTL = 24 * 3600 * 1000;
+const SESSION_TTL = 24 * 3600 * 1000; // a guest
+const WALLET_TTL = 30 * 24 * 3600 * 1000; // a signed-in wallet: one signature a month, not a visit
 const MAX_NONCES = 100_000;
 // DER prefix of an Ed25519 SubjectPublicKeyInfo; the 32 raw key bytes follow it.
 const ED25519_SPKI = Buffer.from("302a300506032b6570032100", "hex");
@@ -50,7 +51,7 @@ export function createAuth({ secret = randomBytes(32), domain = "lobbies.communi
       return this.issue(address);
     },
     issue(address, { guest = false } = {}) {
-      const body = Buffer.from(JSON.stringify({ sub: address, guest, exp: now() + SESSION_TTL })).toString("base64url");
+      const body = Buffer.from(JSON.stringify({ sub: address, guest, exp: now() + (guest ? SESSION_TTL : WALLET_TTL) })).toString("base64url");
       return `${body}.${mac(body)}`;
     },
     /** The session in a token, or null if it is forged or expired. */

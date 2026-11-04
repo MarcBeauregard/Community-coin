@@ -61,6 +61,7 @@ async function open(url, { wallet = true, mode = "ok", account = 0, width = 1440
       const key = () => ({ toBase58: () => addresses[current], toString: () => addresses[current] });
       window.__wallet = {
         switchTo(i) { current = i; (listeners.accountChanged ?? []).forEach((f) => f(key())); },
+        lock() { (listeners.disconnect ?? []).forEach((f) => f()); }, // Phantom locking itself after a while
         calls: { connect: 0, silent: 0 },
       };
       window.phantom = { solana: {
@@ -150,6 +151,13 @@ const live = `${app}?live=${encodeURIComponent(base)}#/lobby`;
   page = await open(live, { context });
   check(await until(async () => (await pill(page).textContent()).includes(keys[0].address.slice(0, 4))), "coming back reconnects quietly");
   check(signs === 1, "without signing again");
+  check(JSON.stringify(await page.evaluate(() => window.__wallet.calls)) === '{"connect":0,"silent":0}', "nor asking the wallet anything (a locked Phantom would pop up for its password)");
+  await page.evaluate(() => window.__wallet.lock());
+  await page.waitForTimeout(400);
+  check((await pill(page).textContent()).includes(keys[0].address.slice(0, 4)), "the wallet locking itself doesn't sign the app out");
+  await page.close();
+  page = await open(live, { context });
+  check(await until(async () => (await pill(page).textContent()).includes(keys[0].address.slice(0, 4))) && signs === 1, "and after it, coming back still asks for nothing");
   check(await page.getByText(/Backing with 1\.0 SOL/).first().waitFor({ timeout: 4000 }).then(() => true, () => false), "and the pledge is still there");
   await page.evaluate(() => window.__wallet.switchTo(1));
   check(await page.getByText(/You switched accounts in your wallet/).first().waitFor({ timeout: 3000 }).then(() => true, () => false), "switching accounts in the wallet signs out, and says why");

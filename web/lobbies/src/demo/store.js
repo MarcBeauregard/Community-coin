@@ -413,8 +413,12 @@ export function createStore({ scene, freeze, live = false } = {}) {
     if (link) actions.goLive({ base: server.base, lobby: server.lobby, token });
     if (clanLink) { clanLink.close(); clanLink = null; if (state.clan === "new") actions.openClan("new"); }
   }
-  const cached = (address) => { try { const c = JSON.parse(localStorage.getItem(SESSION) ?? "null"); return c && c.address === address && c.base === server.base && c.exp > Date.now() ? c.token : null; } catch { return null; } };
-  const remember = (address, token) => { try { localStorage.setItem(SESSION, JSON.stringify({ address, token, base: server.base, exp: Date.now() + 20 * 3600 * 1000 })); } catch {} };
+  // The session is kept with the wallet it was signed with, until it expires (the token says when): coming back,
+  // nobody asks the wallet anything (a locked Phantom would open to ask for its password at every visit).
+  const saved = () => { try { const c = JSON.parse(localStorage.getItem(SESSION) ?? "null"); return c && c.base === server.base && c.exp > Date.now() ? c : null; } catch { return null; } };
+  const cached = (address) => { const c = saved(); return c && c.address === address ? c.token : null; };
+  const expOf = (token) => { try { return JSON.parse(atob(token.split(".")[0].replace(/-/g, "+").replace(/_/g, "/"))).exp - 3600_000; } catch { return Date.now() + 20 * 3600 * 1000; } };
+  const remember = (address, token, wallet) => { try { localStorage.setItem(SESSION, JSON.stringify({ address, token, wallet, base: server.base, exp: expOf(token) })); } catch {} };
   const forget = () => { try { localStorage.removeItem(SESSION); } catch {} };
   async function signedOut(note) {
     unwatch(); unwatch = () => {};
@@ -612,7 +616,7 @@ export function createStore({ scene, freeze, live = false } = {}) {
       if (server) {
         setWallet({ status: "signing", address });
         const token = cached(address) ?? await walletSession(server.base, address, (text) => signText(w, text));
-        remember(address, token);
+        remember(address, token, w.id);
         useSession(token);
         signedIn = true;
       }
@@ -623,7 +627,8 @@ export function createStore({ scene, freeze, live = false } = {}) {
           if (next === state.wallet.address) return;
           signedOut().then(() => actions.openConnect("switched"));
         },
-        onDisconnect: () => signedOut(`${w.name} disconnected.`),
+        // The wallet locking (or closing) is not signing out: the session stands until "Disconnect" here.
+        onDisconnect: () => {},
       });
       if (rpc) readSolana(address);
     },
@@ -631,6 +636,9 @@ export function createStore({ scene, freeze, live = false } = {}) {
     async restoreWallet() {
       const w = lastWallet();
       if (!w) return;
+      // Live with a saved session from this wallet: signed in at once, without a word to the wallet.
+      const c = server && saved();
+      if (c && (c.wallet ?? w.id) === w.id) { try { await actions.signIn(w, c.address); return; } catch { /* fall back to asking quietly */ } }
       setWallet({ status: "restoring", id: w.id, name: w.name }); // the corner waits quietly instead of flashing Connect
       try {
         const address = await connectWallet(w, { silent: true });
