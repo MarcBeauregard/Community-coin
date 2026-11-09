@@ -539,3 +539,5 @@ button.profile-row:hover { background: rgba(255, 255, 255, 0.04); }
 :root:has(.app.phone) { scroll-padding-bottom: 104px; scroll-padding-top: 16px; }
 .app.phone .scroll { scroll-padding-bottom: 104px; }
 .hscroll { position: relative; } /* a hidden label inside a card stays inside the scroller */
+/* Live, before the lobby's server has answered (main.js Opening). */
+.opening { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 24px; }

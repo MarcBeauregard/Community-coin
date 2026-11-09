@@ -2,7 +2,7 @@
 // default, each a distinct wallet), then measures what each of them lives: joining, a chat message reaching
 // everyone, the race deltas and presence arriving, and the server's memory. Fails above the budgets below.
 // (All the sockets come from one address here, so the per-address limits are raised for the run.)
-// Usage: node web/lobbies/load-check.mjs [clients=5000]
+// Usage: node web/lobbies/load-check.mjs [clients=5000]   (or LOAD_PEOPLE=1000 for a small runner)
 
 import { spawn } from "node:child_process";
 import { dirname, join } from "node:path";
@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import WebSocket from "ws";
 import { readFileSync } from "node:fs";
 
-const N = Number(process.argv[2] ?? 5000);
+const N = Number(process.argv[2] ?? process.env.LOAD_PEOPLE ?? 5000);
 const BUDGET = { joinP95: 3000, chatP95: 1000, chatMax: 2500, rssMB: 1024 };
 const PORT = 8800 + Math.floor(Math.random() * 100);
 const base = `http://127.0.0.1:${PORT}`;

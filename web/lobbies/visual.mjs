@@ -16,7 +16,7 @@ const require = createRequire(import.meta.url);
 const { chromium } = require("playwright");
 const here = dirname(fileURLToPath(import.meta.url));
 const dist = join(here, "..", "dist", "lobbies");
-const shots = process.argv[2] || join(dist, "shots");
+const shots = process.argv[2] || join(dist, "..", "lobbies-shots"); // beside the app, not in it: the app's folder is what gets served
 mkdirSync(shots, { recursive: true });
 
 const WIDTHS = [[390, 844], [768, 1024], [1280, 800], [1440, 900]];

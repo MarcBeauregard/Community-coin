@@ -11,7 +11,7 @@ import * as I from "./icons.js";
 import { phoneBreakpoint } from "./tokens.js";
 import { createStore } from "./demo/store.js";
 import { guestSession, devSession } from "./realtime/client.js";
-import { person, SPEAKERS, FEATURED } from "./demo/data.js";
+import { person, SPEAKERS } from "./demo/data.js";
 import { Discover } from "./screens/discover.js";
 import { Lobby, VoicePill } from "./screens/lobby.js";
 import { Launch } from "./screens/launch.js";
@@ -21,8 +21,12 @@ import { Sheets } from "./screens/sheets.js";
 const params = new URLSearchParams(location.search);
 // A server that serves the app itself says so (`<meta name="lobby-server" content="same-origin">`): the app plays live there.
 const served = document.querySelector('meta[name="lobby-server"]')?.content === "same-origin" ? location.origin : null;
-const liveBase = params.get("live") || served;
-const store = createStore({ scene: params.get("scene"), freeze: params.has("freeze"), live: !!liveBase });
+// A served page belongs to its server. Its address may name a lobby (`?lobby=`) and, for tests, a wallet (`&as=`,
+// refused by a server without --dev-sessions); nothing in it can point the page at another server or cluster, or
+// dress it up as a scene of the demo: a link to the real address always opens the real thing.
+const param = (k) => (served && k !== "lobby" && k !== "as" ? null : params.get(k));
+const liveBase = served ?? params.get("live");
+const store = createStore({ scene: param("scene"), freeze: !served && params.has("freeze"), live: !!liveBase });
 // A link to a screen opens on it (#/lobby, #/clan); #/launch only once there is a launch to show.
 {
   const screen = location.hash.replace("#/", "");
@@ -34,25 +38,34 @@ const store = createStore({ scene: params.get("scene"), freeze: params.has("free
 }
 // ?live=<server> joins the realtime server as a guest; connecting a wallet signs in with it (Sign-In With Solana).
 // `?rpc=<url>` reads the connected wallet's real balance from that cluster.
-if (params.get("rpc")) store.actions.setRpc(params.get("rpc"));
-// The lobby: `&lobby=<id>`, else the one the server says is on now, else the demo's.
+if (param("rpc")) store.actions.setRpc(param("rpc"));
+// The lobby: `&lobby=<id>`, else the one the server says is on now.
 async function pickLobby(base) {
-  if (params.get("lobby")) return params.get("lobby");
-  try {
-    const r = await fetch(`${base}/lobbies`);
-    if (r.ok) { const j = await r.json(); if (j.current != null) return j.current; }
-  } catch {}
-  return FEATURED.id === "fnd" ? 412 : FEATURED.id;
+  if (param("lobby")) return param("lobby");
+  const { current } = await (await fetch(`${base}/lobbies`)).json();
+  if (current === null || current === undefined) throw new Error("No lobby on this server yet");
+  return current;
 }
 if (liveBase) {
   const base = liveBase;
   // `&as=<name>` signs in as that wallet on a server started with --dev-sessions (tests, local development).
-  (params.get("as") ? devSession(base, params.get("as")) : guestSession(base))
-    .then(async (token) => {
-      store.actions.goLive({ base, lobby: await pickLobby(base), token });
-      if (!params.get("as")) store.actions.restoreWallet();
-    })
-    .catch((e) => console.error(e.message));
+  const as = param("as");
+  // Getting in takes a session and the lobby that is on. A server that is waking up, busy or out of reach is asked
+  // again, a little later each time; until it answers the page says so, and shows no lobby at all (see Opening).
+  (async () => {
+    for (let wait = 1000; ; wait = Math.min(wait * 2, 15000)) {
+      try {
+        const token = await (as ? devSession(base, as) : guestSession(base));
+        store.actions.goLive({ base, lobby: await pickLobby(base), token });
+        if (!as) store.actions.restoreWallet();
+        return;
+      } catch (e) {
+        console.error(e.message);
+        store.actions.entering(false);
+        await new Promise((r) => setTimeout(r, wait));
+      }
+    }
+  })();
 } else {
   store.actions.restoreWallet();
 }
@@ -93,6 +106,21 @@ function TabBar({ s, a }) {
   </nav>`;
 }
 
+// Live, until the lobby's server has answered: its name and nothing else. Never the demo's lobby, which would read
+// as a real one at a real address.
+function Opening({ net }) {
+  const k = netState(net);
+  const text = k === "offline" ? "You’re offline. The lobby opens when you’re back."
+    : k === "gone" ? "This lobby isn’t open on this server. Reload the page to join the one that is."
+    : k === "down" ? "Can’t reach the lobby server. Still trying."
+    : "Opening the lobby…";
+  return html`<main class="opening">
+    <${I.Logo} size=${40} />
+    <h1 class="display" style="font-size:24px">Social Launch</h1>
+    <p role="status" class="t2" style="font-size:15px;line-height:1.5;text-align:center;max-width:320px">${text}</p>
+  </main>`;
+}
+
 function App() {
   const [s, setS] = useState(store.get());
   const phone = usePhone();
@@ -112,9 +140,10 @@ function App() {
   // The tab's title says where the person is.
   useEffect(() => {
     const clan = s.clans.find((c) => c.id === s.clan);
+    if (liveBase && !s.live) { document.title = "Social Launch"; return; }
     const where = { discover: "Lobbies", lobby: lobbyInfo(s).name, launch: s.launched ? `$${s.launched.id.toUpperCase()} launched` : "Launch", clan: clan ? `$${clan.ticker} clan` : "Clans" }[s.route.screen];
     document.title = `${where} · Social Launch`;
-  }, [s.route.screen, s.clan, !!s.launched]);
+  }, [s.route.screen, s.clan, !!s.launched, !!s.live]);
   // The address follows the screen, and the back button walks it.
   useEffect(() => {
     const want = `#/${s.route.screen}`;
@@ -131,6 +160,7 @@ function App() {
     return () => removeEventListener("popstate", onPop);
   }, []);
 
+  if (liveBase && !s.live) return html`<div class="app"><${Opening} net=${s.net} /></div>`;
   const screen = s.route.screen === "launch" && !s.launched ? "discover" : s.route.screen;
   const showTabs = phone && (screen === "discover" || (screen === "clan" && s.clanView === "list"));
   return html`<div class=${`${phone ? "app phone" : "app"}${netState(s.net) ? " net-on" : ""}`} data-balance=${s.balance}>

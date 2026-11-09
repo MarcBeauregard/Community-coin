@@ -10,6 +10,9 @@ services:
     dockerContext: .
     healthCheckPath: /health
     envVars:
+      # Render's own proxy (Cloudflare) writes the visitor's address here; X-Forwarded-For can be forged by the visitor.
+      - key: TRUST_PROXY
+        value: cf-connecting-ip
       - key: SESSION_SECRET
         generateValue: true
       - key: STATS_TOKEN

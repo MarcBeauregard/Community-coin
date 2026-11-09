@@ -383,8 +383,9 @@ export function createStore({ scene, freeze, live = false } = {}) {
         break;
       case "closed":
         if (s.live) set({ live: { ...s.live, connected: false } });
-        // The server refused this session (signed out, unknown lobby): no reconnection is coming.
-        if (m.code >= 4400 && m.code < 4500 && m.code !== 4408) { clearTimeout(downTimer); setNet({ server: "gone", back: false }); }
+        if (m.code === 4401 && Date.now() - renewedAt > 60_000) { linkLost(); sessionEnded(); }
+        // The server refused this connection (unknown lobby, lobby full): no reconnection is coming.
+        else if (m.code >= 4400 && m.code < 4500 && m.code !== 4408) { clearTimeout(downTimer); setNet({ server: "gone", back: false }); }
         else linkLost();
         break;
       case "pong": {
@@ -420,13 +421,27 @@ export function createStore({ scene, freeze, live = false } = {}) {
   const expOf = (token) => { try { return JSON.parse(atob(token.split(".")[0].replace(/-/g, "+").replace(/_/g, "/"))).exp - 3600_000; } catch { return Date.now() + 20 * 3600 * 1000; } };
   const remember = (address, token, wallet) => { try { localStorage.setItem(SESSION, JSON.stringify({ address, token, wallet, base: server.base, exp: expOf(token) })); } catch {} };
   const forget = () => { try { localStorage.removeItem(SESSION); } catch {} };
-  async function signedOut(note) {
+  function dropWallet(note) {
     unwatch(); unwatch = () => {};
     walletRef = null;
     forget();
     setWallet({ status: "none", id: null, name: null, address: null, signedIn: false, balance: null, error: null });
     if (note) toast(note, "white");
+  }
+  async function signedOut(note) {
+    dropWallet(note);
     if (server) { try { useSession(await guestSession(server.base)); } catch { /* the server allows no guests: stay disconnected */ } }
+  }
+  // The server no longer knows this session (it expired, or the server's key changed): back in as a guest, asked
+  // until the server answers. A wallet that was signed in signs again the next time it is needed. Once a minute at
+  // most: a server that refuses its own fresh sessions is not asked in a loop.
+  let renewedAt = 0;
+  async function sessionEnded() {
+    renewedAt = Date.now();
+    dropWallet(state.wallet.signedIn ? "Your session ended. Connect your wallet to sign in again." : null);
+    for (let wait = 1000; ; wait = Math.min(wait * 2, 15000)) {
+      try { return useSession(await guestSession(server.base)); } catch { await new Promise((r) => later(r, wait)); }
+    }
   }
   let clanLink = null;
   const hhmm = (at) => new Date(at).toTimeString().slice(0, 5);
@@ -485,8 +500,9 @@ export function createStore({ scene, freeze, live = false } = {}) {
     const s = state;
     const beat = s.beat + 1;
     if (s.launched) return set({ beat });
-    // Live, the race is the server's alone: while the link is down nothing moves it (never the demo's crowd).
-    if (link) return set(s.live ? { beat, elapsed: Math.floor((link.now() - s.live.opensAt) / 1000) } : { beat });
+    // Live, the race is the server's alone: before it answers and while the link is down nothing moves it (never
+    // the demo's clock or crowd).
+    if (link || live) return set(s.live ? { beat, elapsed: Math.floor((link.now() - s.live.opensAt) / 1000) } : { beat });
     const elapsed = s.elapsed + 1;
     const patch = { elapsed, beat };
     if (elapsed < LOCK_AT && beat % 3 === 0) {
@@ -535,6 +551,8 @@ export function createStore({ scene, freeze, live = false } = {}) {
 
   const actions = {
     wantScreen(screen) { wantScreen = screen; },
+    /** Live, before the server's first answer: whether the last try to get in went through (main.js keeps trying). */
+    entering(ok) { if (!state.live) setNet({ server: ok ? "ok" : "down" }); },
     goLive({ base, lobby, token }) {
       server = { base, token, lobby };
       if (link) link.close();

@@ -1,7 +1,4 @@
 node_modules/
-artifacts/
-cache/
-coverage/
 .env
 web/dist/
 solana/target/

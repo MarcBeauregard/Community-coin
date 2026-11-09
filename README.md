@@ -8,8 +8,7 @@ maladies des memes : le **vamp** (chaque meme qui marche est copié, et chaque c
 
 Ce dépôt contient le programme et ses tests, une réplique exacte de ses règles en JavaScript vérifiée contre
 lui étape par étape, un simulateur qui joue **le même scénario viral** une fois avec les règles d'aujourd'hui et
-une fois avec celles-ci pour mesurer qui paie qui, et **l'application du launchpad**. La première version, en
-Solidity pour Base, reste dans le dépôt comme référence (dernière section).
+une fois avec celles-ci pour mesurer qui paie qui, et **l'application du launchpad**.
 
 **Résultat en une phrase :** le vamp se règle dans le protocole ; le PvP se réduit fortement, mais ne
 disparaît pas, et aucun mécanisme ne peut le faire disparaître, parce qu'un marché de memes est à somme
@@ -106,6 +105,7 @@ Un seul serveur sert l'application et ses lobbies ; la page n'a besoin d'aucun p
    | `LOBBY_HOST` | Le wallet de l'hôte : lui seul retire une idée. |
    | `LOBBY_NAME`, `LOBBY_THEME`, `LOBBY_HOST_NAME`, `LOBBY_WELCOME` | Le nom, le thème, le nom affiché de l'hôte, le mot d'accueil. |
    | `ORIGINS` | L'adresse publique de la page (connexion par wallet liée à ce site). |
+   | `TRUST_PROXY` | L'en-tête où le proxy de l'hébergeur écrit l'adresse du visiteur (`cf-connecting-ip` sur Render ou derrière Cloudflare, `fly-client-ip` sur Fly.io, `x-real-ip` derrière nginx). Sans lui, les limites par adresse se lisent dans `X-Forwarded-For`, qu'un visiteur peut falsifier chez certains hébergeurs. `GET /health` renvoie l'adresse que le serveur voit pour toi : elle doit être la tienne. |
    | `/data` | Le volume : clans, médias, retours des testeurs. |
 
 3. **Suivre la bêta** : `GET /health` (sonde), `GET /lobbies` (le lobby en cours), et :
@@ -119,7 +119,7 @@ Un seul serveur sert l'application et ses lobbies ; la page n'a besoin d'aucun p
 
 Sans Docker : `npm run build:lobbies` puis
 `node web/lobbies/server/server.mjs --schedule hourly --host <wallet> --guests --static web/dist/lobbies`.
-Le test de bout en bout : `npm run test:beta`.
+Le test de bout en bout : `npm run test:lobbies -- beta`.
 
 ## Déployer sur Solana (devnet)
 
@@ -183,10 +183,11 @@ Solana : son SOL est gratuit et n'a aucune valeur. Pas de mainnet avant un audit
 6. **Publier** : commiter `web/src/deployments.js` (écrit à l'étape 4) et pousser sur `main` ; GitHub Pages
    republie l'application avec le bouton « Connect wallet ».
 
-Le programme n'a jamais été compilé pour la cible Solana (SBF) dans l'environnement où il a été écrit : ses tests
-l'exécutent nativement dans le runtime Solana, avec les vrais programmes Token-2022 et Associated Token. Les
-étapes 3 et 5 sont donc aussi son premier vrai test sur une chaîne ; si l'une échoue, son message suffit à
-corriger.
+Le programme compile pour la cible Solana (`cargo build-sbf`, environ 820 Ko) mais n'a encore jamais été déployé :
+ses tests l'exécutent nativement dans le runtime Solana, avec les vrais programmes Token-2022 et Associated Token.
+Les étapes 3 et 5 sont donc son premier vrai test sur une chaîne ; si l'une échoue, son message suffit à corriger.
+L'adresse inscrite dans le code (`declare_id!`) appartient à une clé de déploiement : `anchor keys sync` la remplace
+par la tienne à l'étape 3.
 
 ## Le diagnostic
 
@@ -301,10 +302,9 @@ devraient être la règle pour tous les lancements. La lignée est un choix de l
 se protéger des copies : elle protège ses détenteurs, pas les acheteurs de copies. C'est pour ça qu'elle
 reste optionnelle (le lanceur d'une variante choisit son parent, ou aucun).
 
-Ces chiffres remplacent ceux de la version Base : sa simulation avançait l'horloge de Hardhat sans miner de bloc,
-si bien que ses lectures ne voyaient pas le temps passer et que le bot ne retirait jamais ses tokens vestés lors
-de la première retombée. C'est corrigé dans `scripts/simulate.js`, et les deux simulations concordent
-maintenant à environ 1 % près (la moitié « aujourd'hui », qui ne dépend pas du temps, à l'identique).
+La première version du protocole (des contrats Solidity pour Base, leurs tests et leur simulateur) a été retirée
+du dépôt : le programme Solana en reprend les règles, et sa simulation concordait avec celle-ci à environ 1 % près.
+Elle reste dans l'historique git (dernier commit qui la contient : `a4835c5`).
 
 ## Ce que ça ne résout pas
 
@@ -355,26 +355,27 @@ minimum pour une Union.
 
 Les deux derniers lisent ce qu'écrit `cargo test` : lancer `npm run test:solana` d'abord.
 
-## La version Base (référence)
-
-`contracts/CommunityCoin.sol` et `contracts/MemeToken.sol`, leurs 28 tests (`npm test`), le simulateur sur les
-contrats (`npm run simulate`) et le script de déploiement (`npm run deploy`) restent dans le dépôt : c'est la
-spécification d'origine, dont le programme Solana reprend les règles et les noms. Node 22 ; le compilateur `solc`
-est pris dans `node_modules`.
-
 ## Utiliser
 
 ```bash
 npm install
 ```
 
-```bash
-npm run test:solana
-```
+Tout vérifier d'un coup (le programme, sa réplique JavaScript, le simulateur, le launchpad et les lobbies dans
+Chromium ; environ 25 minutes) :
 
 ```bash
-npm run test:protocol && npm run test:wire
+npm test
 ```
+
+La première fois, installer le Chromium de Playwright :
+
+```bash
+npx playwright install chromium
+```
+
+Une partie seulement : `npm run test:solana`, `npm run test:protocol`, `npm run test:wire`, `npm run test:web`,
+`npm run test:wallet`, ou `npm run test:lobbies -- <nom…>` (par exemple `-- finale net`). Le simulateur :
 
 ```bash
 npm run simulate:web

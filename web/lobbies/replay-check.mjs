@@ -50,7 +50,7 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const here = dirname(fileURLToPath(import.meta.url));
 const dist = join(here, "..", "dist", "lobbies");
-const shots = join(dist, "shots");
+const shots = join(dist, "..", "lobbies-shots"); // beside the app, as visual.mjs does
 mkdirSync(shots, { recursive: true });
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".png": "image/png", ".jpg": "image/jpeg" };
 const files = http.createServer((req, res) => {

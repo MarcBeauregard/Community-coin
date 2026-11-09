@@ -182,8 +182,7 @@ links.alice.close();
 
 // ------------------------------------------------------------------ the app, live, as a founder
 const dist = join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "lobbies");
-// NO_BROWSER=1 skips the browser part (CI without Chromium).
-if (existsSync(join(dist, "index.html")) && !process.env.NO_BROWSER) {
+{
   const require = createRequire(import.meta.url);
   const { chromium } = require("playwright");
   const TYPES = { ".html": "text/html", ".js": "text/javascript", ".png": "image/png", ".jpg": "image/jpeg" };
@@ -240,8 +239,6 @@ if (existsSync(join(dist, "index.html")) && !process.env.NO_BROWSER) {
   await browser.close();
   files.close();
   await s2.close();
-} else {
-  console.log("  --  browser part skipped (app not built, or NO_BROWSER set)");
 }
 
 await server.close();

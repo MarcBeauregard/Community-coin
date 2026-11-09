@@ -16,7 +16,6 @@ export const Wallet = icon(html`<rect x="3" y="5.5" width="14" height="10" rx="2
 export const Book = icon(html`<path d="M4 4.5h4.5a1.5 1.5 0 0 1 1.5 1.5v10a1.5 1.5 0 0 0-1.5-1.5H4z" /><path d="M16 4.5h-4.5A1.5 1.5 0 0 0 10 6v10a1.5 1.5 0 0 1 1.5-1.5H16z" />`);
 export const Clock = icon(html`<circle cx="10" cy="10" r="6.5" /><path d="M10 6.5V10l2.5 1.5" />`);
 export const Chevron = icon(html`<path d="M6 8l4 4 4-4" />`);
-export const Menu = icon(html`<path d="M4 6h12" /><path d="M4 10h12" /><path d="M4 14h12" />`);
 export const Close = icon(html`<path d="M5.5 5.5l9 9" /><path d="M14.5 5.5l-9 9" />`);
 export const Lock = icon(html`<rect x="4.5" y="9" width="11" height="7.5" rx="2" /><path d="M7 9V7a3 3 0 0 1 6 0v2" />`);
 export const Coins = icon(html`<ellipse cx="8" cy="7" rx="4.5" ry="2.2" /><path d="M3.5 7v3c0 1.2 2 2.2 4.5 2.2" /><ellipse cx="12.5" cy="12.5" rx="4" ry="2" /><path d="M8.5 12.5v2.2c0 1.1 1.8 2 4 2s4-.9 4-2v-2.2" />`);

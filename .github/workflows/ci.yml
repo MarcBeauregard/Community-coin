@@ -5,9 +5,12 @@ on:
   pull_request:
 
 jobs:
-  # The Solana program, then the JavaScript replica and the wire format checked against what its tests wrote.
-  solana:
+  # Everything `npm test` checks: the Solana program, its JavaScript replica and wire format against what the
+  # program's tests wrote, the simulator, the launchpad in Chromium, then every lobby check (server, crank, clans,
+  # voice, the app in Chromium at four widths, accessibility, load).
+  verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -23,30 +26,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run test:solana
+      - run: npx playwright install --with-deps chromium
+      - run: npm test
         env:
           RUST_LOG: error
-      - run: npm run test:protocol
-      - run: npm run test:wire
-      # The lobbies' JavaScript side against the program's lobby walk (written by test:solana).
-      - run: node web/lobbies/chain-check.mjs
-
-  # The app, its simulator, and the Base contracts kept as the reference.
-  web:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run build:web
-      - run: node web/simulate.mjs
-      - run: npm test
-      - run: npm run build:lobbies
-      # The lobbies' server, crank, clans, voice and load, without a browser (the Chromium parts run locally).
-      - run: npm run test:realtime && npm run test:crank && npm run test:clans && npm run test:voice
-        env:
-          NO_BROWSER: "1"
-      - run: npm run test:load -- 1000
+          LOAD_PEOPLE: "1000"

@@ -2,13 +2,13 @@
 // Sign-In With Solana. The server's clock is the only clock: clients render from the `now` it sends.
 //
 //   node web/lobbies/server/server.mjs --port 8790 [--guests] [--dev-sessions] [--data <dir>] [--sfu <wss url>] [--welcome <text>]
-//          [--origins https://app.example] [--trust-proxy] [--max-per-ip 50] [--http-per-min 120] [--lobby 412 --opens-at <ms>]
+//          [--origins https://app.example] [--trust-proxy [header]] [--max-per-ip 50] [--http-per-min 120] [--lobby 412 --opens-at <ms>]
 //          [--rpc <url> --program <id>]    (race from the chain through the indexer; else the simulated demo lobby)
 //          [--schedule hourly --host <wallet> [--name …] [--theme …] [--host-name …]] [--static web/dist/lobbies]
 //          (the closed beta: an empty practice lobby every hour, the app served from the same address)
-//   env: PORT, DATA_DIR, ORIGINS (or Render's RENDER_EXTERNAL_URL), SESSION_SECRET (sessions survive restarts), STATS_TOKEN (GET /stats), LOBBY_HOST, …
+//   env: PORT, DATA_DIR, ORIGINS (or Render's RENDER_EXTERNAL_URL), TRUST_PROXY (the proxy's own header), SESSION_SECRET (sessions survive restarts), STATS_TOKEN (GET /stats), LOBBY_HOST, …
 //
-//   GET  /health                      → { ok, lobbies }
+//   GET  /health                      → { ok, lobbies, address }
 //   GET  /lobbies                     → { lobbies: [{ id, opensAt, name, theme, phase, inside, listening }], current }
 //   GET  /stats  (Bearer STATS_TOKEN) → the beta's counts per lobby, returning visitors, testers' feedback
 //   POST /feedback {text, rating, lobby, screen} → { ok }  (one a minute per address)
@@ -36,8 +36,8 @@ import { createClans } from "./clans.mjs";
 import { createClanRoom, fileStore } from "./clan-room.mjs";
 import { createMedia } from "./media.mjs";
 import { sfuToken, sfuAdmin } from "./voice.mjs";
-import { mkdirSync, existsSync, readFileSync, statSync } from "node:fs";
-import { join, normalize, extname } from "node:path";
+import { mkdirSync, readFileSync, readdirSync } from "node:fs";
+import { join, extname } from "node:path";
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "content-type, authorization" };
 const json = (res, status, body) => {
@@ -70,9 +70,18 @@ const bearer = (req, url) => (req.headers.authorization ?? "").replace(/^Bearer 
 
 export function createServer({ port = 0, guests = false, devSessions = false, dataDir = null, voice = null, lobbies, auth = createAuth(), now = () => Date.now(), batchMs = 250, maxPerRoom = 20000,
   maxPerIp = 50, httpPerMin = 120, origins = null, trustProxy = false, staticDir = null, statsToken = null }) {
-  // Abuse limits: sockets per address, HTTP requests per address and minute, and (in production) the app's origins.
-  // Behind a proxy, `trustProxy` reads the client's address from X-Forwarded-For.
-  const ipOf = (req) => (trustProxy && String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim()) || req.socket.remoteAddress;
+  // Abuse limits: sockets per address, API requests per address and minute, and (in production) the app's origins.
+  // The visitor's address is the socket's, unless a proxy stands in front (`trustProxy`). Then it is in the header
+  // the platform's own proxy writes, which a visitor can't forge there: `trustProxy` names it ("cf-connecting-ip" on
+  // Render and behind Cloudflare, "fly-client-ip" on Fly.io, "x-real-ip" behind nginx). Without a name, or when that
+  // header is missing, it is the first entry of X-Forwarded-For, which is only as good as the proxy: where the proxy
+  // appends to what the visitor sent (Render does), the visitor chooses it, and with it whose limits they spend.
+  const ownHeader = typeof trustProxy === "string" ? trustProxy.toLowerCase() : null;
+  const ipOf = (req) => {
+    if (!trustProxy) return req.socket.remoteAddress;
+    const own = ownHeader && ownHeader !== "x-forwarded-for" ? String(req.headers[ownHeader] ?? "").trim() : "";
+    return own || String(req.headers["x-forwarded-for"] ?? "").split(",")[0].trim() || req.socket.remoteAddress;
+  };
   const sockets = new Map(); // ip -> open sockets
   const hits = new Map(); // ip -> { n, since }
   const tooMany = (ip) => {
@@ -120,21 +129,23 @@ export function createServer({ port = 0, guests = false, devSessions = false, da
   const feedbackStore = dataDir ? fileStore(join(dataDir, "feedback.jsonl")) : null;
   for (const f of feedbackStore?.load?.() ?? []) feedback.push(f);
   const lastFeedback = new Map(); // ip -> time
-  // The app itself, from this server: one address for the page and its lobby.
+  // The app itself, from this server: one address for the page and its lobby. Its files are read once, at the start:
+  // no request reaches the disk, none can name a path outside the app, and a page's files don't count as API requests.
   const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".webp": "image/webp", ".ico": "image/x-icon", ".json": "application/json" };
-  function serveStatic(url, res) {
-    const rel = decode(url.pathname) ?? "/";
-    const file = normalize(join(staticDir, rel.endsWith("/") ? `${rel}index.html` : rel));
-    if (!file.startsWith(normalize(staticDir)) || !existsSync(file) || !statSync(file).isFile()) return false;
-    let body = readFileSync(file);
-    const ext = extname(file);
-    // The page learns that its lobby server is this one (no ?live= needed).
-    if (ext === ".html") body = Buffer.from(body.toString().replace("</head>", '<meta name="lobby-server" content="same-origin"></head>'));
-    res.writeHead(200, { "content-type": TYPES[ext] ?? "application/octet-stream", "x-content-type-options": "nosniff",
-      "cache-control": ext === ".html" ? "no-cache" : rel.startsWith("/chunks/") || rel.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "public, max-age=300" });
-    res.end(body);
-    return true;
-  }
+  const files = new Map(); // "/app.js" -> { headers, body }
+  if (staticDir) (function load(dir, at) {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      if (e.isDirectory()) { load(join(dir, e.name), `${at}${e.name}/`); continue; }
+      if (!e.isFile()) continue;
+      const ext = extname(e.name);
+      let body = readFileSync(join(dir, e.name));
+      // The page learns that its lobby server is this one (no ?live= needed).
+      if (ext === ".html") body = Buffer.from(body.toString().replace("</head>", '<meta name="lobby-server" content="same-origin"></head>'));
+      files.set(`${at}${e.name}`, { body, headers: { "content-type": TYPES[ext] ?? "application/octet-stream", "content-length": body.length, "x-content-type-options": "nosniff",
+        "cache-control": ext === ".html" ? "no-cache" : at.startsWith("/chunks/") || at.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "public, max-age=300" } });
+    }
+  })(staticDir, "/");
+  const fileAt = (url) => { const p = decode(url.pathname); return p === null ? undefined : files.get(p.endsWith("/") ? `${p}index.html` : p); };
   const server = http.createServer((req, res) => handle(req, res).catch((e) => {
     // A request that breaks something answers 500; it never takes the server down.
     console.error(`${req.method} ${req.url}: ${e.message}`);
@@ -142,8 +153,11 @@ export function createServer({ port = 0, guests = false, devSessions = false, da
   }));
   async function handle(req, res) {
     if (req.method === "OPTIONS") return json(res, 204, {});
+    const url = URL.canParse(req.url, "http://x") ? new URL(req.url, "http://x") : null;
+    const file = url && req.method === "GET" ? fileAt(url) : undefined;
+    if (file) { res.writeHead(200, file.headers); return res.end(file.body); }
     if (tooMany(ipOf(req))) return json(res, 429, { error: "Too many requests" });
-    const url = new URL(req.url, "http://x");
+    if (!url) return json(res, 400, { error: "Bad request" });
     if (req.method === "GET" && url.pathname === "/auth/nonce") {
       // The page's own site goes in the message when it is allowed to sign in here: one of --origins, or any page
       // on a development server without that list. A phishing site can't get a message for ours, nor ours for it.
@@ -211,7 +225,8 @@ export function createServer({ port = 0, guests = false, devSessions = false, da
       const clan = clans.toJSON(decode(c[1]) ?? "");
       return json(res, clan ? 200 : 404, clan ?? { error: "No clan for this mint" });
     }
-    if (req.method === "GET" && url.pathname === "/health") return json(res, 200, { ok: true, lobbies: rooms.size });
+    // `address`: the address the limits count this caller as (to check `trustProxy` against the platform's proxy).
+    if (req.method === "GET" && url.pathname === "/health") return json(res, 200, { ok: true, lobbies: rooms.size, address: ipOf(req) });
     if (req.method === "GET" && url.pathname === "/lobbies") {
       // The lobbies on this server, and the one to join now: the latest that has opened and not ended long ago, else
       // the next to open.
@@ -250,7 +265,6 @@ export function createServer({ port = 0, guests = false, devSessions = false, da
     }
     const m = /^\/lobbies\/(\d+)$/.exec(url.pathname);
     if (req.method === "GET" && m && rooms.has(m[1])) return json(res, 200, rooms.get(m[1]).snapshot());
-    if (req.method === "GET" && staticDir && serveStatic(url, res)) return;
     json(res, 404, { error: "Not found" });
   }
 
@@ -316,11 +330,12 @@ export { signInMessage };
 if (import.meta.url === `file://${process.argv[1]}`) {
   const arg = (n) => { const i = process.argv.indexOf(`--${n}`); return i < 0 ? undefined : process.argv[i + 1]; };
   const flag = (n) => process.argv.includes(`--${n}`);
+  const named = (n) => { const v = arg(n); return v && !v.startsWith("--") ? v : undefined; }; // a flag that may carry a value
   // Sessions survive a restart when the signing key does: SESSION_SECRET (32 bytes or more, hex or text).
   const secret = process.env.SESSION_SECRET ? Buffer.from(process.env.SESSION_SECRET) : undefined;
   if (secret && secret.length < 32) throw new Error("SESSION_SECRET must be 32 characters or more");
   const common = { port: Number(process.env.PORT ?? arg("port") ?? 8790), guests: flag("guests"), devSessions: flag("dev-sessions"),
-    maxPerIp: Number(arg("max-per-ip") ?? 50), httpPerMin: Number(arg("http-per-min") ?? 120), origins: (arg("origins") ?? process.env.ORIGINS ?? process.env.RENDER_EXTERNAL_URL)?.split(","), trustProxy: flag("trust-proxy"),
+    maxPerIp: Number(arg("max-per-ip") ?? 50), httpPerMin: Number(arg("http-per-min") ?? 120), origins: (arg("origins") ?? process.env.ORIGINS ?? process.env.RENDER_EXTERNAL_URL)?.split(","), trustProxy: flag("trust-proxy") && (named("trust-proxy") ?? process.env.TRUST_PROXY ?? true),
     dataDir: arg("data") ?? process.env.DATA_DIR, staticDir: arg("static") ?? null, statsToken: process.env.STATS_TOKEN ?? null,
     auth: secret ? createAuth({ secret }) : undefined,
     // --sfu wss://… with LIVEKIT_API_KEY and LIVEKIT_API_SECRET in the environment

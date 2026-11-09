@@ -1,4 +1,4 @@
-//! The hub's arithmetic, kept apart from the accounts so it reads like the Solidity contract it was ported from:
+//! The hub's arithmetic, kept apart from the accounts:
 //! virtual constant-product curves, rounded in favour of the reserve, a reference price that closes the gap to
 //! the spot price over an hour, the spike share and the rescale that keeps a curve's shape when its reserve
 //! changes. Every intermediate product that can exceed 128 bits goes through U256. web/src/protocol.js replays

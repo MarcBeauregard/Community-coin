@@ -33,17 +33,25 @@ check), PDA substitution (every account is re-derived from seeds), double settle
 
 ## The server
 
-- Sessions: Sign-In With Solana (ed25519 over a one-time nonce, 5 minutes), HMAC-signed tokens, 24 h. Nonces are
-  capped (100,000 in flight) so a flood cannot exhaust memory.
-- Limits: 120 HTTP requests per minute and 50 sockets per address (`--trust-proxy` behind a proxy), a token bucket
-  per socket, 2 KB WebSocket frames, 4 KB JSON bodies, slow mode in chat; `--origins` restricts the app's origins.
+- Sessions: Sign-In With Solana (ed25519 over a one-time nonce, 5 minutes), HMAC-signed tokens: 24 h for a guest,
+  30 days for a wallet. Nonces are capped (100,000 in flight) so a flood cannot exhaust memory.
+- Limits: 120 API requests per minute and 50 sockets per address, a token bucket per socket, 8 KB WebSocket frames,
+  4 KB JSON bodies, slow mode in chat; `--origins` restricts the app's origins. Behind a proxy the address is read
+  from the header that proxy writes (`--trust-proxy <header>` or `TRUST_PROXY`; `cf-connecting-ip` on Render), not
+  from X-Forwarded-For: on the hosted beta its first entry was whatever the visitor sent, so one header lifted every
+  per-address limit, or spent someone else's. `GET /health` returns the address the server counts the caller as.
+- The served app (`--static`): its files are read once at the start; a request never reaches the disk and can't
+  name a path outside the app. They don't count as API requests (a page is some thirty files).
+- `ws` is 8.21.3: 8.0.0 to 8.20.1 could be made to exhaust memory with tiny fragments (GHSA-96hv-2xvq-fx4p). The
+  image installs from the lockfile (`npm ci --omit=dev`). Left: four moderate advisories in the JSON-RPC client under
+  `@solana/web3.js` 1.x (reached only with `--rpc`, from the RPC node's answers); the fix is web3.js's next major.
 - Clans: membership is read from the chain's events only; re-checked on every message. Media is accepted from its
   bytes (PNG, JPEG, GIF, WebP, MP4, MOV, WebM; never SVG or HTML), 8 MB, members-only, served with `nosniff` and a
   sandboxing CSP. Chat text is stripped of control and bidi characters.
 - Voice: the server decides who publishes; tokens carry it and the SFU's admin API is told at once when it changes.
 - Load: `load-check.mjs` holds 5,000 people in one lobby (chat to all in p95 ~110 ms, ~140 MB).
 
-Fixed in the final audit (an independent review of this code, see `AUDIT.md`):
+Fixed in the final audit (an independent review of this code):
 
 - Two unauthenticated crashes: a malformed `%`-escape in a path (`decodeURIComponent` threw in the async handler)
   and a JSON body of `null`. Bodies are now objects or `{}`, paths are decoded safely, and every request runs under
@@ -63,7 +71,13 @@ lobby set (several instances need a pub/sub between them).
 - Money is never ambiguous: every amount on screen is the program's (receipts are read from its events), the pledge
   sheet says what happens on a win, a loss, a change of mind and what it costs, before signing.
 - Losing pledges are refunded at the lock (00:55), as the copy says; the crank does it at once.
-- Nothing here is fake in live mode: the demo's crowd and clock stop when the app is connected to a server.
+- Nothing here is fake in live mode: the demo's crowd and clock never run there. Until the server's first answer
+  the page shows its name and "Opening the lobby…" (it retries by itself); it used to show the demo's lobby, which at
+  a real address read as a real one whenever the session could not be had (a 429, a server waking up).
+- A served page belongs to its server: `?live=`, `?scene=`, `?freeze` and `?rpc=` are ignored there, so a link to the
+  real address can't open someone else's lobby under it (and have a wallet sign in to it), nor a scene of the demo.
+- A session the server no longer knows (expired, or the server's key changed) is replaced by a guest's at once; a
+  wallet signs again when next needed. It used to end on "reload the page", which a saved wallet session looped on.
 
 ## Lobby changes before real SOL (to review in the external audit)
 - `remove_idea`: signed by the lobby's host (`HostOnly`), refused in the last 5 minutes before the lock

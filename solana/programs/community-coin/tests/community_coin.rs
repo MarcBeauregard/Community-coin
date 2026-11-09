@@ -1,4 +1,4 @@
-//! The Solidity suite's behaviours, on Solana: one ticker per meme, fair openings with vesting, lineage routing,
+//! The hub's behaviours: one ticker per meme, fair openings with vesting, lineage routing,
 //! the spike share, creator and protocol fees, unions, and the books balancing to the lamport and the token unit.
 
 mod common;

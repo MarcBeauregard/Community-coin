@@ -14,10 +14,14 @@ RUN node web/lobbies/build.mjs
 FROM node:22-slim
 WORKDIR /app
 ENV NODE_ENV=production PORT=8790 DATA_DIR=/data
-# The server needs only these three packages.
-RUN npm init -y >/dev/null && npm install --omit=dev --ignore-scripts ws@8.18.0 buffer@6.0.3 @solana/web3.js@1.98.4 && npm cache clean --force
-COPY --from=build /app/web/src ./web/src
-COPY --from=build /app/web/lobbies ./web/lobbies
+# The server's own dependencies, at the versions the lockfile pins.
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+# The server, and what it imports of the app (the program's rules, the wire format).
+COPY web/src ./web/src
+COPY web/lobbies/server ./web/lobbies/server
+COPY web/lobbies/src ./web/lobbies/src
+COPY web/lobbies/indexer.mjs ./web/lobbies/indexer.mjs
 COPY --from=build /app/web/dist/lobbies ./web/dist/lobbies
 RUN mkdir -p /data && chown node:node /data
 USER node

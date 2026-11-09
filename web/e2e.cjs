@@ -299,7 +299,8 @@ const server = http.createServer((req, res) => {
   check((await page.evaluate(() => document.documentElement.dataset.theme)) === "dark", "the house theme is dark");
   await shot("meme-phone-dark");
   await page.click("button[aria-label='Switch to light theme']");
-  check((await page.evaluate(() => document.documentElement.dataset.theme)) === "light", "the theme switch turns the page light");
+  // The page applies the theme after it renders: the check waits for it instead of reading at once.
+  check(await page.waitForFunction(() => document.documentElement.dataset.theme === "light", null, { timeout: 3000 }).then(() => true, () => false), "the theme switch turns the page light");
   await shot("meme-phone-light");
   await page.goto(url + "#market");
   await page.locator(".ranked-row:not(.head)").first().waitFor();

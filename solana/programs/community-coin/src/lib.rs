@@ -19,7 +19,7 @@
 //! Accounting. Every lamport the hub owes sits in one vault. Tokens the hub holds (the reserves of variants, open
 //! batches, fees in parent tokens, votes) are numbers in the meme accounts: they are minted only when they leave
 //! the hub, so every real token is in somebody's wallet and the hub can always buy back the whole supply.
-//! Ported from contracts/CommunityCoin.sol; web/src/protocol.js replays the same rules in the browser.
+//! web/src/protocol.js replays the same rules in the browser.
 
 use anchor_lang::prelude::*;
 use anchor_lang::system_program;

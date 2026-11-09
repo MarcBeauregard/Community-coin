@@ -1,5 +1,5 @@
 //! Test harness: the program runs natively inside the Solana runtime (solana-program-test), next to the real
-//! Token-2022 and associated-token programs. `Hub` wraps the instructions so tests read like the Solidity suite.
+//! Token-2022 and associated-token programs. `Hub` wraps the instructions so tests read as behaviours.
 #![allow(dead_code)]
 
 use anchor_lang::prelude::Pubkey;

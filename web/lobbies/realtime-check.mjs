@@ -118,8 +118,7 @@ const base = `http://localhost:${server.port}`;
 
 // ------------------------------------------------------------------ the app, live, in Chromium
 const dist = join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "lobbies");
-// NO_BROWSER=1 skips the browser part (CI without Chromium).
-if (existsSync(join(dist, "index.html")) && !process.env.NO_BROWSER) {
+{
   const require = createRequire(import.meta.url);
   const { chromium } = require("playwright");
   const TYPES = { ".html": "text/html", ".js": "text/javascript", ".png": "image/png", ".jpg": "image/jpeg" };
@@ -149,8 +148,6 @@ if (existsSync(join(dist, "index.html")) && !process.env.NO_BROWSER) {
   cp.close();
   await browser.close();
   files.close();
-} else {
-  console.log("  --  browser part skipped (app not built, or NO_BROWSER set)");
 }
 
 // ------------------------------------------------------------------ malformed requests never take the server down
