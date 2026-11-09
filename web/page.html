@@ -766,6 +766,11 @@ svg.dia { width: 100%; max-width: 220px; height: auto; }
   .activity-row { grid-template-columns: 78px 104px 78px minmax(0, 1fr) minmax(0, 1.4fr) 84px; }
 }
 @media (max-width: 640px) {
+  /* A panel's actions go under its title when they don't fit beside it (a long ticker, a wider fallback font). */
+  .panel-head { flex-wrap: wrap; }
+  .panel-head > div:first-child { flex: 1 1 120px; min-width: 0; }
+  /* A figure's footnote wraps in a narrow card instead of pushing the page wider. */
+  .kpi-foot .delta { white-space: normal; }
   .top-inner { gap: var(--sp-2h); min-height: 56px; }
   .brand span:last-child { display: none; }
   .pills { gap: var(--sp-1); }
