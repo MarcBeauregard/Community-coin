@@ -27,9 +27,9 @@ for (const file of suites) {
   console.log(`${ok ? "PASS" : "FAIL"}  ${file.replace(/\.mjs$/, "")}  (${Math.round((Date.now() - t0) / 1000)} s)`);
   if (!ok) {
     failed++;
-    const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.split("\n");
-    const lines = out.filter((l) => /^FAIL|Error|error:/.test(l));
-    console.log((lines.length ? lines : out.slice(-25)).slice(0, 25).map((l) => `      ${l}`).join("\n"));
+    // What failed: the checks that said FAIL, then the end of the output (a crash's message and where it happened).
+    const out = `${r.stdout ?? ""}${r.stderr ?? ""}`.trimEnd().split("\n");
+    console.log([...out.filter((l) => /^FAIL/.test(l)), ...out.slice(-30)].map((l) => `      ${l}`).join("\n"));
     if (r.error) console.log(`      ${r.error.message}`);
   }
 }

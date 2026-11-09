@@ -5,6 +5,7 @@
 
 import { createRequire } from "node:module";
 import http from "node:http";
+import net from "node:net";
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join, extname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -64,7 +65,13 @@ const fakeSfu = async (url, init) => {
   calls.push({ url, admin: auth?.video?.roomAdmin === true && auth.video.room === JSON.parse(init.body).room, ...JSON.parse(init.body) });
   return { ok: true, status: 200 };
 };
-const voice = { url: "wss://sfu.example", apiKey: "k", apiSecret: "s3cret", fetch: fakeSfu };
+// The SFU's address: a local port that takes a connection and never answers, so the app's audio stays "connecting"
+// on every machine while the stage's roles are checked (audio-check checks the audio itself). A made-up name was
+// left to the network: it hangs on some machines and fails at once on others, where the stage then offers
+// "Try again" instead of the hand.
+const silent = net.createServer((socket) => socket.on("error", () => {}));
+await new Promise((r) => silent.listen(0, "127.0.0.1", r));
+const voice = { url: `ws://127.0.0.1:${silent.address().port}`, apiKey: "k", apiSecret: "s3cret", fetch: fakeSfu };
 const source = simulatedSource({ everySec: 1e9 });
 const host = source.chain.lobby.host;
 const server = await createServer({ guests: true, devSessions: true, voice, batchMs: 30, lobbies: [{ id: 412, opensAt: Date.now() - 1000 * 1000, source }] });
@@ -164,7 +171,10 @@ const dist = join(dirname(fileURLToPath(import.meta.url)), "..", "dist", "lobbie
   check(await dave.getByText("The host invited you to speak").waitFor({ timeout: 3000 }).then(() => true, () => false), "brought up, the listener is invited to speak in their app");
   check(await until(() => calls.some((c) => c.identity === "dave" && c.permission.canPublish)), "and the SFU lets them publish");
   await dave.getByRole("button", { name: "Not now" }).click();
-  check(await dave.getByText(/Listening · you can raise your hand/).first().waitFor({ timeout: 3000 }).then(() => true, () => false), "they step down from the app");
+  // Back in the audience: the hand is offered again and the server no longer counts them on stage. (What the line
+  // says about the audio, "Joining the stage…" here, is the audio's: this SFU never answers.)
+  check(await dave.getByRole("button", { name: "Raise hand to pitch" }).waitFor({ timeout: 3000 }).then(() => true, () => false)
+    && await until(() => !server.rooms.get("412").stage.isSpeaker("dave")), "they step down from the app");
   check(hostPage.errors.length === 0 && dave.errors.length === 0, "no script errors");
   await browser.close();
   files.close();
